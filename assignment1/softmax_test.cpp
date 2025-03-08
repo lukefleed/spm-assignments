@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <fstream> // Add this include for file operations
 #include <hpc_helpers.hpp>
 #include <iostream>
 #include <limits>
@@ -80,6 +81,16 @@ int main() {
   std::printf("%-10s %-10s %-10s %-10s\n", "Size", "Plain", "Auto", "AVX");
   std::printf("----------------------------------------\n");
 
+  // Create and open output CSV file
+  std::ofstream result_file("results.csv");
+  if (!result_file.is_open()) {
+    std::cerr << "Failed to open results.csv for writing" << std::endl;
+    return 1;
+  }
+
+  // Write CSV header
+  result_file << "Size,Plain,Auto,AVX" << std::endl;
+
   bool expected_order_maintained = true;
   std::vector<size_t> violated_sizes;
 
@@ -113,6 +124,10 @@ int main() {
     // Stampa risultati
     std::printf("%-10zu %-10.7f %-10.7f %-10.7f\n", K, t_plain, t_auto, t_avx);
 
+    // Write results to CSV file
+    result_file << K << "," << t_plain << "," << t_auto << "," << t_avx
+                << std::endl;
+
     // Verifica ordine di efficienza atteso
     if (!(t_plain >= t_auto && t_auto >= t_avx)) {
       expected_order_maintained = false;
@@ -131,10 +146,22 @@ int main() {
         std::printf(", ");
     }
     std::printf("\n");
+
+    // Write validation results to CSV
+    result_file << "\nExpected efficiency order violated at sizes:"
+                << std::endl;
+    for (size_t i = 0; i < violated_sizes.size(); ++i) {
+      result_file << violated_sizes[i];
+      if (i < violated_sizes.size() - 1)
+        result_file << ",";
+    }
   } else {
     std::printf("Confermato: L'ordine di efficienza è rispettato (Plain > Auto "
                 "> AVX)\n");
   }
+
+  result_file.close();
+  std::cout << "Results saved to results.csv" << std::endl;
 
   return 0;
 }
