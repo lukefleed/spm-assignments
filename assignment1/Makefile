@@ -1,27 +1,49 @@
 CXX                = g++ -std=c++17
 OPTFLAGS	   = -O3
-AUTOFLAGS          = -ftree-vectorize -ffast-math -march=native -fopenmp
+AUTOFLAGS          = -ftree-vectorize -ffast-math -march=native
 AVXFLAGS           = -mavx -mavx2 -mfma -ffast-math
-CXXFLAGS          += -Wall
+CXXFLAGS          += -Wall -Wextra
 INCLUDES	   = -I. -I./include
-LIBS               = #-pthread -fopenmp
-SOURCES            = $(wildcard *.cpp)
-TARGET             = $(SOURCES:.cpp=)
+LIBS               = -lpthread
 
-.PHONY: all clean cleanall
+# Nuova sezione per la test-suite
+TEST_SRC = softmax_test.cpp
+TEST_OBJ = $(TEST_SRC:.cpp=.o)
+OBJS = softmax_plain.o softmax_auto.o softmax_avx.o
 
+# Mantieni i target originali come PHONY
+.PHONY: all clean cleanall test
+
+all: softmax_plain softmax_auto softmax_avx
+
+test: softmax_test
+	./softmax_test
+
+softmax_test: $(OBJS) $(TEST_OBJ)
+	$(CXX) $(CXXFLAGS) $(OPTFLAGS) -o $@ $^ $(LIBS)
+
+# Regole di compilazione specifiche
+softmax_plain.o: softmax_plain.cpp
+	$(CXX) $(CXXFLAGS) $(OPTFLAGS) $(INCLUDES) -c $< -o $@
+
+softmax_auto.o: softmax_auto.cpp
+	$(CXX) $(CXXFLAGS) $(OPTFLAGS) $(AUTOFLAGS) $(INCLUDES) -c $< -o $@
+
+softmax_avx.o: softmax_avx.cpp
+	$(CXX) $(CXXFLAGS) $(OPTFLAGS) $(AVXFLAGS) $(INCLUDES) -c $< -o $@
+
+$(TEST_OBJ): $(TEST_SRC)
+	$(CXX) $(CXXFLAGS) $(OPTFLAGS) $(INCLUDES) -c $< -o $@
+
+# Mantieni le regole originali per gli eseguibili singoli
 %: %.cpp
 	$(CXX) $(INCLUDES) $(CXXFLAGS) $(OPTFLAGS) -o $@ $< $(LIBS)
 
-# For files with _avx in their name, append flags to CXXFLAGS
 %_avx: CXXFLAGS += ${AVXFLAGS}
-
-# For files with _auto in their name, append flags to CXXFLAGS
 %_auto: CXXFLAGS += ${AUTOFLAGS}
 
-all: $(TARGET)
-
 clean:
-	-rm -fr *.o *~
+	-rm -fr *.o *~ softmax_test
+
 cleanall: clean
 	-rm -fr $(TARGET)

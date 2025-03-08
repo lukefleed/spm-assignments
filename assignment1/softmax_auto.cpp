@@ -5,77 +5,23 @@
 #include <random>
 #include <vector>
 
-void softmax_auto(const float *__restrict__ input, float *__restrict__ output,
-                  size_t K) {
-  // Find the maximum to stabilize the computation of the exponential
-  float max_val = -std::numeric_limits<float>::infinity();
+void softmax_auto(const float *input, float *output, size_t K) {
+  if (K == 0)
+    return;
 
-  // Use compiler auto-vectorization without OpenMP
-  // The restrict keyword helps the compiler know there's no pointer aliasing
-  for (size_t i = 0; i < K; ++i) {
+  float max_val = input[0];
+  for (size_t i = 1; i < K; ++i) {
     max_val = std::max(max_val, input[i]);
   }
 
-  // Compute all exponentials and sum in a single loop for better cache
-  // locality
   float sum = 0.0f;
   for (size_t i = 0; i < K; ++i) {
-    // Using temporary variables helps the compiler with vectorization
-    const float exp_val = std::exp(input[i] - max_val);
-    output[i] = exp_val;
-    sum += exp_val;
+    output[i] = expf(input[i] - max_val);
+    sum += output[i];
   }
 
-  // Precompute the reciprocal for faster multiplication
   const float inv_sum = 1.0f / sum;
-
-  // Normalize - this loop is well-suited for auto-vectorization
   for (size_t i = 0; i < K; ++i) {
     output[i] *= inv_sum;
-  }
-}
-
-std::vector<float> generate_random_input(size_t K, float min = -1.0f,
-                                         float max = 1.0f) {
-  std::vector<float> input(K);
-  // std::random_device rd;
-  // std::mt19937 gen(rd());
-  std::mt19937 gen(5489); // fixed seed for reproducible results
-  std::uniform_real_distribution<float> dis(min, max);
-  for (size_t i = 0; i < K; ++i) {
-    input[i] = dis(gen);
-  }
-  return input;
-}
-
-void printResult(std::vector<float> &v, size_t K) {
-  for (size_t i = 0; i < K; ++i) {
-    std::fprintf(stderr, "%f\n", v[i]);
-  }
-}
-
-int main(int argc, char *argv[]) {
-  if (argc == 1) {
-    std::printf("use: %s K [1]\n", argv[0]);
-    return 0;
-  }
-  size_t K = 0;
-  if (argc >= 2) {
-    K = std::stol(argv[1]);
-  }
-  bool print = false;
-  if (argc == 3) {
-    print = true;
-  }
-  std::vector<float> input = generate_random_input(K);
-  std::vector<float> output(K);
-
-  TIMERSTART(softime_auto);
-  softmax_auto(input.data(), output.data(), K);
-  TIMERSTOP(softime_auto);
-
-  // print the results on the standard output
-  if (print) {
-    printResult(output, K);
   }
 }
