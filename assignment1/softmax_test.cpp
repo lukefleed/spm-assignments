@@ -147,21 +147,9 @@ int main() {
     }
     std::printf("\n");
 
-    // Write validation results to CSV
-    result_file << "\nExpected efficiency order violated at sizes:"
-                << std::endl;
-    for (size_t i = 0; i < violated_sizes.size(); ++i) {
-      result_file << violated_sizes[i];
-      if (i < violated_sizes.size() - 1)
-        result_file << ",";
-    }
-  } else {
-    std::printf("Confermato: L'ordine di efficienza è rispettato (Plain > Auto "
-                "> AVX)\n");
+    result_file.close();
+    std::cout << "Results saved to results.csv" << std::endl;
+
+    return 0;
   }
-
-  result_file.close();
-  std::cout << "Results saved to results.csv" << std::endl;
-
-  return 0;
 }

@@ -1,8 +1,8 @@
 CXX                = g++ -std=c++17
-OPTFLAGS	   = -O3
-AUTOFLAGS          = -ftree-vectorize -ffast-math -march=native
-AVXFLAGS           = -mavx -mavx2 -mfma -ffast-math
-CXXFLAGS          += -Wall -Wextra
+OPTFLAGS	   = -O3 -ffast-math -fopenmp
+AUTOFLAGS = -march=native -ftree-vectorize -fopenmp
+AVXFLAGS = -mavx2 -mfma -malign-double -falign-loops=32
+CXXFLAGS          += -Wall -Wextra -fno-math-errno
 INCLUDES	   = -I. -I./include
 LIBS               = -lpthread
 
@@ -24,7 +24,7 @@ softmax_test: $(OBJS) $(TEST_OBJ)
 
 # Regole di compilazione specifiche
 softmax_plain.o: softmax_plain.cpp
-	$(CXX) $(CXXFLAGS) $(OPTFLAGS) $(INCLUDES) -c $< -o $@
+	$(CXX) $(CXXFLAGS) $(OPTFLAGS) -fno-tree-vectorize $(INCLUDES) -c $< -o $@
 
 softmax_auto.o: softmax_auto.cpp
 	$(CXX) $(CXXFLAGS) $(OPTFLAGS) $(AUTOFLAGS) $(INCLUDES) -c $< -o $@

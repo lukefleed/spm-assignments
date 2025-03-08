@@ -7,23 +7,19 @@
 #include <vector>
 
 static inline float horizontal_max(__m256 x) {
-  __m128 vlow = _mm256_extractf128_ps(x, 0);
-  __m128 vhigh = _mm256_extractf128_ps(x, 1);
-  vlow = _mm_max_ps(vlow, vhigh);
-  vhigh = _mm_shuffle_ps(vlow, vlow, _MM_SHUFFLE(2, 3, 0, 1));
-  vlow = _mm_max_ps(vlow, vhigh);
-  vhigh = _mm_shuffle_ps(vlow, vlow, _MM_SHUFFLE(1, 0, 3, 2));
-  vlow = _mm_max_ps(vlow, vhigh);
-  return _mm_cvtss_f32(vlow);
+  __m256 y = _mm256_permute2f128_ps(x, x, 0x01); // Swap 128-bit lanes
+  x = _mm256_max_ps(x, y);                       // Max tra le due metà
+  x = _mm256_max_ps(x, _mm256_shuffle_ps(x, x, _MM_SHUFFLE(1, 0, 3, 2)));
+  x = _mm256_max_ps(x, _mm256_shuffle_ps(x, x, _MM_SHUFFLE(2, 3, 0, 1)));
+  return _mm256_cvtss_f32(x);
 }
 
 static inline float horizontal_sum(__m256 x) {
-  __m128 a = _mm256_extractf128_ps(x, 0);
-  __m128 b = _mm256_extractf128_ps(x, 1);
-  a = _mm_add_ps(a, b);
-  a = _mm_hadd_ps(a, a);
-  a = _mm_hadd_ps(a, a);
-  return _mm_cvtss_f32(a);
+  __m256 y = _mm256_permute2f128_ps(x, x, 0x01);
+  x = _mm256_add_ps(x, y);
+  x = _mm256_hadd_ps(x, x);
+  x = _mm256_hadd_ps(x, x);
+  return _mm256_cvtss_f32(x);
 }
 
 void softmax_avx(const float *input, float *output, size_t K) {
@@ -34,12 +30,32 @@ void softmax_avx(const float *input, float *output, size_t K) {
   __m256 max_vals = _mm256_set1_ps(-std::numeric_limits<float>::infinity());
   size_t i = 0;
 
-  // Process 32 elements (4 AVX registers) at once for better instruction-level
-  // parallelism
-  for (; i + 32 <= K; i += 32) {
-    // Prefetch ahead to reduce cache misses
-    _mm_prefetch(input + i + 64, _MM_HINT_T0);
+  // Process 64 elements (8 AVX registers) at once instead of 32
+  for (; i + 64 <= K; i += 64) {
+    _mm_prefetch(input + i + 64,
+                 _MM_HINT_T0); // 64 elementi avanti (1 cache line)
 
+    __m256 chunk1 = _mm256_loadu_ps(input + i);
+    __m256 chunk2 = _mm256_loadu_ps(input + i + 8);
+    __m256 chunk3 = _mm256_loadu_ps(input + i + 16);
+    __m256 chunk4 = _mm256_loadu_ps(input + i + 24);
+    __m256 chunk5 = _mm256_loadu_ps(input + i + 32);
+    __m256 chunk6 = _mm256_loadu_ps(input + i + 40);
+    __m256 chunk7 = _mm256_loadu_ps(input + i + 48);
+    __m256 chunk8 = _mm256_loadu_ps(input + i + 56);
+
+    max_vals = _mm256_max_ps(max_vals, chunk1);
+    max_vals = _mm256_max_ps(max_vals, chunk2);
+    max_vals = _mm256_max_ps(max_vals, chunk3);
+    max_vals = _mm256_max_ps(max_vals, chunk4);
+    max_vals = _mm256_max_ps(max_vals, chunk5);
+    max_vals = _mm256_max_ps(max_vals, chunk6);
+    max_vals = _mm256_max_ps(max_vals, chunk7);
+    max_vals = _mm256_max_ps(max_vals, chunk8);
+  }
+
+  // Process remaining chunks of 32
+  for (; i + 32 <= K; i += 32) {
     __m256 chunk1 = _mm256_loadu_ps(input + i);
     __m256 chunk2 = _mm256_loadu_ps(input + i + 8);
     __m256 chunk3 = _mm256_loadu_ps(input + i + 16);
