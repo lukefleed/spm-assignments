@@ -40,20 +40,35 @@ bool verify_results(const float *a, const float *b, size_t K,
   return true;
 }
 
-// Template per il test delle prestazioni
+// Template per il test delle prestazioni con statistiche migliorate
 template <typename Func>
 double benchmark(Func &&func, const float *input, float *output, size_t K,
-                 size_t iterations = 10) {
-  auto start = std::chrono::high_resolution_clock::now();
+                 size_t samples = 10, size_t iterations_per_sample = 5) {
+  std::vector<double> measurements;
+  measurements.reserve(samples);
 
-  for (size_t i = 0; i < iterations; ++i) {
-    func(input, output, K);
+  // Esegue multiple misurazioni indipendenti
+  for (size_t s = 0; s < samples; ++s) {
+    auto start = std::chrono::high_resolution_clock::now();
+
+    // Ogni misurazione esegue la funzione più volte
+    for (size_t i = 0; i < iterations_per_sample; ++i) {
+      func(input, output, K);
+    }
+
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed = end - start;
+    double avg_time = elapsed.count() / iterations_per_sample;
+    measurements.push_back(avg_time);
   }
 
-  auto end = std::chrono::high_resolution_clock::now();
-  std::chrono::duration<double> elapsed = end - start;
+  // Calcola la media delle misurazioni
+  double sum = 0.0;
+  for (double time : measurements) {
+    sum += time;
+  }
 
-  return elapsed.count() / iterations;
+  return sum / samples;
 }
 
 int main() {
