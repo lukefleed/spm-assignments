@@ -265,22 +265,18 @@ int main() {
     }
   }
 
-  // Print a summary of any performance order violations.
-  std::cout << "-------------------------------------------------\n";
-  if (!expected_order_maintained) {
-    std::cout
-        << "WARNING: Expected performance order (Plain ≥ Auto ≥ AVX) violated\n"
-        << "Problematic sizes: ";
-    for (size_t i = 0; i < violated_sizes.size(); ++i) {
-      std::cout << violated_sizes[i];
-      if (i < violated_sizes.size() - 1)
-        std::cout << ", ";
-    }
-    std::cout << "\n";
-  }
-
   result_file.close();
   std::cout << "\nResults saved to results.csv\n";
+
+  // Open CSV file for writing speedup results
+  std::ofstream speedup_file("speedup.csv");
+  if (!speedup_file) {
+    std::cerr << "Failed to open speedup.csv\n";
+    return 1;
+  }
+
+  // Write header for speedup data
+  speedup_file << "Size,Auto_Speedup,AVX_Speedup\n";
 
   // After running all benchmarks, analyze the results
   std::cout << "\nPerformance Analysis:\n";
@@ -303,6 +299,9 @@ int main() {
 
     double auto_speedup = plain_time / auto_time;
     double avx_speedup = plain_time / avx_time;
+
+    // Write the speedup values to the CSV file
+    speedup_file << K << "," << auto_speedup << "," << avx_speedup << "\n";
 
     // Categorize the size
     std::string category;
@@ -336,6 +335,9 @@ int main() {
       }
     }
   }
+
+  speedup_file.close();
+  std::cout << "Speedup results saved to speedup.csv\n";
 
   std::cout << "- tiny:   K ≤ 64 elements\n";
   std::cout << "- small:  64 < K ≤ 1024 elements\n";
