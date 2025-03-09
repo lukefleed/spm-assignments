@@ -78,9 +78,7 @@ void softmax_avx(const float *input, float *output, size_t K) {
 
 // Reduce local maximums to global maximum
 #pragma omp critical
-    {
-      max_val = std::max(max_val, local_max);
-    }
+    { max_val = std::max(max_val, local_max); }
   }
 
   // ========================================================================
@@ -117,11 +115,14 @@ void softmax_avx(const float *input, float *output, size_t K) {
         const __m256 data2 = _mm256_load_ps(input + i + 16);
         const __m256 data3 = _mm256_load_ps(input + i + 24);
 
-        // Fast approximate exp using custom implementation or avx_mathfun.h
-        const __m256 exp0 = exp256_ps(_mm256_sub_ps(data0, max_broadcast));
-        const __m256 exp1 = exp256_ps(_mm256_sub_ps(data1, max_broadcast));
-        const __m256 exp2 = exp256_ps(_mm256_sub_ps(data2, max_broadcast));
-        const __m256 exp3 = exp256_ps(_mm256_sub_ps(data3, max_broadcast));
+        const __m256 exp0 = exp256_ps(
+            _mm256_fnmadd_ps(_mm256_set1_ps(1.0f), max_broadcast, data0));
+        const __m256 exp1 = exp256_ps(
+            _mm256_fnmadd_ps(_mm256_set1_ps(1.0f), max_broadcast, data1));
+        const __m256 exp2 = exp256_ps(
+            _mm256_fnmadd_ps(_mm256_set1_ps(1.0f), max_broadcast, data2));
+        const __m256 exp3 = exp256_ps(
+            _mm256_fnmadd_ps(_mm256_set1_ps(1.0f), max_broadcast, data3));
 
         _mm256_store_ps(output + i, exp0);
         _mm256_store_ps(output + i + 8, exp1);
@@ -207,10 +208,10 @@ void softmax_avx(const float *input, float *output, size_t K) {
       __m256 data2 = _mm256_load_ps(output + i + 16);
       __m256 data3 = _mm256_load_ps(output + i + 24);
 
-      data0 = _mm256_mul_ps(data0, inv_sum);
-      data1 = _mm256_mul_ps(data1, inv_sum);
-      data2 = _mm256_mul_ps(data2, inv_sum);
-      data3 = _mm256_mul_ps(data3, inv_sum);
+      data0 = _mm256_fmadd_ps(data0, inv_sum, _mm256_setzero_ps());
+      data1 = _mm256_fmadd_ps(data1, inv_sum, _mm256_setzero_ps());
+      data2 = _mm256_fmadd_ps(data2, inv_sum, _mm256_setzero_ps());
+      data3 = _mm256_fmadd_ps(data3, inv_sum, _mm256_setzero_ps());
 
       _mm256_store_ps(output + i, data0);
       _mm256_store_ps(output + i + 8, data1);
@@ -303,8 +304,10 @@ void softmax_avx_small(const float *input, float *output, size_t K) {
     // Load data and subtract max for numerical stability
     const __m256 data1 = _mm256_load_ps(input + i);
     const __m256 data2 = _mm256_load_ps(input + i + 8);
-    const __m256 shifted1 = _mm256_sub_ps(data1, max_broadcast);
-    const __m256 shifted2 = _mm256_sub_ps(data2, max_broadcast);
+    const __m256 shifted1 =
+        _mm256_fnmadd_ps(_mm256_set1_ps(1.0f), max_broadcast, data1);
+    const __m256 shifted2 =
+        _mm256_fnmadd_ps(_mm256_set1_ps(1.0f), max_broadcast, data2);
 
     // Compute exponentials
     const __m256 exp1 = exp256_ps(shifted1);

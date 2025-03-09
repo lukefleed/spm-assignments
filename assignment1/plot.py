@@ -35,7 +35,7 @@ fig.add_trace(go.Scatter(
 
 # Update layout with labels and title
 fig.update_layout(
-    title='Softmax Implementation Performance Comparison',
+    title='Softmax Implementation Performance Comparison (No AVX512 support)',
     xaxis_title='Vector Size (log scale)',
     yaxis_title='Execution Time (seconds)',
     legend_title='Implementation',
@@ -81,7 +81,7 @@ fig_small.add_trace(go.Scatter(
 
 # Update layout with labels and title for small sizes plot
 fig_small.update_layout(
-    title='Softmax Performance Comparison (Small Sizes ≤ 8192)',
+    title='Softmax Performance Comparison for Small Sizes (No AVX512 support)',
     xaxis_title='Vector Size (log scale)',
     yaxis_title='Execution Time (seconds)',
     legend_title='Implementation',

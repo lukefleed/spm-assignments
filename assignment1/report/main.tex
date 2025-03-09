@@ -40,19 +40,32 @@
 \newcommand{\C}{\mathbb{C}}
 
 
-\title{Methods for solving PageRank with multiple damping factors}
+\title{Assignment 1: The softmax function}
 \author{Luca Lombardo}
-\date{}
+\date{\today}
 
 \begin{document}
 \maketitle
 
 \tableofcontents
-\clearpage
 
 \setlength{\parindent}{0em}
 % \setlength{\parskip}{1em}
 
+\section{Introduction}
+The softmax function is a mathematical function that takes a vector of real numbers as input and transforms it into a probability distribution. The mathematical definition of the softmax function is given by:
 
+\begin{equation*}
+    \sigma: \R^K \to \Big\{ z \in \R^K \,|\, z_i \geq 0, \sum_{i=1}^K z_i = 1 \Big\}
+\end{equation*}
+\begin{equation}
+    \sigma(\mathbf{z}_j) = \frac{e^{z_j}}{\sum_{i=1}^K e^{z_i}}
+\end{equation}
+
+\section{Implementations}
+In the following sections, given a scalar implementation (to witch we will refer as \texttt{softmax\_plain}), we will show how to auto-vectorize it and then how to manually vectorize the code using AVX intrinsics and FMA. Then we will compare the results of the three implementations.
+
+\subsection{Auto-Vectorized implementation}
+In implementing\footnote{This version is implemented in the file \texttt{softmax\_auto.cpp}.} the autovectorized version of the softmax function, I made several key modifications compared to the plain implementation. First, I added \texttt{\#pragma omp simd} directives to explicitly instruct the compiler to vectorize the three main computational loops, allowing parallel processing of multiple array elements with SIMD instructions. For the first two loops, I included appropriate reduction clauses (i.e., \texttt{reduction(max : max\_val)} and \texttt{reduction(+ : sum)}) to ensure correct calculation of the maximum value and sum while maintaining vectorization. I replaced \texttt{std::exp()} with the single-precision \texttt{expf()} function, which is specifically optimized for floating-point operations, offers better performance with SIMD instructions, and avoids unnecessary double-precision calculations that would be performed by \texttt{std::exp()} before converting back to float. Rather than using repeated divisions in the normalization step, I precomputed the inverse of the sum (\texttt{inv\_sum = 1.0f / sum}) and used multiplication operations, which are generally more efficient in vectorized code. Instead of using \texttt{std::max()}, I implemented an explicit comparison with an \texttt{if}-statement that might be more amenable to autovectorization for the compiler.
 
 \end{document}

@@ -1,1 +1,14 @@
 assignment1/softmax_test
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.dvi
+*.idx
+*.out
+*.log
+*.toc
+*.gz
+*.fdb_latexmk
+*.fls
+.vscode/settings.json
