@@ -2,103 +2,77 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
-#include <cstdlib> // per posix_memalign
+#include <cstdlib>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <memory>
+#include <new> // For std::align_val_t
 #include <random>
 #include <vector>
 
-/**
- * @brief Aligned allocator for proper memory alignment with SIMD instructions
- * @tparam T The type of elements to allocate
- */
-template <typename T> class AlignedAllocator {
+// This allocator uses the over-aligned new and delete operators provided in
+// C++17 to guarantee that allocated memory is aligned to 32 bytes (suitable for
+// AVX).
+template <typename T> class AlignedAllocatorC17 {
 public:
   using value_type = T;
-  static constexpr size_t alignment = 32; // Alignment at 32 bytes for AVX
+  static constexpr size_t alignment = 32; // Alignment required for AVX
 
-  // Verify alignment is a power of 2 and sufficient for AVX
-  static_assert((alignment & (alignment - 1)) == 0,
-                "Alignment must be a power of 2");
-  static_assert(alignment >= 32,
-                "Alignment must be at least 32 bytes for AVX operations");
-
-  AlignedAllocator() noexcept = default;
-
-  template <typename U>
-  AlignedAllocator(const AlignedAllocator<U> &) noexcept {}
-
-  /**
-   * @brief Allocate aligned memory
-   * @param n Number of elements to allocate
-   * @return Pointer to aligned memory
-   * @throws std::bad_alloc if allocation fails
-   */
-  T *allocate(size_t n) {
+  // Allocate memory using the C++17 aligned operator new.
+  T *allocate(std::size_t n) {
     if (n == 0)
       return nullptr;
-
-    void *ptr = nullptr;
-    if (posix_memalign(&ptr, alignment, n * sizeof(T)) != 0) {
-      throw std::bad_alloc();
-    }
-    return static_cast<T *>(ptr);
+    return static_cast<T *>(
+        ::operator new(n * sizeof(T), std::align_val_t(alignment)));
   }
 
-  /**
-   * @brief Deallocate previously allocated memory
-   * @param p Pointer to memory to deallocate
-   * @param n Number of elements (unused)
-   */
-  void deallocate(T *p, size_t) noexcept { free(p); }
+  // Deallocate memory using the C++17 aligned operator delete.
+  void deallocate(T *p, std::size_t) noexcept {
+    ::operator delete(p, std::align_val_t(alignment));
+  }
 
   template <typename U>
-  bool operator==(const AlignedAllocator<U> &) const noexcept {
+  bool operator==(const AlignedAllocatorC17<U> &) const noexcept {
     return true;
   }
 
   template <typename U>
-  bool operator!=(const AlignedAllocator<U> &) const noexcept {
+  bool operator!=(const AlignedAllocatorC17<U> &) const noexcept {
     return false;
   }
 };
 
+// Alias for a vector using the C++17 aligned allocator.
 template <typename T>
-using aligned_vector = std::vector<T, AlignedAllocator<T>>;
+using aligned_vector = std::vector<T, AlignedAllocatorC17<T>>;
 
-// Dichiarazioni delle funzioni softmax
+//------------------------------------------------------------------------------
+// Declarations for softmax functions to be tested.
+// Implementations should compute:
+//   output[i] = exp(input[i] - max(input)) / sum_j(exp(input[j] - max(input)))
+//------------------------------------------------------------------------------
 void softmax_plain(const float *input, float *output, size_t K);
 void softmax_auto(const float *input, float *output, size_t K);
 void softmax_avx(const float *input, float *output, size_t K);
 void softmax_avx_small(const float *input, float *output, size_t K);
 
-/**
- * @brief Generate random input data for testing with a fixed seed
- * @param K Size of the input array
- * @param min Minimum value for random numbers
- * @param max Maximum value for random numbers
- * @return Vector of random floats aligned for SIMD operations
- */
+//------------------------------------------------------------------------------
+// Generate random input data with a fixed seed
+//------------------------------------------------------------------------------
 aligned_vector<float> generate_random_input(size_t K, float min = -1.0f,
                                             float max = 1.0f) noexcept {
   aligned_vector<float> input(K);
-  std::mt19937 gen(5489); // Seed fisso per risultati riproducibili
+  std::mt19937 gen(5489); // Fixed seed for reproducible results.
   std::uniform_real_distribution<float> dis(min, max);
   std::generate(input.begin(), input.end(), [&]() { return dis(gen); });
   return input;
 }
 
-/**
- * @brief Verify if two result arrays are approximately equal
- * @param a First array to compare
- * @param b Second array to compare
- * @param K Size of the arrays
- * @param abs_eps Absolute error tolerance
- * @param rel_eps Relative error tolerance
- * @return True if results match within tolerance, false otherwise
- */
+//------------------------------------------------------------------------------
+// Verify that two arrays are approximately equal.
+// Uses both absolute and relative error tolerances.
+//------------------------------------------------------------------------------
 bool verify_results(const float *a, const float *b, size_t K,
                     float abs_eps = 1e-6, float rel_eps = 1e-4) noexcept {
   for (size_t i = 0; i < K; ++i) {
@@ -113,13 +87,10 @@ bool verify_results(const float *a, const float *b, size_t K,
   return true;
 }
 
-/**
- * @brief Validate that the output array satisfies softmax properties
- * @param output Array containing softmax results
- * @param K Size of the array
- * @param epsilon Error tolerance for the sum (should be close to 1.0)
- * @return True if output is a valid softmax result, false otherwise
- */
+//------------------------------------------------------------------------------
+// Validate that the output array is a proper softmax distribution:
+// all values are in [0,1] and sum approximately to 1.
+//------------------------------------------------------------------------------
 bool validate_softmax(const float *output, size_t K,
                       float epsilon = 1e-3) noexcept {
   float sum = 0.0f;
@@ -131,17 +102,10 @@ bool validate_softmax(const float *output, size_t K,
   return std::abs(sum - 1.0f) <= epsilon;
 }
 
-/**
- * @brief Benchmark a function with warmup and return the median execution time
- * @tparam Func Type of the function to benchmark
- * @param func Function to benchmark
- * @param input Input data array
- * @param output Output data array
- * @param K Size of the arrays
- * @param samples Number of measurement samples to collect
- * @param iterations_per_sample Number of iterations per sample
- * @return Median execution time in seconds
- */
+//------------------------------------------------------------------------------
+// Benchmark a softmax function by running multiple iterations and samples,
+// then return the median execution time (seconds).
+//------------------------------------------------------------------------------
 template <typename Func>
 double benchmark(Func &&func, const float *input, float *output, size_t K,
                  size_t samples = 11,
@@ -149,12 +113,12 @@ double benchmark(Func &&func, const float *input, float *output, size_t K,
   std::vector<double> measurements;
   measurements.reserve(samples);
 
-  // Warmup
+  // Warmup phase to minimize startup overhead.
   for (size_t i = 0; i < 3; ++i) {
     func(input, output, K);
   }
 
-  // Measure execution time
+  // Measurement phase.
   for (size_t s = 0; s < samples; ++s) {
     auto start = std::chrono::high_resolution_clock::now();
 
@@ -167,70 +131,77 @@ double benchmark(Func &&func, const float *input, float *output, size_t K,
     measurements.push_back(elapsed.count() / iterations_per_sample);
   }
 
-  // Returns the median of the measurements
+  // Return the median of the measurements.
   std::sort(measurements.begin(), measurements.end());
   return measurements[measurements.size() / 2];
 }
 
-/**
- * @brief Structure to hold test data for each test size
- */
+//------------------------------------------------------------------------------
+// Structure to hold test data for each test size.
+//------------------------------------------------------------------------------
 struct TestData {
-  size_t size;
-  aligned_vector<float> input;
-  aligned_vector<float> plain;
-  aligned_vector<float> auto_vec;
-  aligned_vector<float> avx;
+  size_t size;                    // Number of elements.
+  aligned_vector<float> input;    // Input array.
+  aligned_vector<float> plain;    // Output from plain softmax.
+  aligned_vector<float> auto_vec; // Output from auto-vectorized softmax.
+  aligned_vector<float> avx;      // Output from AVX softmax.
 };
 
-/**
- * @brief Main function to run the softmax implementation benchmarks
- * @return 0 on success, 1 on failure
- */
+//------------------------------------------------------------------------------
+// Main function: runs tests, benchmarks, and writes results to CSV.
+//------------------------------------------------------------------------------
 int main() {
+  // Define various input sizes for testing.
   const std::vector<size_t> test_sizes = {128,    256,    512,    1024,   2048,
                                           4096,   8192,   16384,  32768,  65536,
                                           131072, 262144, 524288, 1048576};
 
-  // Initialize test data
+  // Initialize test data for each input size.
   std::vector<TestData> test_data;
   for (auto K : test_sizes) {
-    test_data.push_back({K, generate_random_input(K), aligned_vector<float>(K),
-                         aligned_vector<float>(K), aligned_vector<float>(K)});
+    test_data.push_back({
+        K,
+        generate_random_input(K), // Random input.
+        aligned_vector<float>(K), // Plain softmax output.
+        aligned_vector<float>(K), // Auto-vectorized softmax output.
+        aligned_vector<float>(K)  // AVX softmax output.
+    });
   }
 
-  // Open the result file
+  // Open CSV file for writing benchmark results.
   std::ofstream result_file("results.csv");
   if (!result_file) {
     std::cerr << "Failed to open results.csv\n";
     return 1;
   }
 
-  // Print header
+  // Print header for console output.
   std::cout << std::left << std::setw(10) << "Size" << std::setw(12) << "Plain"
             << std::setw(12) << "Auto" << std::setw(12) << "AVX"
-            << "\n-------------------------------------------------\n";
+            << "\n"
+            << "-------------------------------------------------\n";
 
   result_file << "Size,Plain,Auto,AVX\n";
 
+  // Flag to check if expected performance order is maintained.
   bool expected_order_maintained = true;
   std::vector<size_t> violated_sizes;
 
   for (auto &data : test_data) {
     const size_t K = data.size;
 
-    // Cache warmup
+    // Warmup: run plain and auto implementations.
     softmax_plain(data.input.data(), data.plain.data(), K);
     softmax_auto(data.input.data(), data.auto_vec.data(), K);
 
-    // Use softmax_avx_small for smaller sizes
-    if (K <= 8192) {
+    // Choose the appropriate AVX function based on input size.
+    if (K <= 8192)
       softmax_avx_small(data.input.data(), data.avx.data(), K);
-    } else {
+    else
       softmax_avx(data.input.data(), data.avx.data(), K);
-    }
 
-    // Validate results
+    // Validate that all implementations yield equivalent results and valid
+    // softmax outputs.
     if (!verify_results(data.plain.data(), data.auto_vec.data(), K) ||
         !verify_results(data.plain.data(), data.avx.data(), K) ||
         !validate_softmax(data.plain.data(), K) ||
@@ -240,41 +211,42 @@ int main() {
       return 1;
     }
 
-    // Benchmark
+    // Benchmark each implementation.
     const double t_plain =
         benchmark(softmax_plain, data.input.data(), data.plain.data(), K);
     const double t_auto =
         benchmark(softmax_auto, data.input.data(), data.auto_vec.data(), K);
 
-    // Use appropriate function for benchmark based on size
+    // Use a heuristic based on cache size to select the appropriate AVX
+    // function.
+    const size_t BLOCK_SIZE =
+        32 * 1024 / sizeof(float); // Approximately 8192 floats.
     double t_avx;
-    if (K <= 8192) {
+    if (K <= BLOCK_SIZE * 2)
       t_avx =
           benchmark(softmax_avx_small, data.input.data(), data.avx.data(), K);
-    } else {
+    else
       t_avx = benchmark(softmax_avx, data.input.data(), data.avx.data(), K);
-    }
 
-    // Print results
+    // Print benchmark results.
     std::cout << std::left << std::setw(10) << K << std::fixed
               << std::setprecision(7) << std::setw(12) << t_plain
               << std::setw(12) << t_auto << std::setw(12) << t_avx << "\n";
 
-    // Write results to file
     result_file << K << "," << t_plain << "," << t_auto << "," << t_avx << "\n";
     if (!result_file) {
       std::cerr << "Failed to write results for size " << K << "\n";
       return 1;
     }
 
-    // Check if the expected order is maintained
+    // Check if the expected performance order (Plain ≥ Auto ≥ AVX) holds.
     if (!(t_plain >= t_auto && t_auto >= t_avx)) {
       expected_order_maintained = false;
       violated_sizes.push_back(K);
     }
   }
 
-  // Print summary
+  // Print a summary of any performance order violations.
   std::cout << "-------------------------------------------------\n";
   if (!expected_order_maintained) {
     std::cout

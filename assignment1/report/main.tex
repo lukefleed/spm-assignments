@@ -52,20 +52,26 @@
 \setlength{\parindent}{0em}
 % \setlength{\parskip}{1em}
 
-\section{Introduction}
-The softmax function is a mathematical function that takes a vector of real numbers as input and transforms it into a probability distribution. The mathematical definition of the softmax function is given by:
+% \section{Introduction}
+% The softmax function is a mathematical function that takes a vector of real numbers as input and transforms it into a probability distribution. The mathematical definition of the softmax function is given by:
 
-\begin{equation*}
-    \sigma: \R^K \to \Big\{ z \in \R^K \,|\, z_i \geq 0, \sum_{i=1}^K z_i = 1 \Big\}
-\end{equation*}
-\begin{equation}
-    \sigma(\mathbf{z}_j) = \frac{e^{z_j}}{\sum_{i=1}^K e^{z_i}}
-\end{equation}
+% \begin{equation*}
+%     \sigma: \R^K \to \Big\{ z \in \R^K \,|\, z_i \geq 0, \sum_{i=1}^K z_i = 1 \Big\}
+% \end{equation*}
+% \begin{equation}
+%     \sigma(\mathbf{z}_j) = \frac{e^{z_j}}{\sum_{i=1}^K e^{z_i}}
+% \end{equation}
 
 \section{Implementations}
 In the following sections, given a scalar implementation (to witch we will refer as \texttt{softmax\_plain}), we will show how to auto-vectorize it and then how to manually vectorize the code using AVX intrinsics and FMA. Then we will compare the results of the three implementations.
 
 \subsection{Auto-Vectorized implementation}
 In implementing\footnote{This version is implemented in the file \texttt{softmax\_auto.cpp}.} the autovectorized version of the softmax function, I made several key modifications compared to the plain implementation. First, I added \texttt{\#pragma omp simd} directives to explicitly instruct the compiler to vectorize the three main computational loops, allowing parallel processing of multiple array elements with SIMD instructions. For the first two loops, I included appropriate reduction clauses (i.e., \texttt{reduction(max : max\_val)} and \texttt{reduction(+ : sum)}) to ensure correct calculation of the maximum value and sum while maintaining vectorization. I replaced \texttt{std::exp()} with the single-precision \texttt{expf()} function, which is specifically optimized for floating-point operations, offers better performance with SIMD instructions, and avoids unnecessary double-precision calculations that would be performed by \texttt{std::exp()} before converting back to float. Rather than using repeated divisions in the normalization step, I precomputed the inverse of the sum (\texttt{inv\_sum = 1.0f / sum}) and used multiplication operations, which are generally more efficient in vectorized code. Instead of using \texttt{std::max()}, I implemented an explicit comparison with an \texttt{if}-statement that might be more amenable to autovectorization for the compiler.
+
+\subsection{Manually Vectorized implementation}
+In designing the softmax implementation, I developed two distinct versions to address different input size scenarios. For large input arrays, the primary variant employs cache blocking with a block size derived from the L1 cache capacity (4096 bytes) to ensure that each data block remains in cache during processing. This decision minimizes memory latency through effective prefetching and loop unrolling, while OpenMP parallelization distributes the computational load across threads. In contrast, the "small" version avoids the overhead associated with thread management and cache blocking, which is unnecessary for data sizes that already reside in cache. This dual-approach allows the implementation to achieve optimal performance: the large variant excels with high data volumes where memory access becomes the bottleneck, and the small variant delivers better throughput for cache-resident datasets. \\
+
+For the primary function, several specific optimization choices were made to maximize efficiency. Data is processed in chunks of 32 elements per iteration to match the width of AVX registers, and for indices not multiple of 8, scalar processing is used rather than vector masking; the infrequent residual iterations render the simpler scalar approach both effective and low-overhead. The use of the \texttt{\_mm256\_fnmadd\_ps} intrinsic in the exponential computation phase was carefully integrated to combine the subtraction of the maximum value with the preparation of the exponent input in one step, thereby reducing the overall instruction count and streamlining the computation pipeline.
+
 
 \end{document}
