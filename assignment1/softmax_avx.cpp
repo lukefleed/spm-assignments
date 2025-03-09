@@ -12,8 +12,7 @@
 void softmax_avx(const float *input, float *output, size_t K) {
 
   // Cache-friendly block size (L1 cache consideration)
-  const size_t BLOCK_SIZE =
-      4096 / sizeof(float); // Typical L1 data cache is 32KB
+  const size_t BLOCK_SIZE = 4096 / sizeof(float);
 
   // ========================================================================
   // Phase 1: Maximum value computation with vectorized reduction and blocking

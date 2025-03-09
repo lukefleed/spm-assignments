@@ -154,7 +154,7 @@ double benchmark(Func &&func, const float *input, float *output, size_t K,
     func(input, output, K);
   }
 
-  // Misurazioni
+  // Measure execution time
   for (size_t s = 0; s < samples; ++s) {
     auto start = std::chrono::high_resolution_clock::now();
 
@@ -167,7 +167,7 @@ double benchmark(Func &&func, const float *input, float *output, size_t K,
     measurements.push_back(elapsed.count() / iterations_per_sample);
   }
 
-  // Restituisce la mediana
+  // Returns the median of the measurements
   std::sort(measurements.begin(), measurements.end());
   return measurements[measurements.size() / 2];
 }
