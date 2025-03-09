@@ -1,11 +1,3 @@
-/**
- * @file softmax_avx.cpp
- * @brief Optimized AVX-accelerated softmax implementation with masking and
- * OpenMP parallelization.
- * @author Your Name
- * @date 2023-10-01
- */
-
 #include <algorithm>
 #include <avx_mathfun.h>
 #include <immintrin.h>
