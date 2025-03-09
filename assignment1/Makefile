@@ -1,6 +1,6 @@
 CXX                = g++ -std=c++17
 OPTFLAGS	   = -O3 -ffast-math -fopenmp
-AUTOFLAGS = -mavx2 -ftree-vectorize -fopenmp
+AUTOFLAGS = -mavx2 -ftree-vectorize -fopenmp # use -march=native for using native CPU
 AVXFLAGS = -mavx2 -mfma -malign-double -falign-loops=32 -fopenmp
 CXXFLAGS          += -Wall -Wextra -fno-math-errno
 INCLUDES	   = -I. -I./include
@@ -21,13 +21,13 @@ softmax_test: $(OBJS) $(TEST_OBJ)
 	$(CXX) $(CXXFLAGS) $(OPTFLAGS) -o $@ $^ $(LIBS)
 
 softmax_plain.o: softmax_plain.cpp
-	$(CXX) $(CXXFLAGS) $(OPTFLAGS) -fno-tree-vectorize $(INCLUDES) -c $< -o $@
+	$(CXX) $(CXXFLAGS) $(OPTFLAGS) -fno-tree-vectorize -DTEST_BUILD $(INCLUDES) -c $< -o $@
 
 softmax_auto.o: softmax_auto.cpp
-	$(CXX) $(CXXFLAGS) $(OPTFLAGS) $(AUTOFLAGS) $(INCLUDES) -c $< -o $@
+	$(CXX) $(CXXFLAGS) $(OPTFLAGS) $(AUTOFLAGS) -DTEST_BUILD $(INCLUDES) -c $< -o $@
 
 softmax_avx.o: softmax_avx.cpp
-	$(CXX) $(CXXFLAGS) $(OPTFLAGS) $(AVXFLAGS) $(INCLUDES) -c $< -o $@
+	$(CXX) $(CXXFLAGS) $(OPTFLAGS) $(AVXFLAGS) -DTEST_BUILD $(INCLUDES) -c $< -o $@
 
 $(TEST_OBJ): $(TEST_SRC)
 	$(CXX) $(CXXFLAGS) $(OPTFLAGS) $(INCLUDES) -c $< -o $@
@@ -43,4 +43,4 @@ clean:
 	-rm -fr *.o *~ softmax_test
 
 cleanall: clean
-	-rm -fr $(TARGET)
+	-rm -fr softmax_plain softmax_auto softmax_avx

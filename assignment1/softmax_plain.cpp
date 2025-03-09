@@ -34,6 +34,7 @@ void softmax_plain(const float *input, float *output, size_t K) {
 // original code.
 // --------------------------------------------------------------------------//
 
+#ifndef TEST_BUILD
 std::vector<float> generate_random_input(size_t K, float min = -1.0f,
                                          float max = 1.0f) {
   std::vector<float> input(K);
@@ -78,3 +79,4 @@ int main(int argc, char *argv[]) {
     printResult(output, K);
   }
 }
+#endif

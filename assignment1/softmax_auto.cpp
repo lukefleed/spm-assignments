@@ -89,6 +89,7 @@ public:
 template <typename T>
 using aligned_vector = std::vector<T, AlignedAllocatorC17<T>>;
 
+#ifndef TEST_BUILD
 // Generate random input data with a fixed seed
 aligned_vector<float> generate_random_input(size_t K, float min = -1.0f,
                                             float max = 1.0f) noexcept {
@@ -108,7 +109,9 @@ void printResult(const aligned_vector<float> &v, size_t K) {
     std::fprintf(stderr, "%f\n", v[i]);
   }
 }
+#endif
 
+#ifndef TEST_BUILD
 int main(int argc, char *argv[]) {
   if (argc == 1) {
     std::printf("use: %s K [1]\n", argv[0]);
@@ -141,3 +144,4 @@ int main(int argc, char *argv[]) {
 
   return 0;
 }
+#endif
