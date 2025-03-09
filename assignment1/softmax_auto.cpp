@@ -7,6 +7,17 @@
 #include <random>
 #include <vector>
 
+/**
+ * @brief Compute the softmax of an input array using auto-vectorization.
+ * @param input Pointer to the input array (must be 32-byte aligned).
+ * @param output Pointer to the output array (must be 32-byte aligned).
+ * @param K Size of the input and output arrays.
+ *
+ * This function computes the softmax of the input array using
+ * auto-vectorization Consider removing the current pragma omp simd and
+ * substituting it with the commented one. For small values of K, the overhead
+ * of OpenMP is not worth it.
+ */
 void softmax_auto(const float *input, float *output, size_t K) {
   float max_val = -std::numeric_limits<float>::infinity();
 #pragma omp simd reduction(max : max_val)

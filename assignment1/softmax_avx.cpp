@@ -85,6 +85,7 @@ void softmax_avx(const float *input, float *output, size_t K) {
 
     const float block_max = _mm256_cvtss_f32(max_vec);
     max_val = std::max(max_val, block_max);
+    // max_val = fmaxf(max_val, block_max);
   }
 
   // Phase 2: Compute exponentials and sum with masking
