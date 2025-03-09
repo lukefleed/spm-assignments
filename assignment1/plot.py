@@ -7,8 +7,8 @@ import numpy as np
 os.makedirs("images", exist_ok=True)
 
 # Read the CSV file
-df = pd.read_csv("results_parallel_axv521.csv")
-df_speedup = pd.read_csv("speedup_parallel_axv521.csv")
+df = pd.read_csv("results_parallel_noaxv521.csv")
+df_speedup = pd.read_csv("speedup_noparallel_axv521.csv")
 
 # Create figure for all sizes
 fig = go.Figure()
@@ -37,7 +37,7 @@ fig.add_trace(go.Scatter(
 
 # Update layout with labels and title
 fig.update_layout(
-    title='Softmax Implementation Performance Comparison (Parallel, AXV521)',
+    title='Softmax Implementation Performance Comparison (Parallel, No AXV521)',
     xaxis_title='Vector Size (log scale)',
     yaxis_title='Execution Time (seconds)',
     legend_title='Implementation',
@@ -54,8 +54,8 @@ fig.update_layout(
 )
 
 # Save the figure as PDF
-fig.write_image("images/softmax_parallel_axv521.pdf")
-print("Plot saved as images/softmax_parallel_axv521.pdf")
+fig.write_image("images/softmax_parallel_noaxv521.pdf")
+print("Plot saved as images/softmax_parallel_noaxv521.pdf")
 
 # ---------- Create Small Sizes Plot ----------
 
@@ -89,7 +89,7 @@ fig_small.add_trace(go.Scatter(
 
 # Update layout with labels and title for small sizes plot
 fig_small.update_layout(
-    title='Softmax Performance Comparison for Small Sizes (Parallel, AXV521)',
+    title='Softmax Performance Comparison for Small Sizes (Parallel, No AXV521)',
     xaxis_title='Vector Size (log scale)',
     yaxis_title='Execution Time (seconds)',
     legend_title='Implementation',
@@ -106,8 +106,8 @@ fig_small.update_layout(
 )
 
 # Save the small sizes figure as PDF
-fig_small.write_image("images/softmax_parallel_axv521_small.pdf")
-print("Small sizes plot saved as images/softmax_parallel_axv521_small.pdf")
+fig_small.write_image("images/softmax_parallel_noaxv521_small.pdf")
+print("Small sizes plot saved as images/softmax_parallel_noaxv521_small.pdf")
 
 # ---------- Create Histogram Plot for Speedups with Extended Non-Power-of-2 Categories ----------
 
@@ -175,7 +175,13 @@ fig_speedup = go.Figure(data=[
 ])
 fig_speedup.update_layout(
     barmode='group',
-    title='Average Speedup Comparison',
+    title='Average Speedup relative to Plain Implementation (No Parallel, No AXV521)',
+    legend=dict(
+        yanchor="top",
+        y=0.99,
+        xanchor="left",
+        x=0.01
+    ),
     xaxis_title='Size of the input',
     yaxis_title='Average Speedup',
         template='plotly_white',
@@ -184,5 +190,5 @@ fig_speedup.update_layout(
 )
 
 # Save the updated speedup histogram as PDF
-fig_speedup.write_image("images/softmax_parallel_axv521_speedup.pdf")
-print("Speedup plot saved as images/softmax_parallel_axv521_speedup.pdf")
+fig_speedup.write_image("images/softmax_noparallel_axv521_speedup.pdf")
+print("Speedup plot saved as images/softmax_noparallel_axv521_speedup.pdf")

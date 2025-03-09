@@ -24,3 +24,57 @@ void softmax_plain(const float *input, float *output, size_t K) {
     output[i] /= sum;
   }
 }
+
+// --------------------------------------------------------------------------//
+// This code implementation includes a standalone benchmarking mechanism with a
+// main function that allows direct timing measurement of the softmax
+// implementations. While you're supposed to use `make test`
+// for formal benchmarking, this approach offers an alternative that directly
+// prints the elapsed time using the TIMERSTART and TIMERSTOP macros from the
+// original code.
+// --------------------------------------------------------------------------//
+
+std::vector<float> generate_random_input(size_t K, float min = -1.0f,
+                                         float max = 1.0f) {
+  std::vector<float> input(K);
+  // std::random_device rd;
+  // std::mt19937 gen(rd());
+  std::mt19937 gen(5489); // fixed seed for reproducible results
+  std::uniform_real_distribution<float> dis(min, max);
+  for (size_t i = 0; i < K; ++i) {
+    input[i] = dis(gen);
+  }
+  return input;
+}
+
+void printResult(std::vector<float> &v, size_t K) {
+  for (size_t i = 0; i < K; ++i) {
+    std::fprintf(stderr, "%f\n", v[i]);
+  }
+}
+
+int main(int argc, char *argv[]) {
+  if (argc == 1) {
+    std::printf("use: %s K [1]\n", argv[0]);
+    return 0;
+  }
+  size_t K = 0;
+  if (argc >= 2) {
+    K = std::stol(argv[1]);
+  }
+  bool print = false;
+  if (argc == 3) {
+    print = true;
+  }
+  std::vector<float> input = generate_random_input(K);
+  std::vector<float> output(K);
+
+  TIMERSTART(softime_plain);
+  softmax_plain(input.data(), output.data(), K);
+  TIMERSTOP(softime_plain);
+
+  // print the results on the standard output
+  if (print) {
+    printResult(output, K);
+  }
+}
