@@ -6,7 +6,7 @@ import os
 os.makedirs("images", exist_ok=True)
 
 # Read the CSV file
-df = pd.read_csv("results.csv")
+df = pd.read_csv("results_noparallel_axv521.csv")
 
 # Create figure for all sizes
 fig = go.Figure()
@@ -35,7 +35,7 @@ fig.add_trace(go.Scatter(
 
 # Update layout with labels and title
 fig.update_layout(
-    title='Softmax Implementation Performance Comparison (No AVX512 support)',
+    title='Softmax Implementation Performance Comparison',
     xaxis_title='Vector Size (log scale)',
     yaxis_title='Execution Time (seconds)',
     legend_title='Implementation',
@@ -46,8 +46,8 @@ fig.update_layout(
 )
 
 # Save the figure as PDF
-fig.write_image("images/softmax_performance.pdf")
-print("Plot saved as images/softmax_performance.pdf")
+fig.write_image("images/softmax_noparallel_axv521.pdf")
+print("Plot saved as images/softmax_noparallel_axv521.pdf")
 
 # ---------- Create Small Sizes Plot ----------
 
@@ -81,7 +81,7 @@ fig_small.add_trace(go.Scatter(
 
 # Update layout with labels and title for small sizes plot
 fig_small.update_layout(
-    title='Softmax Performance Comparison for Small Sizes (No AVX512 support)',
+    title='Softmax Performance Comparison for Small Sizes',
     xaxis_title='Vector Size (log scale)',
     yaxis_title='Execution Time (seconds)',
     legend_title='Implementation',
@@ -92,5 +92,5 @@ fig_small.update_layout(
 )
 
 # Save the small sizes figure as PDF
-fig_small.write_image("images/softmax_performance_small.pdf")
-print("Small sizes plot saved as images/softmax_performance_small.pdf")
+fig_small.write_image("images/softmax_noparallel_axv521_small.pdf")
+print("Small sizes plot saved as images/softmax_noparallel_axv521_small.pdf")

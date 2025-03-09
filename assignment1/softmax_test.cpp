@@ -191,9 +191,9 @@ int main() {
   }
 
   // Open CSV file for writing benchmark results.
-  std::ofstream result_file("results.csv");
+  std::ofstream result_file("results_noparallel_axv521.csv");
   if (!result_file) {
-    std::cerr << "Failed to open results.csv\n";
+    std::cerr << "Failed to open results_noparallel_axv521.csv\n";
     return 1;
   }
 
@@ -269,7 +269,7 @@ int main() {
   std::cout << "\nResults saved to results.csv\n";
 
   // Open CSV file for writing speedup results
-  std::ofstream speedup_file("speedup.csv");
+  std::ofstream speedup_file("speedup_noparallel_axv521.csv");
   if (!speedup_file) {
     std::cerr << "Failed to open speedup.csv\n";
     return 1;
