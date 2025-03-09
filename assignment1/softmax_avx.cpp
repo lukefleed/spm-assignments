@@ -147,6 +147,25 @@ void softmax_avx(const float *input, float *output, size_t K) {
         local_sum += output[i];
       }
 
+      // Usa masked processing
+      if (i < block_end) {
+        int remaining = block_end - i;
+        float tmp[8] = {0}; // Allocazione temporanea allineata
+
+        // Copia solo gli elementi rimanenti
+        std::copy(input + i, input + block_end, tmp);
+
+        const __m256 data = _mm256_load_ps(tmp);
+        const __m256 exp_data = exp256_ps(_mm256_sub_ps(data, max_broadcast));
+        _mm256_store_ps(tmp, exp_data);
+
+        // Copia indietro solo gli elementi validi
+        for (int j = 0; j < remaining; j++) {
+          output[i + j] = tmp[j];
+          local_sum += tmp[j];
+        }
+      }
+
       // Horizontal sum reduction
       __m256 sum_vec = _mm256_add_ps(sum0, sum1);
       __m256 tmp = _mm256_permute2f128_ps(sum_vec, sum_vec, 0x01);
@@ -349,13 +368,12 @@ void softmax_avx_small(const float *input, float *output, size_t K) {
     _mm256_store_ps(output + i + 8, data2);
   }
 
-  // Process remaining elements in 8-element chunks
+  // use masked processing for remaining elements
   for (; i + 7 < K; i += 8) {
     __m256 data = _mm256_load_ps(output + i);
     data = _mm256_mul_ps(data, inv_sum);
     _mm256_store_ps(output + i, data);
   }
-
   // Handle remaining elements
   for (; i < K; ++i) {
     output[i] /= sum;
