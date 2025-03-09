@@ -35,67 +35,60 @@ void softmax_avx(const float *input, float *output, size_t K) {
   float max_val = -std::numeric_limits<float>::infinity();
 
   // Phase 1: Compute the maximum value using vectorized reduction with masking
-#pragma omp parallel num_threads(omp_get_num_procs())
-  {
-    float local_max = -std::numeric_limits<float>::infinity();
+#pragma omp parallel for reduction(max                                         \
+                                   : max_val) num_threads(omp_get_num_procs())
+  for (size_t block_start = 0; block_start < K; block_start += BLOCK_SIZE) {
+    const size_t block_end = std::min(block_start + BLOCK_SIZE, K);
+    __m256 max_vec = _mm256_set1_ps(-std::numeric_limits<float>::infinity());
 
-#pragma omp for nowait
-    for (size_t block_start = 0; block_start < K; block_start += BLOCK_SIZE) {
-      const size_t block_end = std::min(block_start + BLOCK_SIZE, K);
-      __m256 max_vec = _mm256_set1_ps(-std::numeric_limits<float>::infinity());
+    size_t i = block_start;
+    // Process 32 elements per iteration (4x unrolling)
+    for (; i + 31 < block_end; i += 32) {
+      _mm_prefetch(reinterpret_cast<const char *>(input + i + 128),
+                   _MM_HINT_T0);
+      const __m256 data0 = _mm256_load_ps(input + i);
+      const __m256 data1 = _mm256_load_ps(input + i + 8);
+      const __m256 data2 = _mm256_load_ps(input + i + 16);
+      const __m256 data3 = _mm256_load_ps(input + i + 24);
 
-      size_t i = block_start;
-      // Process 32 elements per iteration (4x unrolling)
-      for (; i + 31 < block_end; i += 32) {
-        _mm_prefetch(reinterpret_cast<const char *>(input + i + 128),
-                     _MM_HINT_T0);
-        const __m256 data0 = _mm256_load_ps(input + i);
-        const __m256 data1 = _mm256_load_ps(input + i + 8);
-        const __m256 data2 = _mm256_load_ps(input + i + 16);
-        const __m256 data3 = _mm256_load_ps(input + i + 24);
-
-        max_vec = _mm256_max_ps(max_vec, data0);
-        max_vec = _mm256_max_ps(max_vec, data1);
-        max_vec = _mm256_max_ps(max_vec, data2);
-        max_vec = _mm256_max_ps(max_vec, data3);
-      }
-
-      // Process 8 elements per iteration
-      for (; i + 7 < block_end; i += 8) {
-        const __m256 data = _mm256_load_ps(input + i);
-        max_vec = _mm256_max_ps(max_vec, data);
-      }
-
-      // Handle remaining elements (less than 8) using masking
-      const size_t remaining = block_end - i;
-      if (remaining > 0) {
-        const __m256i mask = compute_mask(remaining);
-        const __m256 data = _mm256_maskload_ps(input + i, mask);
-        const __m256 blended = _mm256_blendv_ps(
-            _mm256_set1_ps(-std::numeric_limits<float>::infinity()), data,
-            _mm256_castsi256_ps(mask));
-        max_vec = _mm256_max_ps(max_vec, blended);
-      }
-
-      // Horizontal reduction to find the maximum value in the vector
-      __m256 tmp = _mm256_permute2f128_ps(max_vec, max_vec, 0x01);
-      max_vec = _mm256_max_ps(max_vec, tmp);
-      tmp = _mm256_shuffle_ps(max_vec, max_vec, _MM_SHUFFLE(1, 0, 3, 2));
-      max_vec = _mm256_max_ps(max_vec, tmp);
-      tmp = _mm256_shuffle_ps(max_vec, max_vec, _MM_SHUFFLE(2, 3, 0, 1));
-      max_vec = _mm256_max_ps(max_vec, tmp);
-
-      const float block_max = _mm256_cvtss_f32(max_vec);
-      local_max = std::max(local_max, block_max);
+      max_vec = _mm256_max_ps(max_vec, data0);
+      max_vec = _mm256_max_ps(max_vec, data1);
+      max_vec = _mm256_max_ps(max_vec, data2);
+      max_vec = _mm256_max_ps(max_vec, data3);
     }
 
-#pragma omp critical
-    { max_val = std::max(max_val, local_max); }
+    // Process 8 elements per iteration
+    for (; i + 7 < block_end; i += 8) {
+      const __m256 data = _mm256_load_ps(input + i);
+      max_vec = _mm256_max_ps(max_vec, data);
+    }
+
+    // Handle remaining elements (less than 8) using masking
+    const size_t remaining = block_end - i;
+    if (remaining > 0) {
+      const __m256i mask = compute_mask(remaining);
+      const __m256 data = _mm256_maskload_ps(input + i, mask);
+      const __m256 blended = _mm256_blendv_ps(
+          _mm256_set1_ps(-std::numeric_limits<float>::infinity()), data,
+          _mm256_castsi256_ps(mask));
+      max_vec = _mm256_max_ps(max_vec, blended);
+    }
+
+    // Horizontal reduction to find the maximum value in the vector
+    __m256 tmp = _mm256_permute2f128_ps(max_vec, max_vec, 0x01);
+    max_vec = _mm256_max_ps(max_vec, tmp);
+    tmp = _mm256_shuffle_ps(max_vec, max_vec, _MM_SHUFFLE(1, 0, 3, 2));
+    max_vec = _mm256_max_ps(max_vec, tmp);
+    tmp = _mm256_shuffle_ps(max_vec, max_vec, _MM_SHUFFLE(2, 3, 0, 1));
+    max_vec = _mm256_max_ps(max_vec, tmp);
+
+    const float block_max = _mm256_cvtss_f32(max_vec);
+    max_val = std::max(max_val, block_max);
   }
 
   // Phase 2: Compute exponentials and sum with masking
   float sum = 0.0f;
-#pragma omp parallel
+#pragma omp parallel num_threads(omp_get_num_procs())
   {
     float local_sum = 0.0f;
     const __m256 max_broadcast = _mm256_set1_ps(max_val);
@@ -164,7 +157,8 @@ void softmax_avx(const float *input, float *output, size_t K) {
 
   // Phase 3: Normalize the output with masking
   const __m256 inv_sum = _mm256_set1_ps(1.0f / sum);
-#pragma omp parallel for
+
+#pragma omp parallel for num_threads(omp_get_num_procs())
   for (size_t block_start = 0; block_start < K; block_start += BLOCK_SIZE) {
     const size_t block_end = std::min(block_start + BLOCK_SIZE, K);
 

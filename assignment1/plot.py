@@ -45,9 +45,9 @@ fig.update_layout(
     height=600,
 )
 
-# Save the figure as SVG
-fig.write_image("images/softmax_performance.svg")
-print("Plot saved as images/softmax_performance.svg")
+# Save the figure as PDF
+fig.write_image("images/softmax_performance.pdf")
+print("Plot saved as images/softmax_performance.pdf")
 
 # ---------- Create Small Sizes Plot ----------
 
@@ -91,6 +91,6 @@ fig_small.update_layout(
     height=600,
 )
 
-# Save the small sizes figure as SVG
-fig_small.write_image("images/softmax_performance_small.svg")
-print("Small sizes plot saved as images/softmax_performance_small.svg")
+# Save the small sizes figure as PDF
+fig_small.write_image("images/softmax_performance_small.pdf")
+print("Small sizes plot saved as images/softmax_performance_small.pdf")
