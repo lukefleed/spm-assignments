@@ -1,175 +1,364 @@
 #include <algorithm>
-#include <avx_mathfun.h>
-#include <hpc_helpers.hpp>
+#include <avx_mathfun.h> // For AVX optimized exp
+#include <immintrin.h>   // AVX intrinsics
 #include <iostream>
 #include <limits>
+#include <omp.h> // For OpenMP parallelization
 #include <random>
 #include <vector>
 
-static inline float horizontal_max(__m256 x) {
-  __m256 y = _mm256_permute2f128_ps(x, x, 0x01); // Swap 128-bit lanes
-  x = _mm256_max_ps(x, y);                       // Max tra le due metà
-  x = _mm256_max_ps(x, _mm256_shuffle_ps(x, x, _MM_SHUFFLE(1, 0, 3, 2)));
-  x = _mm256_max_ps(x, _mm256_shuffle_ps(x, x, _MM_SHUFFLE(2, 3, 0, 1)));
-  return _mm256_cvtss_f32(x);
-}
-
-static inline float horizontal_sum(__m256 x) {
-  __m256 y = _mm256_permute2f128_ps(x, x, 0x01);
-  x = _mm256_add_ps(x, y);
-  x = _mm256_hadd_ps(x, x);
-  x = _mm256_hadd_ps(x, x);
-  return _mm256_cvtss_f32(x);
-}
-
+// Improved AVX-accelerated softmax implementation
+// with cache blocking, OpenMP, prefetching and optimized exp
 void softmax_avx(const float *input, float *output, size_t K) {
-  if (K == 0)
-    return;
 
-  // Step 1: Find maximum value
-  __m256 max_vals = _mm256_set1_ps(-std::numeric_limits<float>::infinity());
+  // Cache-friendly block size (L1 cache consideration)
+  const size_t BLOCK_SIZE =
+      4096 / sizeof(float); // Typical L1 data cache is 32KB
+
+  // ========================================================================
+  // Phase 1: Maximum value computation with vectorized reduction and blocking
+  // ========================================================================
+  float max_val = -std::numeric_limits<float>::infinity();
+
+#pragma omp parallel
+  {
+    float local_max = -std::numeric_limits<float>::infinity();
+
+#pragma omp for nowait
+    for (size_t block_start = 0; block_start < K; block_start += BLOCK_SIZE) {
+      const size_t block_end = std::min(block_start + BLOCK_SIZE, K);
+      __m256 max_vec = _mm256_set1_ps(-std::numeric_limits<float>::infinity());
+
+      // Prefetch next block
+      if (block_start + BLOCK_SIZE < K) {
+        _mm_prefetch((const char *)(input + block_start + BLOCK_SIZE),
+                     _MM_HINT_T0);
+      }
+
+      size_t i = block_start;
+
+      // Main processing loop with 4x unrolling (32 elements/iteration)
+      for (; i + 31 < block_end; i += 32) {
+        // Prefetch data ahead of time
+        _mm_prefetch((const char *)(input + i + 64), _MM_HINT_T0);
+
+        const __m256 data0 = _mm256_load_ps(input + i);
+        const __m256 data1 = _mm256_load_ps(input + i + 8);
+        const __m256 data2 = _mm256_load_ps(input + i + 16);
+        const __m256 data3 = _mm256_load_ps(input + i + 24);
+
+        max_vec = _mm256_max_ps(max_vec, data0);
+        max_vec = _mm256_max_ps(max_vec, data1);
+        max_vec = _mm256_max_ps(max_vec, data2);
+        max_vec = _mm256_max_ps(max_vec, data3);
+      }
+
+      // Process remaining elements in 8-element chunks
+      for (; i + 7 < block_end; i += 8) {
+        const __m256 data = _mm256_load_ps(input + i);
+        max_vec = _mm256_max_ps(max_vec, data);
+      }
+
+      // Horizontal max reduction
+      __m256 tmp = _mm256_permute2f128_ps(max_vec, max_vec, 0x01);
+      max_vec = _mm256_max_ps(max_vec, tmp);
+      tmp = _mm256_shuffle_ps(max_vec, max_vec, _MM_SHUFFLE(1, 0, 3, 2));
+      max_vec = _mm256_max_ps(max_vec, tmp);
+      tmp = _mm256_shuffle_ps(max_vec, max_vec, _MM_SHUFFLE(2, 3, 0, 1));
+      max_vec = _mm256_max_ps(max_vec, tmp);
+
+      float block_max = _mm256_cvtss_f32(max_vec);
+
+      // Handle remaining elements
+      for (; i < block_end; ++i) {
+        block_max = std::max(block_max, input[i]);
+      }
+
+      local_max = std::max(local_max, block_max);
+    }
+
+// Reduce local maximums to global maximum
+#pragma omp critical
+    {
+      max_val = std::max(max_val, local_max);
+    }
+  }
+
+  // ========================================================================
+  // Phase 2: Exponential computation and sum reduction
+  // ========================================================================
+  float sum = 0.0f;
+
+#pragma omp parallel
+  {
+    float local_sum = 0.0f;
+    const __m256 max_broadcast = _mm256_set1_ps(max_val);
+
+#pragma omp for nowait
+    for (size_t block_start = 0; block_start < K; block_start += BLOCK_SIZE) {
+      const size_t block_end = std::min(block_start + BLOCK_SIZE, K);
+      __m256 sum0 = _mm256_setzero_ps();
+      __m256 sum1 = _mm256_setzero_ps();
+
+      // Prefetch next block
+      if (block_start + BLOCK_SIZE < K) {
+        _mm_prefetch((const char *)(input + block_start + BLOCK_SIZE),
+                     _MM_HINT_T0);
+      }
+
+      size_t i = block_start;
+
+      // Main processing loop with 4x unrolling
+      for (; i + 31 < block_end; i += 32) {
+        // Prefetch data ahead of time
+        _mm_prefetch((const char *)(input + i + 64), _MM_HINT_T0);
+
+        const __m256 data0 = _mm256_load_ps(input + i);
+        const __m256 data1 = _mm256_load_ps(input + i + 8);
+        const __m256 data2 = _mm256_load_ps(input + i + 16);
+        const __m256 data3 = _mm256_load_ps(input + i + 24);
+
+        // Fast approximate exp using custom implementation or avx_mathfun.h
+        const __m256 exp0 = exp256_ps(_mm256_sub_ps(data0, max_broadcast));
+        const __m256 exp1 = exp256_ps(_mm256_sub_ps(data1, max_broadcast));
+        const __m256 exp2 = exp256_ps(_mm256_sub_ps(data2, max_broadcast));
+        const __m256 exp3 = exp256_ps(_mm256_sub_ps(data3, max_broadcast));
+
+        _mm256_store_ps(output + i, exp0);
+        _mm256_store_ps(output + i + 8, exp1);
+        _mm256_store_ps(output + i + 16, exp2);
+        _mm256_store_ps(output + i + 24, exp3);
+
+        // Accumulate sums in parallel accumulators
+        sum0 = _mm256_add_ps(sum0, _mm256_add_ps(exp0, exp1));
+        sum1 = _mm256_add_ps(sum1, _mm256_add_ps(exp2, exp3));
+      }
+
+      // Process remaining elements in 8-element chunks
+      for (; i + 7 < block_end; i += 8) {
+        const __m256 data = _mm256_load_ps(input + i);
+        const __m256 exp = exp256_ps(_mm256_sub_ps(data, max_broadcast));
+        _mm256_store_ps(output + i, exp);
+        sum0 = _mm256_add_ps(sum0, exp);
+      }
+
+      // Handle remaining elements
+      for (; i < block_end; ++i) {
+        output[i] = expf(input[i] - max_val);
+        local_sum += output[i];
+      }
+
+      // Horizontal sum reduction
+      __m256 sum_vec = _mm256_add_ps(sum0, sum1);
+      __m256 tmp = _mm256_permute2f128_ps(sum_vec, sum_vec, 0x01);
+      sum_vec = _mm256_add_ps(sum_vec, tmp);
+      tmp = _mm256_hadd_ps(sum_vec, sum_vec);
+      sum_vec = _mm256_hadd_ps(tmp, tmp);
+
+      local_sum += _mm256_cvtss_f32(sum_vec);
+    }
+
+// Reduce local sums to global sum
+#pragma omp atomic
+    sum += local_sum;
+  }
+
+  // ========================================================================
+  // Phase 3: Normalization with vectorized division
+  // ========================================================================
+  const __m256 inv_sum = _mm256_set1_ps(1.0f / sum);
+
+#pragma omp parallel for
+  for (size_t block_start = 0; block_start < K; block_start += BLOCK_SIZE) {
+    const size_t block_end = std::min(block_start + BLOCK_SIZE, K);
+    size_t i = block_start;
+
+    // Prefetch next block
+    if (block_start + BLOCK_SIZE < K) {
+      _mm_prefetch((const char *)(output + block_start + BLOCK_SIZE),
+                   _MM_HINT_T0);
+    }
+
+    // Main processing loop with 4x unrolling
+    for (; i + 31 < block_end; i += 32) {
+      // Prefetch data ahead of time
+      _mm_prefetch((const char *)(output + i + 64), _MM_HINT_T0);
+
+      __m256 data0 = _mm256_load_ps(output + i);
+      __m256 data1 = _mm256_load_ps(output + i + 8);
+      __m256 data2 = _mm256_load_ps(output + i + 16);
+      __m256 data3 = _mm256_load_ps(output + i + 24);
+
+      data0 = _mm256_mul_ps(data0, inv_sum);
+      data1 = _mm256_mul_ps(data1, inv_sum);
+      data2 = _mm256_mul_ps(data2, inv_sum);
+      data3 = _mm256_mul_ps(data3, inv_sum);
+
+      _mm256_store_ps(output + i, data0);
+      _mm256_store_ps(output + i + 8, data1);
+      _mm256_store_ps(output + i + 16, data2);
+      _mm256_store_ps(output + i + 24, data3);
+    }
+
+    // Process remaining elements in 8-element chunks
+    for (; i + 7 < block_end; i += 8) {
+      __m256 data = _mm256_load_ps(output + i);
+      data = _mm256_mul_ps(data, inv_sum);
+      _mm256_store_ps(output + i, data);
+    }
+
+    // Handle remaining elements
+    for (; i < block_end; ++i) {
+      output[i] /= sum;
+    }
+  }
+}
+
+/**
+ * Optimized AVX implementation of softmax function for small input sizes
+ * without OpenMP parallelization. This function computes:
+ * output[i] = exp(input[i] - max) / sum(exp(input[j] - max))
+ *
+ * @param input Pointer to input array (should be aligned to 32 bytes)
+ * @param output Pointer to output array (should be aligned to 32 bytes)
+ * @param K Size of input and output arrays
+ */
+void softmax_avx_small(const float *input, float *output, size_t K) {
+  // ======================================================================
+  // Phase 1: Find maximum value using vectorized operations
+  // ======================================================================
+  __m256 max_vec = _mm256_set1_ps(-std::numeric_limits<float>::infinity());
   size_t i = 0;
 
-  // Process 64 elements (8 AVX registers) at once instead of 32
-  for (; i + 64 <= K; i += 64) {
-    _mm_prefetch(input + i + 64,
-                 _MM_HINT_T0); // 64 elementi avanti (1 cache line)
+  // Process in 16-element chunks (2x unrolling) for better throughput
+  for (; i + 15 < K; i += 16) {
+    // Prefetch next chunk of data
+    _mm_prefetch((const char *)(input + i + 16), _MM_HINT_T0);
 
-    __m256 chunk1 = _mm256_loadu_ps(input + i);
-    __m256 chunk2 = _mm256_loadu_ps(input + i + 8);
-    __m256 chunk3 = _mm256_loadu_ps(input + i + 16);
-    __m256 chunk4 = _mm256_loadu_ps(input + i + 24);
-    __m256 chunk5 = _mm256_loadu_ps(input + i + 32);
-    __m256 chunk6 = _mm256_loadu_ps(input + i + 40);
-    __m256 chunk7 = _mm256_loadu_ps(input + i + 48);
-    __m256 chunk8 = _mm256_loadu_ps(input + i + 56);
+    const __m256 data1 = _mm256_load_ps(input + i);
+    const __m256 data2 = _mm256_load_ps(input + i + 8);
 
-    max_vals = _mm256_max_ps(max_vals, chunk1);
-    max_vals = _mm256_max_ps(max_vals, chunk2);
-    max_vals = _mm256_max_ps(max_vals, chunk3);
-    max_vals = _mm256_max_ps(max_vals, chunk4);
-    max_vals = _mm256_max_ps(max_vals, chunk5);
-    max_vals = _mm256_max_ps(max_vals, chunk6);
-    max_vals = _mm256_max_ps(max_vals, chunk7);
-    max_vals = _mm256_max_ps(max_vals, chunk8);
+    max_vec = _mm256_max_ps(max_vec, data1);
+    max_vec = _mm256_max_ps(max_vec, data2);
   }
 
-  // Process remaining chunks of 32
-  for (; i + 32 <= K; i += 32) {
-    __m256 chunk1 = _mm256_loadu_ps(input + i);
-    __m256 chunk2 = _mm256_loadu_ps(input + i + 8);
-    __m256 chunk3 = _mm256_loadu_ps(input + i + 16);
-    __m256 chunk4 = _mm256_loadu_ps(input + i + 24);
-
-    max_vals = _mm256_max_ps(max_vals, chunk1);
-    max_vals = _mm256_max_ps(max_vals, chunk2);
-    max_vals = _mm256_max_ps(max_vals, chunk3);
-    max_vals = _mm256_max_ps(max_vals, chunk4);
+  // Process remaining elements in 8-element chunks
+  for (; i + 7 < K; i += 8) {
+    const __m256 data = _mm256_load_ps(input + i);
+    max_vec = _mm256_max_ps(max_vec, data);
   }
 
-  // Process remaining chunks of 8
-  for (; i + 8 <= K; i += 8) {
-    __m256 chunk = _mm256_loadu_ps(input + i);
-    max_vals = _mm256_max_ps(max_vals, chunk);
-  }
+  // Horizontal max reduction - find maximum across all vector elements
+  // First, compare high 128 bits with low 128 bits
+  __m256 tmp = _mm256_permute2f128_ps(max_vec, max_vec, 0x01);
+  max_vec = _mm256_max_ps(max_vec, tmp);
 
-  float max_val = horizontal_max(max_vals);
+  // Compare adjacent pairs of elements
+  tmp = _mm256_shuffle_ps(max_vec, max_vec, _MM_SHUFFLE(1, 0, 3, 2));
+  max_vec = _mm256_max_ps(max_vec, tmp);
 
-  // Handle remainder elements
+  // Compare remaining adjacent pairs
+  tmp = _mm256_shuffle_ps(max_vec, max_vec, _MM_SHUFFLE(2, 3, 0, 1));
+  max_vec = _mm256_max_ps(max_vec, tmp);
+
+  // Extract the maximum value (now in the lowest float of max_vec)
+  float max_val = _mm256_cvtss_f32(max_vec);
+
+  // Handle remaining elements sequentially
   for (; i < K; ++i) {
     max_val = std::max(max_val, input[i]);
   }
 
-  // Step 2: Compute exponentials and sum
-  __m256 sum_vec = _mm256_setzero_ps();
-  __m256 max_broadcast = _mm256_set1_ps(max_val);
+  // ======================================================================
+  // Phase 2: Compute exponentials and sum
+  // ======================================================================
+  __m256 sum_vec1 = _mm256_setzero_ps(); // First accumulator
+  __m256 sum_vec2 = _mm256_setzero_ps(); // Second accumulator for better ILP
+  const __m256 max_broadcast = _mm256_set1_ps(max_val);
   i = 0;
 
-  // Process 32 elements at once
-  for (; i + 32 <= K; i += 32) {
-    // Prefetch ahead for both input and output arrays
-    _mm_prefetch(input + i + 64, _MM_HINT_T0);
-    _mm_prefetch(output + i + 64, _MM_HINT_T0);
+  // Process in 16-element chunks
+  for (; i + 15 < K; i += 16) {
+    // Prefetch next chunk
+    _mm_prefetch((const char *)(input + i + 16), _MM_HINT_T0);
 
-    __m256 chunk1 = _mm256_loadu_ps(input + i);
-    __m256 chunk2 = _mm256_loadu_ps(input + i + 8);
-    __m256 chunk3 = _mm256_loadu_ps(input + i + 16);
-    __m256 chunk4 = _mm256_loadu_ps(input + i + 24);
+    // Load data and subtract max for numerical stability
+    const __m256 data1 = _mm256_load_ps(input + i);
+    const __m256 data2 = _mm256_load_ps(input + i + 8);
+    const __m256 shifted1 = _mm256_sub_ps(data1, max_broadcast);
+    const __m256 shifted2 = _mm256_sub_ps(data2, max_broadcast);
 
-    chunk1 = _mm256_sub_ps(chunk1, max_broadcast);
-    chunk2 = _mm256_sub_ps(chunk2, max_broadcast);
-    chunk3 = _mm256_sub_ps(chunk3, max_broadcast);
-    chunk4 = _mm256_sub_ps(chunk4, max_broadcast);
+    // Compute exponentials
+    const __m256 exp1 = exp256_ps(shifted1);
+    const __m256 exp2 = exp256_ps(shifted2);
 
-    __m256 exp_chunk1 = exp256_ps(chunk1);
-    __m256 exp_chunk2 = exp256_ps(chunk2);
-    __m256 exp_chunk3 = exp256_ps(chunk3);
-    __m256 exp_chunk4 = exp256_ps(chunk4);
+    // Store results
+    _mm256_store_ps(output + i, exp1);
+    _mm256_store_ps(output + i + 8, exp2);
 
-    _mm256_storeu_ps(output + i, exp_chunk1);
-    _mm256_storeu_ps(output + i + 8, exp_chunk2);
-    _mm256_storeu_ps(output + i + 16, exp_chunk3);
-    _mm256_storeu_ps(output + i + 24, exp_chunk4);
-
-    sum_vec = _mm256_add_ps(sum_vec, exp_chunk1);
-    sum_vec = _mm256_add_ps(sum_vec, exp_chunk2);
-    sum_vec = _mm256_add_ps(sum_vec, exp_chunk3);
-    sum_vec = _mm256_add_ps(sum_vec, exp_chunk4);
+    // Accumulate sums using two accumulators for better pipelining
+    sum_vec1 = _mm256_add_ps(sum_vec1, exp1);
+    sum_vec2 = _mm256_add_ps(sum_vec2, exp2);
   }
 
-  // Process remaining chunks of 8
-  for (; i + 8 <= K; i += 8) {
-    __m256 chunk = _mm256_loadu_ps(input + i);
-    chunk = _mm256_sub_ps(chunk, max_broadcast);
-    __m256 exp_chunk = exp256_ps(chunk);
-    _mm256_storeu_ps(output + i, exp_chunk);
-    sum_vec = _mm256_add_ps(sum_vec, exp_chunk);
+  // Process remaining elements in 8-element chunks
+  for (; i + 7 < K; i += 8) {
+    const __m256 data = _mm256_load_ps(input + i);
+    const __m256 shifted = _mm256_sub_ps(data, max_broadcast);
+    const __m256 exp = exp256_ps(shifted);
+    _mm256_store_ps(output + i, exp);
+    sum_vec1 = _mm256_add_ps(sum_vec1, exp);
   }
 
-  float sum = horizontal_sum(sum_vec);
+  // Combine the two accumulators
+  __m256 sum_vec = _mm256_add_ps(sum_vec1, sum_vec2);
 
-  // Handle remainder elements
+  // Horizontal sum reduction - efficiently add all elements in the vector
+  __m256 tmp_sum = _mm256_permute2f128_ps(sum_vec, sum_vec, 0x01);
+  sum_vec = _mm256_add_ps(sum_vec, tmp_sum);
+  tmp_sum = _mm256_hadd_ps(sum_vec, sum_vec);
+  sum_vec = _mm256_hadd_ps(tmp_sum, tmp_sum);
+
+  // Extract the sum (now in the lowest float)
+  float sum = _mm256_cvtss_f32(sum_vec);
+
+  // Handle remaining elements
   for (; i < K; ++i) {
     output[i] = expf(input[i] - max_val);
     sum += output[i];
   }
 
-  // Step 3: Normalize by sum - use multiplication by reciprocal instead of
-  // division
-  const float sum_recip = 1.0f / sum;
-  __m256 sum_reciprocal = _mm256_set1_ps(sum_recip);
+  // ======================================================================
+  // Phase 3: Normalize by dividing by sum
+  // ======================================================================
+  const __m256 inv_sum = _mm256_set1_ps(1.0f / sum);
   i = 0;
 
-  // Process 32 elements at once
-  for (; i + 32 <= K; i += 32) {
-    _mm_prefetch(output + i + 64, _MM_HINT_T0);
+  // Process in 16-element chunks
+  for (; i + 15 < K; i += 16) {
+    // Prefetch next chunk
+    _mm_prefetch((const char *)(output + i + 16), _MM_HINT_T0);
 
-    __m256 chunk1 = _mm256_loadu_ps(output + i);
-    __m256 chunk2 = _mm256_loadu_ps(output + i + 8);
-    __m256 chunk3 = _mm256_loadu_ps(output + i + 16);
-    __m256 chunk4 = _mm256_loadu_ps(output + i + 24);
+    // Load, normalize and store
+    __m256 data1 = _mm256_load_ps(output + i);
+    __m256 data2 = _mm256_load_ps(output + i + 8);
 
-    // Multiply by reciprocal (faster than division)
-    chunk1 = _mm256_mul_ps(chunk1, sum_reciprocal);
-    chunk2 = _mm256_mul_ps(chunk2, sum_reciprocal);
-    chunk3 = _mm256_mul_ps(chunk3, sum_reciprocal);
-    chunk4 = _mm256_mul_ps(chunk4, sum_reciprocal);
+    data1 = _mm256_mul_ps(data1, inv_sum);
+    data2 = _mm256_mul_ps(data2, inv_sum);
 
-    _mm256_storeu_ps(output + i, chunk1);
-    _mm256_storeu_ps(output + i + 8, chunk2);
-    _mm256_storeu_ps(output + i + 16, chunk3);
-    _mm256_storeu_ps(output + i + 24, chunk4);
+    _mm256_store_ps(output + i, data1);
+    _mm256_store_ps(output + i + 8, data2);
   }
 
-  // Process remaining chunks of 8
-  for (; i + 8 <= K; i += 8) {
-    __m256 chunk = _mm256_loadu_ps(output + i);
-    chunk = _mm256_mul_ps(chunk, sum_reciprocal);
-    _mm256_storeu_ps(output + i, chunk);
+  // Process remaining elements in 8-element chunks
+  for (; i + 7 < K; i += 8) {
+    __m256 data = _mm256_load_ps(output + i);
+    data = _mm256_mul_ps(data, inv_sum);
+    _mm256_store_ps(output + i, data);
   }
 
-  // Handle remainder elements
+  // Handle remaining elements
   for (; i < K; ++i) {
-    output[i] *= sum_recip;
+    output[i] /= sum;
   }
 }
