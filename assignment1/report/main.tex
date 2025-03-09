@@ -15,24 +15,7 @@
 \usepackage{hyperref}
 \usepackage{tikz}
 \usepackage{lipsum}
-\usepackage{svg}
-\usepackage{algorithm}
-\usepackage{algpseudocode}
-\usepackage{mathtools}
-\usepackage{nccmath}
-\usepackage[most]{tcolorbox}
-\newtcolorbox[auto counter]{problem}[1][]{%
-    enhanced,
-    breakable,
-    colback=white,
-    colbacktitle=white,
-    coltitle=black,
-    fonttitle=\bfseries,
-    boxrule=.6pt,
-    titlerule=.2pt,
-    toptitle=3pt,
-    bottomtitle=3pt,
-    title=GitHub repository of this project}
+
 
 \newcommand{\R}{\mathbb{R}}
 \newcommand{\N}{\mathbb{N}}
@@ -43,7 +26,7 @@
 
 \title{Assignment 1: The softmax function}
 \author{Luca Lombardo}
-\date{\today}
+\date{}
 
 \begin{document}
 \maketitle
@@ -67,45 +50,56 @@
 In the following sections, given a scalar implementation (to witch we will refer as \texttt{softmax\_plain}), we will show how to auto-vectorize it and then how to manually vectorize the code using AVX intrinsics and FMA. Then we will compare the results of the three implementations.
 
 \subsection{Auto-Vectorized implementation}
-In implementing\footnote{This version is implemented in the file \texttt{softmax\_auto.cpp}.} the autovectorized version of the softmax function, I made several key modifications compared to the plain implementation. First, I added \texttt{\#pragma omp simd} directives to explicitly instruct the compiler to vectorize the three main computational loops, allowing parallel processing of multiple array elements with SIMD instructions. For the first two loops, I included appropriate reduction clauses (i.e., \texttt{reduction(max : max\_val)} and \texttt{reduction(+ : sum)}) to ensure correct calculation of the maximum value and sum while maintaining vectorization. I replaced \texttt{std::exp()} with the single-precision \texttt{expf()} function, which is specifically optimized for floating-point operations, offers better performance with SIMD instructions, and avoids unnecessary double-precision calculations that would be performed by \texttt{std::exp()} before converting back to float. Rather than using repeated divisions in the normalization step, I precomputed the inverse of the sum (\texttt{inv\_sum = 1.0f / sum}) and used multiplication operations, which are generally more efficient in vectorized code. Instead of using \texttt{std::max()}, I implemented an explicit comparison with an \texttt{if}-statement that might be more amenable to autovectorization for the compiler. \\
-
-It is worth noting that replacing \texttt{\#pragma omp simd} with \texttt{\#pragma omp parallel for simd} results in significantly degraded performance for small values of K (becoming even slower than the plain implementation). This counterintuitive behavior occurs because thread creation and management introduce considerable overhead that outweighs any computational benefits when processing small arrays. The cost of spawning threads, synchronizing their execution, and handling potential load imbalances becomes expensive relative to the limited work being performed. On the other hand, fot large values of K, the parallelized version scales well: the computation workload here is sufficiently large to justify the overhead of thread management, and the performance gains from parallel execution become evident.
+The auto-vectorized version\footnote{Implemented in \texttt{softmax\_auto.cpp}.} of the softmax function includes several optimizations. \texttt{\#pragma omp simd} directives were added to vectorize the main computational loops, with reduction clauses for correct maximum value and sum calculations. The \texttt{expf()} function replaced \texttt{std::exp()} for better SIMD performance. Precomputing the inverse sum (\texttt{inv\_sum = 1.0f / sum}) and using multiplications instead of divisions improved efficiency. Explicit comparisons replaced \texttt{std::max()} to aid vectorization. Using \texttt{\#pragma omp parallel for simd} degraded performance for small arrays due to thread management overhead but scaled well for large arrays.
 
 \subsection{Manually Vectorized implementation}
-In designing the softmax implementation, I developed two distinct versions to address different input size scenarios. For large input arrays, the primary variant employs cache blocking with a block size derived from the L1 cache capacity (4096 bytes) to ensure that each data block remains in cache during processing. This decision minimizes memory latency through effective prefetching and loop unrolling, while OpenMP parallelization distributes the computational load across threads. In contrast, the "small" version avoids the overhead associated with thread management and cache blocking, which is unnecessary for data sizes that already reside in cache. This dual-approach allows the implementation to achieve optimal performance: the large variant excels with high data volumes where memory access becomes the bottleneck, and the small variant delivers better throughput for cache-resident datasets. \\
+The \texttt{softmax\_avx} implementation employs a three-phase approach with explicit AVX2 intrinsics to achieve maximum performance. Each phase (find maximum, compute exponentials with sum, normalize) is optimized with loop unrolling (4x for processing 32 elements at once), software prefetching, and efficient horizontal reduction patterns. To handle array sizes that aren't multiples of 8 (AVX register width), a principled masking approach is used via the \texttt{compute\_mask()} function, which creates appropriate mask vectors for conditional loading/storing operations (\texttt{\_mm256\_maskload\_ps} and \texttt{\_mm256\_maskstore\_ps}). This eliminates the need for a remainder loop, improving instruction throughput. The implementation also employs careful cache blocking with a 32KB block size to minimize L1 cache misses during multi-phase processing, crucial since the algorithm makes multiple passes over the data. \\
 
-For the primary function, several specific optimization choices were made to maximize efficiency. Data is processed in chunks of 32 elements per iteration to match the width of AVX registers, and for indices not multiple of 8, scalar processing is used rather than vector masking; the infrequent residual iterations render the simpler scalar approach both effective and low-overhead. The use of the \texttt{\_mm256\_fnmadd\_ps} intrinsic in the exponential computation phase was carefully integrated to combine the subtraction of the maximum value with the preparation of the exponent input in one step, thereby reducing the overall instruction count and streamlining the computation pipeline.
+The implementation utilizes OpenMP to distribute computation across available hardware threads. For the reduction phase (finding the maximum), a standard \texttt{\#pragma omp parallel for reduction(max:max\_val)} is used, while the sum calculation employs a more specific approach with manual local reductions and atomic updates to minimize false sharing and synchronization overhead. Performance analysis revealed that small array sizes suffered from OpenMP thread management overhead, leading to a specialized variant that skips parallelization entirely for small inputs while maintaining all AVX optimizations.
 
 \section{Results}
-In the following section we will compare the three implementations of the softmax function under different conditions. There 2 main parameters that we will vary: the machine architecture (one supporting AVX512 and one not supporting it) and the parallelization in the implementation of \texttt{softmax\_auto}. The two differnt machine architectures are:
-\begin{itemize}
-  \item \textbf{Machine 1}: Intel(R) Xeon(R) Gold 5318Y, 96 threads, 1TB RAM.
-  \item \textbf{Machine 2}: AMD Ryzen 5 PRO 5650G, 12 threads, 32GB RAM.
-\end{itemize}
-Both running Ubuntu 22.04 LTS. \\
-
-The importance of the AVX512 instruction set is crucial in comparing the performance of \texttt{softmax\_auto} and \texttt{softmax\_avx}. The \texttt{softmax\_auto} implementation relies on the compiler's ability to auto-vectorize the code, which will use AVX512 instructions if available. Thus comparing the performance of \texttt{softmax\_auto} with AVX512 support against the \texttt{softmax\_avx} implementation, which is manually optimized for AVX2, will be clearly unbalanced. We expect the \texttt{softmax\_auto} implementation to outperform the \texttt{softmax\_avx} implementation on the machine with AVX512 support, while the opposite is expected on the machine without AVX512 support.
+In this section, we compare the three implementations of the softmax function under different conditions. First, we evaluate the \texttt{softmax\_auto} implementation with and without the \texttt{parallel} directive. Next, we compare the performance using AVX2 and AVX512 instructions. The \texttt{softmax\_auto} relies on the compiler's auto-vectorization, which benefits from AVX512 if available. We expect \texttt{softmax\_auto} with AVX512 to outperform \texttt{softmax\_avx}, which is manually optimized for AVX2. Without AVX512 support, \texttt{softmax\_avx} should have better performance.
 
 \paragraph{How do we measure the performance?}
 Performance is measured using a rigorous benchmark: after 3 warmup iterations, 11 samples (each averaging 20 iterations) are taken and the median is reported. Input sizes vary from 1 to 1,048,576 elements (both powers of 2 and non-power-of-2) to test alignment. A custom C++17 aligned allocator (32-byte alignment) ensures fair SIMD comparisons. Correctness is verified by checking that each implementation produces equivalent probability distributions (non-negative values summing to 1), and speedups are reported relative to the plain implementation.
 
-\subsection{Without AVX512 support on host}
-Let's start with the results of the machine without AVX512 support. We first begin by comparing the results without the \texttt{parallel} directive in the \texttt{softmax\_auto} implementation. The results are shown in the following plot:
+\paragraph{Numerical stability} The softmax function can be numerically unstable, especially for large values. To ensure stability during benchmarks, input values are limited to $1048576$.
 
-\begin{figure}[H]
+\subsection{Numerical results}
+\paragraph{No AVX512} To ensure a fair comparison between the \texttt{softmax\_auto} and \texttt{softmax\_avx} implementations, benchmarks were conducted on a system without AVX512 support. The results, depicted in Figure \ref{fig:softmax_auto_no_avx512}, illustrate the performance without the \texttt{parallel} directive in the \texttt{softmax\_auto} implementation. This pattern is consistent even for smaller input sizes. On the other hand, enabling the \texttt{parallel} directive significantly enhances the performance of \texttt{softmax\_auto} for large input sizes, as illustrated in Figure \ref{fig:softmax_auto_no_avx512_parallel}. The performance approaches that of \texttt{softmax\_avx}. However, for small input sizes, the overhead introduced by the \texttt{parallel} directive outweighs the benefits of parallelization, resulting in a performance degradation compared to the plain implementation.
+
+\begin{figure}[h!]
   \centering
-  \includegraphics[width=0.8\textwidth]{../images/softmax_noparallel.pdf}
-  \caption{Performance comparison of the three implementations of the softmax function without AVX512 support and without parallelization for \texttt{softmax\_auto}.}
-  \label{fig:softmax_auto_no_parallel}
+  \includegraphics[width=\textwidth]{../images/softmax_noparallel_noaxv521.pdf}
+  \caption{Performance comparison of \texttt{softmax\_plain}, \texttt{softmax\_auto} and\texttt{softmax\_avx} without AVX512 support and without the \texttt{parallel} directive.}
+  \label{fig:softmax_auto_no_avx512}
 \end{figure}
 
-We can clearly see that the \texttt{softmax\_avx} implementation outperforms the \texttt{softmax\_auto} implementation, which in turn outperforms the plain implementation. Let's see what happens when we add the \texttt{parallel} directive to the \texttt{softmax\_auto} implementation. The results are shown in the following plot:
-\begin{figure}[H]
+\begin{figure}[h!]
   \centering
-  \includegraphics[width=0.8\textwidth]{../images/softmax_parallel.pdf}
-  \caption{Performance comparison of the three implementations of the softmax function without AVX512 support and with parallelization for \texttt{softmax\_auto}.}
-  \label{fig:softmax_auto_parallel}
+  \includegraphics[width=\textwidth]{../images/softmax_parallel_noaxv521.pdf}
+  \caption{Performance comparison of \texttt{softmax\_plain}, \texttt{softmax\_auto} and\texttt{softmax\_avx} without AVX512 support and with the \texttt{parallel} directive.}
+  \label{fig:softmax_auto_no_avx512_parallel}
 \end{figure}
+
+\paragraph{With AVX512} When compiled with AVX512 support, the \texttt{softmax\_auto} implementation demonstrates superior performance over the \texttt{softmax\_avx} implementation for small input sizes with the \texttt{parallel} directive . However, for larger input sizes, \texttt{softmax\_avx} performs better (See Figure \ref{fig:softmax_auto_avx512_no_parallel}). Enabling the \texttt{parallel} directive allows \texttt{softmax\_auto} to surpass \texttt{softmax\_avx} in performance for large input sizes, though the overhead for small input sizes remains a limiting factor (See Figure \ref{fig:softmax_auto_avx512_parallel}).
+
+\begin{figure}[h!]
+  \centering
+  \includegraphics[width=\textwidth]{../images/softmax_noparallel_axv521.pdf}
+  \caption{Performance comparison of \texttt{softmax\_plain}, \texttt{softmax\_auto} and\texttt{softmax\_avx} with AVX512 support and without the \texttt{parallel} directive.}
+  \label{fig:softmax_auto_avx512_no_parallel}
+\end{figure}
+
+\begin{figure}[h!]
+  \centering
+  \includegraphics[width=\textwidth]{../images/softmax_parallel_axv521.pdf}
+  \caption{Performance comparison of \texttt{softmax\_plain}, \texttt{softmax\_auto} and\texttt{softmax\_avx} with AVX512 support and with the \texttt{parallel} directive.}
+  \label{fig:softmax_auto_avx512_parallel}
+\end{figure}
+
+\subsection{Compilation and Execution}
+The implementation uses different compilation flags to optimize for different instruction sets and vectorization capabilities. The \texttt{OPTFLAGS} variable enables level 3 optimizations (\texttt{-O3}), fast math operations (\texttt{-ffast-math}), and OpenMP support. For the auto-vectorized implementation, \texttt{AUTOFLAGS} includes \texttt{-mavx2} to enable AVX2 instructions and \texttt{-ftree-vectorize} to explicitly request vectorization. During testing, we compiled with both \texttt{-mavx2} and \texttt{-march=native} settings to evaluate performance with AVX2 and AVX512 instructions respectively. The manually vectorized implementation uses \texttt{AVXFLAGS} with \texttt{-mavx2}, \texttt{-mfma} to enable fused multiply-add operations, and alignment optimizations (\texttt{-malign-double} and \texttt{-falign-loops=32}). To build all implementations, run \texttt{make all} in the project directory. The command \texttt{make test} builds and executes the test suite that verifies correctness across all implementations. Individual executables can be built using \texttt{make softmax\_plain}, \texttt{make softmax\_auto}, or \texttt{make softmax\_avx}.
 
 
 

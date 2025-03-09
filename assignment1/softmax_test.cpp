@@ -84,8 +84,11 @@ bool verify_results(const float *a, const float *b, size_t K,
     float diff = std::abs(a[i] - b[i]);
     float max_val = std::max(std::abs(a[i]), std::abs(b[i]));
     if (diff > abs_eps && diff > rel_eps * max_val) {
-      std::cerr << "Mismatch at " << i << ": " << a[i] << " vs " << b[i]
-                << "\n";
+      std::cerr << "Validation failed at index " << i << ":\n";
+      std::cerr << "  Expected: " << a[i] << "\n";
+      std::cerr << "  Got:      " << b[i] << "\n";
+      std::cerr << "  Difference: " << diff << " (abs_eps: " << abs_eps
+                << ", rel_eps*max: " << rel_eps * max_val << ")\n";
       return false;
     }
   }
@@ -100,11 +103,20 @@ bool validate_softmax(const float *output, size_t K,
                       float epsilon = 1e-3) noexcept {
   float sum = 0.0f;
   for (size_t i = 0; i < K; ++i) {
-    if (output[i] < 0 || output[i] > 1)
+    if (output[i] < 0 || output[i] > 1) {
+      std::cerr << "Validation failed at index " << i
+                << ": softmax output out of range [0,1].\n";
+      std::cerr << "  Value: " << output[i] << "\n";
       return false;
+    }
     sum += output[i];
   }
-  return std::abs(sum - 1.0f) <= epsilon;
+  if (std::abs(sum - 1.0f) > epsilon) {
+    std::cerr << "Validation failed: softmax distribution sum is " << sum
+              << " (expected 1.0) with tolerance epsilon = " << epsilon << "\n";
+    return false;
+  }
+  return true;
 }
 
 //------------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 CXX                = g++ -std=c++17
 OPTFLAGS	   = -O3 -ffast-math -fopenmp
 AUTOFLAGS = -mavx2 -ftree-vectorize -fopenmp
-AVXFLAGS = -march=native -mfma -malign-double -falign-loops=32 -fopenmp
+AVXFLAGS = -mavx2 -mfma -malign-double -falign-loops=32 -fopenmp
 CXXFLAGS          += -Wall -Wextra -fno-math-errno
 INCLUDES	   = -I. -I./include
 LIBS               = -lpthread
