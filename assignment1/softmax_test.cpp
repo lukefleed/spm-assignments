@@ -355,5 +355,17 @@ int main() {
               << std::setprecision(2) << avg << "x\n";
   }
 
+  // Report any violations of expected performance order
+  if (!expected_order_maintained) {
+    std::cout << "\nWARNING: Expected performance order (Plain ≥ Auto ≥ AVX) "
+              << "was violated for " << violated_sizes.size()
+              << " test sizes:\n";
+    for (size_t i = 0; i < violated_sizes.size(); ++i) {
+      std::cout << violated_sizes[i] << " ";
+    }
+
+    std::cout << std::endl;
+  }
+
   return 0;
 }
