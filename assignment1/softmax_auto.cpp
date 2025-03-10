@@ -41,7 +41,7 @@
  * vectorized version if the machine supports AVX512 and the flag
  * `-march=native` is used.
  */
-void softmax_auto(const float *input, float *output, size_t K,
+void softmax_auto_parallel(const float *input, float *output, size_t K,
                   int num_threads = -1) {
   // Set thread count if specified
   if (num_threads > 0) {
@@ -73,28 +73,42 @@ void softmax_auto(const float *input, float *output, size_t K,
 /// The following code does not use parallelization, suggest to use it for
 /// small K values.
 
-// void softmax_auto(const float *input, float *output, size_t K) {
-//   float max_val = -std::numeric_limits<float>::infinity();
-// #pragma omp simd reduction(max : max_val)
-//   for (size_t i = 0; i < K; ++i) {
-//     if (input[i] > max_val) {
-//       max_val = input[i];
-//     }
-//   }
+void softmax_auto_noparallel(const float *input, float *output, size_t K) {
+  float max_val = -std::numeric_limits<float>::infinity();
+#pragma omp simd reduction(max : max_val)
+  for (size_t i = 0; i < K; ++i) {
+    if (input[i] > max_val) {
+      max_val = input[i];
+    }
+  }
 
-//   float sum = 0.0f;
-// #pragma omp simd reduction(+ : sum)
-//   for (size_t i = 0; i < K; ++i) {
-//     output[i] = expf(input[i] - max_val);
-//     sum += output[i];
-//   }
+  float sum = 0.0f;
+#pragma omp simd reduction(+ : sum)
+  for (size_t i = 0; i < K; ++i) {
+    output[i] = expf(input[i] - max_val);
+    sum += output[i];
+  }
 
-//   const float inv_sum = 1.0f / sum;
-// #pragma omp simd
-//   for (size_t i = 0; i < K; ++i) {
-//     output[i] *= inv_sum;
-//   }
-// }
+  const float inv_sum = 1.0f / sum;
+#pragma omp simd
+  for (size_t i = 0; i < K; ++i) {
+    output[i] *= inv_sum;
+  }
+}
+
+// Add this function above the existing implementations
+
+/**
+ * @brief Wrapper function that delegates to either parallel or non-parallel implementation
+ * based on compile-time configuration.
+ */
+void softmax_auto(const float *input, float *output, size_t K, int num_threads = -1) {
+#if PARALLEL == 0
+  softmax_auto_noparallel(input, output, K);
+#else
+  softmax_auto_parallel(input, output, K, num_threads);
+#endif
+}
 
 // --------------------------------------------------------------------------//
 // This code implementation includes a standalone benchmarking mechanism with a

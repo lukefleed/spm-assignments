@@ -244,7 +244,7 @@ void softmax_avx(const float *input, float *output, size_t K,
  * This function is optimized for small arrays and avoids OpenMP overhead.
  */
 void softmax_avx_small(const float *input, float *output, size_t K,
-                       int num_threads) {
+                       int num_threads = -1) {
   // The num_threads parameter can be ignored in this implementation
   // since it's designed for small inputs and doesn't use parallelization
 

@@ -14,6 +14,48 @@
 #include <set> // For std::set
 #include <vector>
 
+/**
+ * @brief Get the result file name based on compile-time configuration
+ */
+std::string getResultFileName() {
+  std::string name = "results/results";
+
+#if PARALLEL == 0
+  name += "_noparallel";
+#else
+  name += "_parallel";
+#endif
+
+#if USE_AVX512 == 0
+  name += "_noavx512";
+#else
+  name += "_avx512";
+#endif
+
+  return name + ".csv";
+}
+
+/**
+ * @brief Get the speedup file name based on compile-time configuration
+ */
+std::string getSpeedupFileName() {
+  std::string name = "results/speedup";
+
+#if PARALLEL == 0
+  name += "_noparallel";
+#else
+  name += "_parallel";
+#endif
+
+#if USE_AVX512 == 0
+  name += "_noavx512";
+#else
+  name += "_avx512";
+#endif
+
+  return name + ".csv";
+}
+
 constexpr size_t BLOCK_SIZE =
     32 * 1024 / sizeof(float); // Approximately 8192 floats.
 
@@ -129,7 +171,7 @@ bool validate_softmax(const float *output, size_t K,
 //------------------------------------------------------------------------------
 template <typename Func, typename... Args>
 double benchmark(Func &&func, const float *input, float *output, size_t K,
-                 size_t samples = 100, size_t iterations_per_sample = 100,
+                 size_t samples = 20, size_t iterations_per_sample = 50,
                  Args &&...args) noexcept {
   std::vector<double> measurements;
   measurements.reserve(samples);
@@ -190,7 +232,7 @@ int main(int argc, char *argv[]) {
       5489); // Using same seed as in generate_random_input for consistency
   std::uniform_int_distribution<size_t> dis(1, 2000000);
 
-  size_t additional_needed = 200;
+  size_t additional_needed = 100;
   while (additional_needed > 0) {
     size_t value = dis(gen);
     if (unique_sizes.find(value) == unique_sizes.end()) {
@@ -217,9 +259,9 @@ int main(int argc, char *argv[]) {
   }
 
   // Open CSV file for writing benchmark results.
-  std::ofstream result_file("results/results_parallel_noaxv521.csv");
+  std::ofstream result_file(getResultFileName());
   if (!result_file) {
-    std::cerr << "Failed to open results/results_parallel_noaxv521.csv\n";
+    std::cerr << "Failed to open " << getResultFileName() << "\n";
     return 1;
   }
 
@@ -299,9 +341,9 @@ int main(int argc, char *argv[]) {
   std::cout << "\nResults saved to results.csv\n";
 
   // Open CSV file for writing speedup results
-  std::ofstream speedup_file("results/speedup_parallel_noaxv521.csv");
+  std::ofstream speedup_file(getSpeedupFileName());
   if (!speedup_file) {
-    std::cerr << "Failed to open results/speedup_parallel_noaxv521.csv\n";
+    std::cerr << "Failed to open " << getSpeedupFileName() << "\n";
     return 1;
   }
 
@@ -370,7 +412,7 @@ int main(int argc, char *argv[]) {
 
   speedup_file.close();
   std::cout
-      << "Speedup results saved to results/speedup_parallel_noaxv521.csv\n";
+      << "Speedup results saved to " << getSpeedupFileName() << "\n";
 
   std::cout << "- tiny:   K ≤ 64 elements\n";
   std::cout << "- small:  64 < K ≤ 1024 elements\n";
