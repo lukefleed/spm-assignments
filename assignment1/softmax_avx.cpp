@@ -9,6 +9,36 @@
 #include <vector>
 
 /**
+ *
+ * @brief Manually Vectorized Softmax Implementation
+ *
+ * This implementation employs a three-phase approach with explicit AVX2
+ * intrinsics to achieve maximum performance:
+ *
+ * 1. Find maximum value across the input array
+ * 2. Compute exponentials and sum
+ * 3. Normalize by the sum
+ *
+ * Key optimizations:
+ * - Loop unrolling (4x for processing 32 elements at once)
+ * - Software prefetching
+ * - Efficient horizontal reduction patterns
+ * - Principled masking approach via `compute_mask()` to handle non-multiples of
+ * 8 (AVX register width) without requiring a separate remainder loop
+ * - Cache blocking with a 32KB block size to minimize L1 cache misses during
+ *   multi-phase processing
+ *
+ * Parallelization strategy:
+ * - OpenMP parallelization across available hardware threads
+ * - Standard `#pragma omp parallel for reduction(max:max_val)` for maximum
+ * finding
+ * - Custom approach for sum calculation with manual local reductions and atomic
+ *   updates to minimize false sharing and synchronization overhead
+ * - Specialized variant (`softmax_avx_small`) for small inputs that avoids
+ *   OpenMP threading overhead while maintaining AVX optimizations
+ */
+
+/**
  * @brief Helper function to generate a mask for remaining elements in a vector.
  * @param n Number of remaining elements (0 < n < 8).
  * @return __m256i mask where the first `n` elements are set to -1 (active), and
@@ -25,19 +55,22 @@ static inline __m256i compute_mask(size_t n) {
  * @param input Pointer to the input array (must be 32-byte aligned).
  * @param output Pointer to the output array (must be 32-byte aligned).
  * @param K Size of the input and output arrays.
+ * @param num_threads Number of threads to use (default: -1, use all available).
  *
  * This function computes the softmax of the input array using AVX instructions,
  * OpenMP parallelization, and masking to handle non-multiple-of-8 elements
  * efficiently. It is optimized for large arrays.
  */
-void softmax_avx(const float *input, float *output, size_t K) {
+void softmax_avx(const float *input, float *output, size_t K,
+                 int num_threads = -1) {
   const size_t BLOCK_SIZE =
       32 * 1024 / sizeof(float); // Block size for cache-friendly processing
   float max_val = -std::numeric_limits<float>::infinity();
 
-  // Phase 1: Compute the maximum value using vectorized reduction with masking
-#pragma omp parallel for reduction(max                                         \
-                                   : max_val) num_threads(omp_get_num_procs())
+  // Use specified thread count or default to processor count
+  int threads_to_use = (num_threads > 0) ? num_threads : omp_get_num_procs();
+
+#pragma omp parallel for reduction(max : max_val) num_threads(threads_to_use)
   for (size_t block_start = 0; block_start < K; block_start += BLOCK_SIZE) {
     const size_t block_end = std::min(block_start + BLOCK_SIZE, K);
     __m256 max_vec = _mm256_set1_ps(-std::numeric_limits<float>::infinity());
@@ -90,7 +123,7 @@ void softmax_avx(const float *input, float *output, size_t K) {
 
   // Phase 2: Compute exponentials and sum with masking
   float sum = 0.0f;
-#pragma omp parallel num_threads(omp_get_num_procs())
+#pragma omp parallel num_threads(threads_to_use)
   {
     float local_sum = 0.0f;
     const __m256 max_broadcast = _mm256_set1_ps(max_val);
@@ -160,7 +193,7 @@ void softmax_avx(const float *input, float *output, size_t K) {
   // Phase 3: Normalize the output with masking
   const __m256 inv_sum = _mm256_set1_ps(1.0f / sum);
 
-#pragma omp parallel for num_threads(omp_get_num_procs())
+#pragma omp parallel for num_threads(threads_to_use)
   for (size_t block_start = 0; block_start < K; block_start += BLOCK_SIZE) {
     const size_t block_end = std::min(block_start + BLOCK_SIZE, K);
 
@@ -206,10 +239,15 @@ void softmax_avx(const float *input, float *output, size_t K) {
  * @param input Pointer to the input array (must be 32-byte aligned).
  * @param output Pointer to the output array (must be 32-byte aligned).
  * @param K Size of the input and output arrays.
+ * @param num_threads Number of threads to use (default: -1, use all available).
  *
  * This function is optimized for small arrays and avoids OpenMP overhead.
  */
-void softmax_avx_small(const float *input, float *output, size_t K) {
+void softmax_avx_small(const float *input, float *output, size_t K,
+                       int num_threads) {
+  // The num_threads parameter can be ignored in this implementation
+  // since it's designed for small inputs and doesn't use parallelization
+
   __m256 max_vec = _mm256_set1_ps(-std::numeric_limits<float>::infinity());
   size_t i = 0;
 

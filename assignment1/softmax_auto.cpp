@@ -3,7 +3,8 @@
 #include <hpc_helpers.hpp>
 #include <iostream>
 #include <limits>
-#include <new> // For std::align_val_t
+#include <new>
+#include <omp.h>
 #include <random>
 #include <vector>
 
@@ -12,16 +13,43 @@
  * @param input Pointer to the input array (must be 32-byte aligned).
  * @param output Pointer to the output array (must be 32-byte aligned).
  * @param K Size of the input and output arrays.
+ * @param num_threads Number of threads to use (default is -1, which means no
+ * change).
  *
  * This function computes the softmax of the input array using
  * auto-vectorization Consider removing the current pragma omp simd and
  * substituting it with the commented one. For small values of K, the overhead
  * of OpenMP is not worth it.
+ *
+ * ## Auto-Vectorized Implementation Details
+ *
+ * This implementation includes several optimizations:
+ * - `#pragma omp simd` directives vectorize the main computational loops
+ * - Reduction clauses ensure correct maximum value and sum calculations
+ * - Using `expf()` instead of `std::exp()` improves SIMD performance
+ * - Precomputing the inverse sum (`inv_sum = 1.0f / sum`) and using
+ *   multiplication instead of division improves efficiency
+ * - Explicit comparisons replace `std::max()` to aid vectorization
+ *
+ * ## Performance
+ *
+ * Using parallelization for small K values is not convenient. The threads
+ * will not yield a performance benefit due to overhead. This will result
+ * in a performance drop compared to the scalar version.
+ *
+ * For large K values, the performance will be similar to the manual
+ * vectorized version if the machine supports AVX512 and the flag
+ * `-march=native` is used.
  */
-void softmax_auto(const float *input, float *output, size_t K) {
+void softmax_auto(const float *input, float *output, size_t K,
+                  int num_threads = -1) {
+  // Set thread count if specified
+  if (num_threads > 0) {
+    omp_set_num_threads(num_threads);
+  }
+
   float max_val = -std::numeric_limits<float>::infinity();
-#pragma omp simd reduction(max : max_val)
-  // #pragma omp parallel for simd reduction(max : max_val)
+#pragma omp parallel for simd reduction(max : max_val)
   for (size_t i = 0; i < K; ++i) {
     if (input[i] > max_val) {
       max_val = input[i];
@@ -29,20 +57,44 @@ void softmax_auto(const float *input, float *output, size_t K) {
   }
 
   float sum = 0.0f;
-#pragma omp simd reduction(+ : sum)
-  // #pragma omp parallel for simd reduction(+ : sum)
+#pragma omp parallel for simd reduction(+ : sum)
   for (size_t i = 0; i < K; ++i) {
     output[i] = expf(input[i] - max_val);
     sum += output[i];
   }
 
   const float inv_sum = 1.0f / sum;
-#pragma omp simd
-  // #pragma omp parallel for simd
+#pragma omp parallel for simd
   for (size_t i = 0; i < K; ++i) {
     output[i] *= inv_sum;
   }
 }
+
+/// The following code does not use parallelization, suggest to use it for
+/// small K values.
+
+// void softmax_auto(const float *input, float *output, size_t K) {
+//   float max_val = -std::numeric_limits<float>::infinity();
+// #pragma omp simd reduction(max : max_val)
+//   for (size_t i = 0; i < K; ++i) {
+//     if (input[i] > max_val) {
+//       max_val = input[i];
+//     }
+//   }
+
+//   float sum = 0.0f;
+// #pragma omp simd reduction(+ : sum)
+//   for (size_t i = 0; i < K; ++i) {
+//     output[i] = expf(input[i] - max_val);
+//     sum += output[i];
+//   }
+
+//   const float inv_sum = 1.0f / sum;
+// #pragma omp simd
+//   for (size_t i = 0; i < K; ++i) {
+//     output[i] *= inv_sum;
+//   }
+// }
 
 // --------------------------------------------------------------------------//
 // This code implementation includes a standalone benchmarking mechanism with a
@@ -113,6 +165,8 @@ void printResult(const aligned_vector<float> &v, size_t K) {
 
 #ifndef TEST_BUILD
 int main(int argc, char *argv[]) {
+  int num_threads = -1; // Default: use system default
+
   if (argc == 1) {
     std::printf("use: %s K [1]\n", argv[0]);
     return 0;
@@ -134,7 +188,7 @@ int main(int argc, char *argv[]) {
 
   // Benchmark auto-vectorized implementation
   TIMERSTART(softmax_auto);
-  softmax_auto(input.data(), output.data(), K);
+  softmax_auto(input.data(), output.data(), K, num_threads);
   TIMERSTOP(softmax_auto);
 
   // Print results if requested

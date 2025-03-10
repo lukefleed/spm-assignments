@@ -11,6 +11,7 @@
 #include <new>     // For std::align_val_t
 #include <numeric> // For std::accumulate
 #include <random>
+#include <set> // For std::set
 #include <vector>
 
 constexpr size_t BLOCK_SIZE =
@@ -58,9 +59,12 @@ using aligned_vector = std::vector<T, AlignedAllocatorC17<T>>;
 //   output[i] = exp(input[i] - max(input)) / sum_j(exp(input[j] - max(input)))
 //------------------------------------------------------------------------------
 void softmax_plain(const float *input, float *output, size_t K);
-void softmax_auto(const float *input, float *output, size_t K);
-void softmax_avx(const float *input, float *output, size_t K);
-void softmax_avx_small(const float *input, float *output, size_t K);
+void softmax_auto(const float *input, float *output, size_t K,
+                  int num_threads = -1);
+void softmax_avx(const float *input, float *output, size_t K,
+                 int num_threads = -1);
+void softmax_avx_small(const float *input, float *output, size_t K,
+                       int num_threads = -1);
 
 //------------------------------------------------------------------------------
 // Generate random input data with a fixed seed
@@ -123,16 +127,16 @@ bool validate_softmax(const float *output, size_t K,
 // Benchmark a softmax function by running multiple iterations and samples,
 // then return the median execution time (seconds).
 //------------------------------------------------------------------------------
-template <typename Func>
+template <typename Func, typename... Args>
 double benchmark(Func &&func, const float *input, float *output, size_t K,
-                 size_t samples = 11,
-                 size_t iterations_per_sample = 20) noexcept {
+                 size_t samples = 100, size_t iterations_per_sample = 100,
+                 Args &&...args) noexcept {
   std::vector<double> measurements;
   measurements.reserve(samples);
 
   // Warmup phase to minimize startup overhead.
   for (size_t i = 0; i < 3; ++i) {
-    func(input, output, K);
+    std::forward<Func>(func)(input, output, K, std::forward<Args>(args)...);
   }
 
   // Measurement phase.
@@ -140,7 +144,7 @@ double benchmark(Func &&func, const float *input, float *output, size_t K,
     auto start = std::chrono::high_resolution_clock::now();
 
     for (size_t i = 0; i < iterations_per_sample; ++i) {
-      func(input, output, K);
+      std::forward<Func>(func)(input, output, K, std::forward<Args>(args)...);
     }
 
     auto end = std::chrono::high_resolution_clock::now();
@@ -167,24 +171,34 @@ struct TestData {
 //------------------------------------------------------------------------------
 // Main function: runs tests, benchmarks, and writes results to CSV.
 //------------------------------------------------------------------------------
-int main() {
-  // Define various input sizes for testing.
-  const std::vector<size_t> test_sizes = {
-      // Small sizes to catch edge cases
-      1, 2, 3, 4, 8, 16, 32, 63, 64, 65, 127,
+int main(int argc, char *argv[]) {
+  int num_threads = -1; // Default: use system default
 
-      // Standard powers of 2
-      128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072,
-      262144, 524288, 1048576,
+  // Define test sizes: all powers of 2 plus 200 uniformly distributed values
+  std::vector<size_t> test_sizes;
 
-      // Non-power-of-2 sizes to test alignment handling
-      100, 500, 1000, 3000, 7000, 10000, 50000, 100000, 500000,
+  // Add all powers of 2 less than 2 million
+  std::set<size_t> unique_sizes;
+  for (size_t power = 0; power <= 20; ++power) {
+    size_t value = 1ULL << power; // 2^power
+    test_sizes.push_back(value);
+    unique_sizes.insert(value);
+  }
 
-      // Sizes near multiples of cache line (64 bytes = 16 floats)
-      112, 120, 136, 144, 240, 272,
+  // Add 200 uniformly distributed values between 1 and 2 million
+  std::mt19937 gen(
+      5489); // Using same seed as in generate_random_input for consistency
+  std::uniform_int_distribution<size_t> dis(1, 2000000);
 
-      // Sizes near AVX register boundaries (8 floats)
-      7, 9, 15, 17, 23, 25, 31, 33};
+  size_t additional_needed = 200;
+  while (additional_needed > 0) {
+    size_t value = dis(gen);
+    if (unique_sizes.find(value) == unique_sizes.end()) {
+      test_sizes.push_back(value);
+      unique_sizes.insert(value);
+      additional_needed--;
+    }
+  }
 
   // Sort the test sizes for better output organization
   std::vector<size_t> sorted_test_sizes = test_sizes;
@@ -203,9 +217,9 @@ int main() {
   }
 
   // Open CSV file for writing benchmark results.
-  std::ofstream result_file("results_noparallel_axv521.csv");
+  std::ofstream result_file("results/results_parallel_noaxv521.csv");
   if (!result_file) {
-    std::cerr << "Failed to open results_noparallel_axv521.csv\n";
+    std::cerr << "Failed to open results/results_parallel_noaxv521.csv\n";
     return 1;
   }
 
@@ -245,19 +259,23 @@ int main() {
     }
 
     // Benchmark each implementation.
+    // For the plain version (doesn't need num_threads)
     const double t_plain =
         benchmark(softmax_plain, data.input.data(), data.plain.data(), K);
-    const double t_auto =
-        benchmark(softmax_auto, data.input.data(), data.auto_vec.data(), K);
 
-    // Use a heuristic based on cache size to select the appropriate AVX
-    // function.
+    // For auto version with num_threads
+    const double t_auto =
+        benchmark(softmax_auto, data.input.data(), data.auto_vec.data(), K, 11,
+                  20, num_threads);
+
+    // For AVX versions with num_threads
     double t_avx;
     if (K <= BLOCK_SIZE * 2)
-      t_avx =
-          benchmark(softmax_avx_small, data.input.data(), data.avx.data(), K);
+      t_avx = benchmark(softmax_avx_small, data.input.data(), data.avx.data(),
+                        K, 11, 20, num_threads);
     else
-      t_avx = benchmark(softmax_avx, data.input.data(), data.avx.data(), K);
+      t_avx = benchmark(softmax_avx, data.input.data(), data.avx.data(), K, 11,
+                        20, num_threads);
 
     // Print benchmark results.
     std::cout << std::left << std::setw(10) << K << std::fixed
@@ -281,9 +299,9 @@ int main() {
   std::cout << "\nResults saved to results.csv\n";
 
   // Open CSV file for writing speedup results
-  std::ofstream speedup_file("speedup_noparallel_axv521.csv");
+  std::ofstream speedup_file("results/speedup_parallel_noaxv521.csv");
   if (!speedup_file) {
-    std::cerr << "Failed to open speedup.csv\n";
+    std::cerr << "Failed to open results/speedup_parallel_noaxv521.csv\n";
     return 1;
   }
 
@@ -301,13 +319,15 @@ int main() {
     const size_t K = data.size;
     double plain_time =
         benchmark(softmax_plain, data.input.data(), data.plain.data(), K);
-    double auto_time =
-        benchmark(softmax_auto, data.input.data(), data.auto_vec.data(), K);
-    double avx_time =
-        (K <= BLOCK_SIZE * 2)
-            ? benchmark(softmax_avx_small, data.input.data(), data.avx.data(),
-                        K)
-            : benchmark(softmax_avx, data.input.data(), data.avx.data(), K);
+
+    double auto_time = benchmark(softmax_auto, data.input.data(),
+                                 data.auto_vec.data(), K, 11, 20, num_threads);
+
+    double avx_time = (K <= BLOCK_SIZE * 2)
+                          ? benchmark(softmax_avx_small, data.input.data(),
+                                      data.avx.data(), K, 11, 20, num_threads)
+                          : benchmark(softmax_avx, data.input.data(),
+                                      data.avx.data(), K, 11, 20, num_threads);
 
     double auto_speedup = plain_time / auto_time;
     double avx_speedup = plain_time / avx_time;
@@ -349,7 +369,8 @@ int main() {
   }
 
   speedup_file.close();
-  std::cout << "Speedup results saved to speedup.csv\n";
+  std::cout
+      << "Speedup results saved to results/speedup_parallel_noaxv521.csv\n";
 
   std::cout << "- tiny:   K ≤ 64 elements\n";
   std::cout << "- small:  64 < K ≤ 1024 elements\n";
