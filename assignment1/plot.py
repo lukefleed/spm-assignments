@@ -6,6 +6,10 @@ import pandas as pd
 import plotly.graph_objects as go
 import numpy as np
 from plotly.subplots import make_subplots
+import plotly.io as pio
+
+# Configure Plotly to not use MathJax by default
+pio.kaleido.scope.mathjax = None
 
 # Parse command line arguments
 parser = argparse.ArgumentParser(description='Plot Softmax benchmark results.')
