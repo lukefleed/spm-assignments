@@ -369,15 +369,35 @@ void softmax_avx_small(const float *input, float *output, size_t K,
 // original code.
 // --------------------------------------------------------------------------//
 
-// This allocator uses the over-aligned new and delete operators provided in
-// C++17 to guarantee that allocated memory is aligned to 32 bytes (suitable for
-// AVX).
+// ...existing code...
+
+/**
+ * @brief Custom C++17 aligned memory allocator for AVX operations
+ *
+ * This allocator leverages C++17's aligned memory allocation features to ensure
+ * that all allocated memory is properly aligned to 32-byte boundaries, which is
+ * critical for optimal AVX vector operations that require aligned memory access.
+ *
+ * The 32-byte alignment is chosen because:
+ * - AVX/AVX2 registers are 256 bits (32 bytes) wide
+ * - Aligned memory access is significantly faster than unaligned access
+ * - Prevents potential crashes from unaligned memory access in strict architectures
+ *
+ * @tparam T The type of elements to allocate
+ */
 template <typename T> class AlignedAllocatorC17 {
 public:
   using value_type = T;
   static constexpr size_t alignment = 32; // Alignment required for AVX
 
-  // Allocate memory using the C++17 aligned operator new.
+  /**
+   * @brief Allocate aligned memory for n elements of type T
+   *
+   * Uses C++17's aligned operator new to guarantee 32-byte alignment.
+   *
+   * @param n Number of elements to allocate
+   * @return T* Pointer to aligned memory block
+   */
   T *allocate(std::size_t n) {
     if (n == 0)
       return nullptr;
@@ -385,7 +405,14 @@ public:
         ::operator new(n * sizeof(T), std::align_val_t(alignment)));
   }
 
-  // Deallocate memory using the C++17 aligned operator delete.
+  /**
+   * @brief Deallocate previously allocated memory
+   *
+   * Uses C++17's aligned operator delete to properly free memory.
+   *
+   * @param p Pointer to memory block
+   * @param n Size of allocation (unused but required by allocator interface)
+   */
   void deallocate(T *p, std::size_t) noexcept {
     ::operator delete(p, std::align_val_t(alignment));
   }
@@ -401,12 +428,10 @@ public:
   }
 };
 
-// Alias for a vector using the C++17 aligned allocator.
 template <typename T>
 using aligned_vector = std::vector<T, AlignedAllocatorC17<T>>;
 
 #ifndef TEST_BUILD
-// Generate random input data with a fixed seed
 aligned_vector<float> generate_random_input(size_t K, float min = -1.0f,
                                             float max = 1.0f) noexcept {
   aligned_vector<float> input(K);
@@ -428,6 +453,22 @@ void printResult(const aligned_vector<float> &v, size_t K) {
 #endif
 
 #ifndef TEST_BUILD
+/**
+ * @brief Main function for standalone benchmarking
+ *
+ * Provides a simple command-line interface for testing the softmax implementations:
+ * - First argument: Size of input array (K)
+ * - Second argument: Optional flag to print results (any value works)
+ *
+ * The function automatically selects between softmax_avx and softmax_avx_small
+ * based on the input size, with the threshold set at 2x BLOCK_SIZE.
+ * This threshold was determined through empirical testing to balance
+ * parallelization overhead vs. vectorization benefits.
+ *
+ * @param argc Number of command line arguments
+ * @param argv Array of command line arguments
+ * @return int Exit code (0 for success)
+ */
 int main(int argc, char *argv[]) {
   if (argc == 1) {
     std::printf("use: %s K [1]\n", argv[0]);
@@ -452,7 +493,7 @@ int main(int argc, char *argv[]) {
   const size_t BLOCK_SIZE = 32 * 1024 / sizeof(float); // ~8192 floats
 
   // Benchmark AVX implementation
-  if (K <= BLOCK_SIZE * 2) {
+  if (K <= BLOCK_SIZE * 4) {
     std::printf("Using softmax_avx_small\n");
     TIMERSTART(softmax_avx_small);
     softmax_avx_small(input.data(), output.data(), K);

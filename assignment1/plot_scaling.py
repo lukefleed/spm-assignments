@@ -3,7 +3,11 @@
 import os
 import pandas as pd
 import plotly.graph_objects as go
+import plotly.io as pio
 import numpy as np
+
+# Configure Plotly to not use MathJax by default
+pio.kaleido.scope.mathjax = None
 
 # Hardcoded configuration - always use AVX512
 config_avx = "avx512"
