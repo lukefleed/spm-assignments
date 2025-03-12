@@ -1,4 +1,4 @@
-\documentclass[10pt]{article}
+\documentclass[10pt]{report}
 \usepackage[margin=1in]{geometry}
 \usepackage[utf8]{inputenc}
 \usepackage[english]{babel}
@@ -26,7 +26,7 @@
 
 \title{Assignment I: The softmax function}
 \author{Luca Lombardo}
-\date{}
+
 
 \begin{document}
 \maketitle
@@ -34,10 +34,12 @@
 % \tableofcontents
 
 \setlength{\parindent}{0em}
+\setlength{\parskip}{-0.5em}
 
 \section*{Results}
 This section presents a comparative analysis of three softmax function implementations under varying conditions. We evaluate the \texttt{softmax\_auto} implementation with and without the \texttt{parallel} directive and compare performance between AVX2 and AVX512 instruction sets.
 
+\paragraph{Experimental Setup} All experiments were conducted on a system equipped with dual Intel(R) Xeon(R) Gold 5318Y CPUs, providing a total of 96 threads (48 per CPU). The system has 1TB of RAM and runs Ubuntu 22.04 with Linux kernel 5.15.0-119-generic. All code was compiled using GCC 11.4.0 with appropriate optimization flags.
 
 \subsection*{Performance}
 
@@ -45,14 +47,14 @@ We compare the execution time of three softmax implementations across various in
 
 \begin{figure}[H]
   \centering
-  \begin{minipage}{0.48\textwidth}
+  \begin{minipage}{0.49\textwidth}
     \centering
     \includegraphics[width=\textwidth]{../images/performance/softmax_noparallel_avx512.pdf}
     \caption{Performance of softmax implementations without parallelization and with AVX512 instructions.}
     \label{fig:perf_noparallel_avx512}
   \end{minipage}
   \hfill
-  \begin{minipage}{0.48\textwidth}
+  \begin{minipage}{0.49\textwidth}
     \centering
     \includegraphics[width=\textwidth]{../images/performance/softmax_noparallel_noavx512.pdf}
     \caption{Performance of softmax implementations without parallelization and without AVX512 instructions.}
@@ -60,16 +62,17 @@ We compare the execution time of three softmax implementations across various in
   \end{minipage}
 \end{figure}
 
+
 \begin{figure}[H]
   \centering
-  \begin{minipage}{0.48\textwidth}
+  \begin{minipage}{0.49\textwidth}
     \centering
     \includegraphics[width=\textwidth]{../images/performance/softmax_parallel_avx512.pdf}
     \caption{Performance of softmax implementations with parallelization and AVX512 instructions.}
     \label{fig:perf_parallel_avx512}
   \end{minipage}
   \hfill
-  \begin{minipage}{0.48\textwidth}
+  \begin{minipage}{0.49\textwidth}
     \centering
     \includegraphics[width=\textwidth]{../images/performance/softmax_parallel_noavx512.pdf}
     \caption{Performance of softmax implementations with parallelization but without AVX512 instructions.}
@@ -77,19 +80,21 @@ We compare the execution time of three softmax implementations across various in
   \end{minipage}
 \end{figure}
 
+The manually vectorized implementation \texttt{softmax\_avx} employs an optimization strategy where parallelization is deliberately not enabled for small input sizes (fitting within L1 cache) to avoid thread management overhead. As evidenced in the performance profiles, when the input size becomes larger, the manually vectorized implementation (that is parallelized) outperforms the auto-vectorized implementation (that is not parallelized). It should be noted that the logarithmic scaling on both axes facilitates comprehensive visualization across multiple orders of magnitude but obscures subtle performance differentials between implementations such as the use of AVX2 and AVX512 instructions.The following section will give a more clear visualization of the performance differences.
+
 \subsection*{Speedup}
 We analyze the relative speedup of various configurations compared to the baseline plain implementation. Figures~\ref{fig:speedup_parallel_avx512} through \ref{fig:speedup_noparallel_noavx512} illustrate the performance gains achieved through different combinations of parallelization and vectorization techniques.
 
 \begin{figure}[H]
   \centering
-  \begin{minipage}{0.48\textwidth}
+  \begin{minipage}{0.49\textwidth}
     \centering
     \includegraphics[width=\textwidth]{../images/speedup/softmax_speedup_parallel_avx512.pdf}
     \caption{Speedup with parallelization and AVX512 instructions.}
     \label{fig:speedup_parallel_avx512}
   \end{minipage}
   \hfill
-  \begin{minipage}{0.48\textwidth}
+  \begin{minipage}{0.49\textwidth}
     \centering
     \includegraphics[width=\textwidth]{../images/speedup/softmax_speedup_noparallel_avx512.pdf}
     \caption{Speedup without parallelization but with AVX512 instructions.}
@@ -99,14 +104,14 @@ We analyze the relative speedup of various configurations compared to the baseli
 
 \begin{figure}[H]
   \centering
-  \begin{minipage}{0.48\textwidth}
+  \begin{minipage}{0.49\textwidth}
     \centering
     \includegraphics[width=\textwidth]{../images/speedup/softmax_speedup_parallel_noavx512.pdf}
     \caption{Speedup with parallelization but without AVX512 instructions.}
     \label{fig:speedup_parallel_noavx512}
   \end{minipage}
   \hfill
-  \begin{minipage}{0.48\textwidth}
+  \begin{minipage}{0.49\textwidth}
     \centering
     \includegraphics[width=\textwidth]{../images/speedup/softmax_speedup_noparallel_noavx512.pdf}
     \caption{Speedup without parallelization and without AVX512 instructions.}
@@ -114,22 +119,22 @@ We analyze the relative speedup of various configurations compared to the baseli
   \end{minipage}
 \end{figure}
 
-As evidenced in Figures~\ref{fig:speedup_parallel_avx512} and \ref{fig:speedup_parallel_noavx512}, parallelization significantly enhances the performance of the auto-vectorized implementation. Conversely, the impact of AVX512 instructions appears minimal when comparing Figures~\ref{fig:speedup_parallel_avx512} with \ref{fig:speedup_parallel_noavx512} and \ref{fig:speedup_noparallel_avx512} with \ref{fig:speedup_noparallel_noavx512}.
+Figures~\ref{fig:speedup_parallel_avx512} and \ref{fig:speedup_parallel_noavx512} demonstrate that parallelization yields substantial performance benefits for the auto-vectorized implementation with large input dimensions, while introducing counterproductive overhead for smaller inputs, reducing efficiency to levels comparable with scalar implementation. Regarding instruction set influence, comparative analysis between Figures~\ref{fig:speedup_parallel_avx512} and \ref{fig:speedup_parallel_noavx512}, as well as between Figures~\ref{fig:speedup_noparallel_avx512} and \ref{fig:speedup_noparallel_noavx512}, indicates that AVX512 provides marginal performance improvements over AVX2, with enhancement coefficients remaining below statistical significance\footnote{I am very surprised by this result, as I expected a more significant performance boost from AVX512. I even looked at the disassembly code generated by the compiler to verify that the AVX512 instructions were indeed being used.}
 
 \subsection*{Scalability}
 
-We evaluate thread scalability using a fixed large input size ($K = 2^{30}$) while varying thread count from 1 to 96. Figure~\ref{fig:thread_scaling} shows the execution times, while Figure~\ref{fig:thread_speedup} presents the speedup relative to single-threaded execution alongside the theoretical Amdahl's Law prediction. Notably, a performance discontinuity occurs at approximately half the maximum thread count, corresponding to the number of cores in one of the system's two physical processors.
+We evaluate thread scalability using a fixed input size ($K = 2^{30}$) while varying thread count from 1 to 96. Figure~\ref{fig:thread_scaling} shows the execution times, while Figure~\ref{fig:thread_speedup} presents the speedup relative to single-threaded execution alongside the theoretical Amdahl's Law prediction. Notably, a performance discontinuity occurs at approximately half the maximum thread count, corresponding to the number of cores in one of the system's two physical processors.
 
 \begin{figure}[H]
   \centering
-  \begin{minipage}{0.48\textwidth}
+  \begin{minipage}{0.49\textwidth}
     \centering
     \includegraphics[width=\textwidth]{../images/thread_scaling/thread_scaling_avx512.pdf}
     \caption{Execution time scaling with thread count for the softmax implementations.}
     \label{fig:thread_scaling}
   \end{minipage}
   \hfill
-  \begin{minipage}{0.48\textwidth}
+  \begin{minipage}{0.49\textwidth}
     \centering
     \includegraphics[width=\textwidth]{../images/thread_scaling/thread_scaling_speedup_avx512.pdf}
     \caption{Thread scaling speedup compared to Amdahl's Law prediction.}
@@ -138,22 +143,22 @@ We evaluate thread scalability using a fixed large input size ($K = 2^{30}$) whi
 \end{figure}
 
 \subsection*{Numerical Stability}
-The numerical stability comparison in Figures~\ref{fig:stability_noparallel} and \ref{fig:stability_parallel} demonstrates how each implementation handles numerical challenges across varying input conditions.
+We evaluate numerical stability by measuring how closely the sum of each implementation's output approximates the theoretical value of 1.0. Figure \ref{fig:stability_1M} demonstrates that the plain implementation shows numerical instability at moderate dimensions ($K = 2^{20}$), while both vectorized implementations maintain stability. Figure \ref{fig:stability_1B}, which excludes the significantly divergent plain implementation for clarity, reveals that the manually vectorized implementation achieves superior numerical precision compared to the auto-vectorized variant at very large dimensions. Nevertheless, the auto-vectorized implementation maintains acceptable numerical stability even at substantial input sizes ($K=2^{30}$).
 
 \begin{figure}[H]
   \centering
-  \begin{minipage}{0.48\textwidth}
+  \begin{minipage}{0.49\textwidth}
     \centering
-    \includegraphics[width=\textwidth]{../images/stability/stability_noparallel_avx512.pdf}
-    \caption{Numerical stability without parallelization.}
-    \label{fig:stability_noparallel}
+    \includegraphics[width=\textwidth]{../images/stability/stability_parallel_avx512_1M.pdf}
+    \caption{Numerical stability with small input sizes.}
+    \label{fig:stability_1M}
   \end{minipage}
   \hfill
-  \begin{minipage}{0.48\textwidth}
+  \begin{minipage}{0.49\textwidth}
     \centering
-    \includegraphics[width=\textwidth]{../images/stability/stability_parallel_avx512.pdf}
-    \caption{Numerical stability with parallelization.}
-    \label{fig:stability_parallel}
+    \includegraphics[width=\textwidth]{../images/stability/stability_parallel_avx512_1B.pdf}
+    \caption{Numerical stability without large input sizes.}
+    \label{fig:stability_1B}
   \end{minipage}
 \end{figure}
 

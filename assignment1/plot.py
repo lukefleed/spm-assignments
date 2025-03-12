@@ -220,12 +220,12 @@ def generate_plots(is_parallel, is_avx512, include_stability):
             # Create a single plot for sum values
             fig_stability = go.Figure()
 
-            # Plot sum values for each implementation
-            fig_stability.add_trace(
-                go.Scatter(x=stability_data['Size'], y=stability_data['PlainSum'],
-                          mode='lines+markers', name='Plain Implementation',
-                          marker=dict(size=6))
-            )
+            # # Plot sum values for each implementation
+            # fig_stability.add_trace(
+            #     go.Scatter(x=stability_data['Size'], y=stability_data['PlainSum'],
+            #               mode='lines+markers', name='Plain Implementation',
+            #               marker=dict(size=6))
+            # )
             fig_stability.add_trace(
                 go.Scatter(x=stability_data['Size'], y=stability_data['AutoSum'],
                           mode='lines+markers', name='Auto Implementation',
@@ -240,9 +240,10 @@ def generate_plots(is_parallel, is_avx512, include_stability):
             # Update layout
             fig_stability.update_layout(
                 title=f"Numerical Stability: Sum Analysis ({config_parallel.capitalize()}, {'AVX512' if is_avx512 else 'No AVX512'})",
-                xaxis_title='Vector Size',
+                xaxis_title='Vector Size (log scale)',
                 yaxis_title='Sum of Softmax Output (closer to 1 is better), log scale',
                 yaxis_type='log',
+                xaxis_type='log',
                 template='plotly_white',
                 width=900,
                 height=600,
