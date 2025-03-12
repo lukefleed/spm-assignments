@@ -152,3 +152,5 @@ python3 plot_scaling.py
 ## Hardware Considerations
 
 The benchmark framework distinguishes between AVX512-enabled and non-AVX512 configurations. It is important to note that on processors lacking AVX512 support, the `softmax_auto` implementation's performance metrics will remain invariant between AVX512 and non-AVX512 compilation flags. The `softmax_avx` implementation employs AVX2 instruction sets regardless of the AVX512 compilation setting (so it won't work on older CPUs).
+
+> Note that on the course machiens, this code only works on node zero of `spmcluster` (since it's the only one supporting avx2), while it does not work on any other node of `spmcluster` or on `spmnuma`
