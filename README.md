@@ -1,6 +1,6 @@
 # Softmax Benchmarking
 
-This repository contains implementations and benchmarking tools for the softmax function using different optimization techniques. The project explores plain, auto-vectorized, and manually AVX-vectorized implementations with analysis of performance, numerical stability, and thread scaling.
+This repository contains implementations and benchmarking tools for the softmax function using different optimization techniques. We use plain, auto-vectorized, and manually AVX-vectorized implementations with analysis of performance, numerical stability, and thread scaling.
 
 ## Project Structure
 
@@ -124,7 +124,7 @@ Where `[config]` represents the configuration (e.g., `parallel_avx512`).
 
 ## Experimental Configuration
 
-The default benchmark configuration is designed for comprehensive analysis with extensive iterations and large datasets, which may require significant computational time. For preliminary evaluations or systems with limited resources, we recommend modifying the following parameters in `softmax_test.cpp`:
+The default benchmark configuration is designed for full analysis with extensive iterations and large datasets, which may require significant computational time. For preliminary evaluations or systems with limited resources, I recommend modifying the following parameters in `softmax_test.cpp`:
 
 1. Reduce the number of `samples` (default: 15)
 2. Decrease `iterations_per_sample` (default: 30)
@@ -132,7 +132,7 @@ The default benchmark configuration is designed for comprehensive analysis with 
 
 These adjustments will substantially reduce execution time while still providing meaningful initial results.
 
-## Execution Protocol
+## Execution
 
 To execute the complete test suite with modified parameters:
 
@@ -151,4 +151,4 @@ python3 plot_scaling.py
 
 ## Hardware Considerations
 
-The benchmark framework distinguishes between AVX512-enabled and non-AVX512 configurations. It is important to note that on processors lacking AVX512 support, the `softmax_auto` implementation's performance metrics will remain invariant between AVX512 and non-AVX512 compilation flags. The `softmax_avx` implementation employs AVX2 instruction sets regardless of the AVX512 compilation setting.
+The benchmark framework distinguishes between AVX512-enabled and non-AVX512 configurations. It is important to note that on processors lacking AVX512 support, the `softmax_auto` implementation's performance metrics will remain invariant between AVX512 and non-AVX512 compilation flags. The `softmax_avx` implementation employs AVX2 instruction sets regardless of the AVX512 compilation setting (so it won't work on older CPUs).

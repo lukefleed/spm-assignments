@@ -66,7 +66,7 @@ ifeq ($(USE_AVX512),1)
 else
 	AVX_FLAG = -mavx2
 endif
-AUTOFLAGS = $(AVX_FLAG) -ftree-vectorize -fopenmp
+AUTOFLAGS = $(AVX_FLAG) -ftree-vectorize -fopenmp -fopt-info-vec-missed
 AVXFLAGS = -mavx2 -mfma -malign-double -falign-loops=32 -fopenmp
 CXXFLAGS	+= -Wall -fno-math-errno
 INCLUDES	= -I. -I./include
