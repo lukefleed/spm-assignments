@@ -1,15 +1,15 @@
-#include <chrono>
-#include <iomanip>
-#include <iostream>
-#include <string>
-#include <vector>
-
 #include "common_types.h"
 #include "dynamic_scheduler.h"
 #include "sequential.h"
 #include "static_scheduler.h"
 #include "testing.h" // Includi il nuovo header
 #include "utils.h"
+#include <chrono>
+#include <iomanip>
+#include <iostream>
+#include <string>
+#include <thread>
+#include <vector>
 
 bool run_sequential_wrapper(const Config &config,
                             std::vector<RangeResult> &results_out);
@@ -32,14 +32,18 @@ int main(int argc, char *argv[]) {
       // scaling std::vector<Range> perf_workload = {{1, 200000000}}; // Esempio
       // alternativo
 
-      // Thread da testare
-      std::vector<int> threads_to_test = {
-          1, 2, 4, 8, 12}; // Adatta ai core della macchina di test
-      // Chunk/Block size da testare (ridotti)
-      std::vector<ull> chunks_to_test = {128}; // Ridotto da {64, 256}
+      // Thread da testare (tutti fino al massimo della macchina)
+      int max_threads = std::thread::hardware_concurrency();
+      std::vector<int> threads_to_test;
+      for (int i = 1; i <= max_threads; ++i) {
+        threads_to_test.push_back(i);
+      }
+
+      // Chunk/Block size da testare (tutte le potenze di due fino a 256)
+      std::vector<ull> chunks_to_test = {64, 128, 256};
 
       int samples = 5;               // Numero di misurazioni mediane
-      int iterations_per_sample = 3; // Esecuzioni per ogni misurazione
+      int iterations_per_sample = 2; // Esecuzioni per ogni misurazione
 
       // --- Fine Parametri ---
 

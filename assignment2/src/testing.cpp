@@ -2,16 +2,52 @@
 #include "dynamic_scheduler.h"
 #include "sequential.h"
 #include "static_scheduler.h"
-#include "utils.h"    // Per Timer
-#include <algorithm>  // Per std::sort, std::minmax_element
-#include <cmath>      // Per std::sqrt, std::abs
-#include <functional> // Per std::function
-#include <iomanip>    // Per std::setw, std::fixed, std::setprecision
-#include <iostream>
-#include <numeric> // Per std::accumulate
+#include "utils.h" // Per Timer
+
+#include <algorithm>  // std::sort, std::minmax_element
+#include <cmath>      // std::sqrt, std::abs
+#include <functional> // std::function
+#include <iomanip>    // std::setw, std::fixed, std::setprecision
+#include <iostream>   // std::clog
+#include <numeric>    // std::accumulate
 #include <vector>
 
-// --- Test di Correttezza ---
+// --- Helper Functions ---
+
+// Compares expected sequential results with the results returned by a scheduler
+// test. Returns true if they match; otherwise, prints detailed mismatch
+// information.
+bool compare_results(const std::vector<ull> &expected,
+                     const std::vector<RangeResult> &results,
+                     const std::string &schedulerType, int threadCount,
+                     ull chunkSize) {
+  if (results.size() != expected.size()) {
+    std::cerr << "  [" << schedulerType << " T=" << threadCount
+              << ", C=" << chunkSize << "] Error: expected " << expected.size()
+              << " results, got " << results.size() << std::endl;
+    return false;
+  }
+  for (size_t i = 0; i < expected.size(); ++i) {
+    if (results[i].max_steps.load() != expected[i]) {
+      std::cerr << "  [" << schedulerType << " T=" << threadCount
+                << ", C=" << chunkSize << "] Mismatch on range " << i
+                << ": expected " << expected[i] << ", got "
+                << results[i].max_steps.load() << std::endl;
+      return false;
+    }
+  }
+  return true;
+}
+
+// Prints a summary line in a formatted way
+void print_summary_line(const std::string &testName, int total, int passed) {
+  std::cout << std::setw(20) << std::left << testName
+            << " Total: " << std::setw(4) << total
+            << " Passed: " << std::setw(4) << passed
+            << " Failed: " << std::setw(4) << (total - passed) << std::endl;
+}
+
+// --- Correctness Suite ---
 
 struct CorrectnessTestCase {
   std::string name;
@@ -21,8 +57,9 @@ struct CorrectnessTestCase {
 };
 
 bool run_correctness_suite() {
-  std::cout << "--- Running Correctness Suite ---" << std::endl;
-  bool all_passed = true;
+  std::cout << "=== Running Correctness Suite ===" << std::endl;
+  int test_count = 0;
+  int passed_count = 0;
 
   std::vector<CorrectnessTestCase> test_cases = {
       {"Small Range", {{1, 100}}, {1, 2, 4}, {1, 8, 32}},
@@ -32,282 +69,237 @@ bool run_correctness_suite() {
        {4, 8},
        {1, 10}},
       {"Larger Range", {{1, 10000}}, {8, 16}, {64, 128}},
-      // Aggiungere altri casi se necessario (es. range con start>end già
-      // gestito nel parsing, range con 0)
       {"Mixed Ranges", {{10, 20}, {1000, 1500}, {80, 90}}, {4}, {16}}};
-
-  int test_count = 0;
-  int failed_count = 0;
 
   for (const auto &tc : test_cases) {
     test_count++;
-    std::cout << "\n[Test Case " << test_count << ": " << tc.name << "]"
-              << std::endl;
-    bool case_passed = true;
+    bool testcase_success = true;
+    std::cout << "\n[Test Case " << test_count << "]: " << tc.name << std::endl;
 
-    // 1. Esegui Sequenziale (Baseline)
-    std::cout << "  Running Sequential..." << std::flush;
+    // Run the sequential implementation (baseline)
+    std::cout << "  Executing Sequential baseline... " << std::flush;
     std::vector<ull> expected_results = run_sequential(tc.ranges);
-    std::cout << " Done." << std::endl;
+    std::cout << "Done." << std::endl;
 
-    // 2. Esegui Statico e Dinamico con varie configurazioni
+    // Run tests for static and dynamic schedulers
     for (int n_threads : tc.thread_counts) {
       for (ull chunk : tc.chunk_sizes) {
+        // Config for static scheduling
         Config config_static;
         config_static.scheduling = SchedulingType::STATIC;
         config_static.num_threads = n_threads;
         config_static.chunk_size = chunk;
         config_static.ranges = tc.ranges;
-        config_static.verbose = false; // Tenere spento per output pulito
+        config_static.verbose = false;
 
-        Config config_dynamic = config_static; // Copia la base
+        // Config for dynamic scheduling (copy of static)
+        Config config_dynamic = config_static;
         config_dynamic.scheduling = SchedulingType::DYNAMIC;
 
         // --- Static Test ---
-        std::cout << "  Testing Static  (T=" << n_threads << ", C=" << chunk
-                  << ")..." << std::flush;
-        std::vector<RangeResult> static_results_rr;
-        if (run_static_block_cyclic(config_static, static_results_rr)) {
-          bool match = true;
-          if (static_results_rr.size() != expected_results.size()) {
-            match = false;
-          } else {
-            for (size_t i = 0; i < expected_results.size(); ++i) {
-              if (static_results_rr[i].max_steps.load() !=
-                  expected_results[i]) {
-                match = false;
-                break;
-              }
-            }
-          }
-          if (match) {
-            std::cout << " PASS" << std::endl;
-          } else {
-            std::cout << " FAIL (Mismatch)" << std::endl;
-            // Qui potresti stampare i risultati attesi vs ottenuti per debug
-            case_passed = false;
-          }
+        std::cout << "  [Static  T=" << n_threads << ", C=" << chunk
+                  << "] Running..." << std::flush;
+        std::vector<RangeResult> static_results;
+        bool static_success =
+            run_static_block_cyclic(config_static, static_results);
+        if (static_success && compare_results(expected_results, static_results,
+                                              "Static", n_threads, chunk)) {
+          std::cout << " PASS" << std::endl;
         } else {
-          std::cout << " FAIL (Execution Error)" << std::endl;
-          case_passed = false;
+          std::cout << " FAIL" << std::endl;
+          testcase_success = false;
         }
 
         // --- Dynamic Test ---
-        std::cout << "  Testing Dynamic (T=" << n_threads << ", C=" << chunk
-                  << ")..." << std::flush;
-        std::vector<RangeResult> dynamic_results_rr;
-        if (run_dynamic_task_queue(config_dynamic, dynamic_results_rr)) {
-          bool match = true;
-          if (dynamic_results_rr.size() != expected_results.size()) {
-            match = false;
-          } else {
-            for (size_t i = 0; i < expected_results.size(); ++i) {
-              if (dynamic_results_rr[i].max_steps.load() !=
-                  expected_results[i]) {
-                match = false;
-                break;
-              }
-            }
-          }
-          if (match) {
-            std::cout << " PASS" << std::endl;
-          } else {
-            std::cout << " FAIL (Mismatch)" << std::endl;
-            case_passed = false;
-          }
+        std::cout << "  [Dynamic T=" << n_threads << ", C=" << chunk
+                  << "] Running..." << std::flush;
+        std::vector<RangeResult> dynamic_results;
+        bool dynamic_success =
+            run_dynamic_task_queue(config_dynamic, dynamic_results);
+        if (dynamic_success &&
+            compare_results(expected_results, dynamic_results, "Dynamic",
+                            n_threads, chunk)) {
+          std::cout << " PASS" << std::endl;
         } else {
-          std::cout << " FAIL (Execution Error)" << std::endl;
-          case_passed = false;
+          std::cout << " FAIL" << std::endl;
+          testcase_success = false;
         }
       }
     }
-
-    if (!case_passed) {
-      failed_count++;
-      all_passed = false;
-    }
+    passed_count += (testcase_success ? 1 : 0);
   }
-
-  std::cout << "\n--- Correctness Suite Summary ---" << std::endl;
-  std::cout << "Total Test Cases: " << test_count << std::endl;
-  std::cout << "Passed: " << test_count - failed_count << std::endl;
-  std::cout << "Failed: " << failed_count << std::endl;
-  std::cout << "---------------------------------" << std::endl;
-
-  return all_passed;
+  std::cout << "\n=== Correctness Suite Summary ===" << std::endl;
+  print_summary_line("Correctness", test_count, passed_count);
+  std::cout << "===================================" << std::endl;
+  return (test_count == passed_count);
 }
 
-// --- Test di Performance ---
+// --- Performance Suite ---
 
-// Funzione helper generica per misurare il tempo di esecuzione (mediana)
-// Accetta una funzione che esegue il calcolo e restituisce bool (success/fail)
+// Wrapper for sequential implementation to match the function signature needed
+// for measurement
+bool run_sequential_wrapper(const Config &cfg, std::vector<RangeResult> &res) {
+  std::vector<ull> seq_results = run_sequential(cfg.ranges);
+  res.clear();
+  res.reserve(seq_results.size());
+  for (ull result : seq_results) {
+    RangeResult rr;
+    rr.max_steps.store(result);
+    res.push_back(rr);
+  }
+  return true;
+}
+
+// Helper function to measure median execution time in ms.
 double measure_median_time_ms(
     std::function<bool(const Config &, std::vector<RangeResult> &)> func_to_run,
     const Config &config, int samples, int iterations_per_sample) {
   if (samples <= 0 || iterations_per_sample <= 0)
-    return -1.0; // Valori non validi
+    return -1.0;
 
-  std::vector<double> all_iteration_times_ms;
-  all_iteration_times_ms.reserve(samples * iterations_per_sample);
+  std::vector<double> iteration_times;
+  iteration_times.reserve(samples * iterations_per_sample);
+  std::vector<RangeResult> results_buffer;
 
-  std::vector<RangeResult>
-      results_buffer; // Buffer per i risultati (non analizzati qui)
+  std::cout << "  Running measurements for "
+            << (config.scheduling == SchedulingType::STATIC
+                    ? "Static"
+                    : (config.scheduling == SchedulingType::DYNAMIC
+                           ? "Dynamic"
+                           : "Sequential"))
+            << " scheduler with " << config.num_threads << " thread(s)"
+            << (config.scheduling == SchedulingType::STATIC ||
+                        config.scheduling == SchedulingType::DYNAMIC
+                    ? " and chunk size " + std::to_string(config.chunk_size)
+                    : "")
+            << std::endl;
 
   for (int s = 0; s < samples; ++s) {
+    std::cout << "    Sample " << (s + 1) << "/" << samples << ": "
+              << std::flush;
+    double sample_total = 0.0;
+    int valid_iterations = 0;
+
     for (int iter = 0; iter < iterations_per_sample; ++iter) {
       Timer timer;
       bool success = func_to_run(config, results_buffer);
       double duration_ms = timer.elapsed_ms();
 
       if (!success) {
-        std::cerr << "Warning: Execution failed during performance measurement "
-                     "for config (T="
-                  << config.num_threads << ", C=" << config.chunk_size
-                  << ", Sched="
-                  << (config.scheduling == SchedulingType::STATIC ? "Static"
-                                                                  : "Dynamic")
-                  << "). Sample " << s << ", Iter " << iter
-                  << ". Skipping time." << std::endl;
-        // Potresti decidere di invalidare l'intero campione o il test
-        continue; // Salta questo tempo
+        std::cerr << "X" << std::flush;
+        continue;
       }
-      all_iteration_times_ms.push_back(duration_ms);
+
+      std::cout << "." << std::flush;
+      sample_total += duration_ms;
+      valid_iterations++;
+      iteration_times.push_back(duration_ms);
+    }
+
+    if (valid_iterations > 0) {
+      double avg = sample_total / valid_iterations;
+      std::cout << " Avg: " << std::fixed << std::setprecision(2) << avg
+                << " ms" << std::endl;
+    } else {
+      std::cout << " Failed" << std::endl;
     }
   }
 
-  if (all_iteration_times_ms.empty()) {
-    return -2.0; // Nessuna misurazione valida
-  }
+  if (iteration_times.empty())
+    return -2.0;
 
-  // Calcola la mediana
-  std::sort(all_iteration_times_ms.begin(), all_iteration_times_ms.end());
-  size_t n = all_iteration_times_ms.size();
-  if (n % 2 != 0) {
-    return all_iteration_times_ms[n / 2];
-  } else {
-    return (all_iteration_times_ms[n / 2 - 1] + all_iteration_times_ms[n / 2]) /
-           2.0;
-  }
-}
+  std::sort(iteration_times.begin(), iteration_times.end());
+  size_t n = iteration_times.size();
+  double median =
+      (n % 2) ? iteration_times[n / 2]
+              : (iteration_times[n / 2 - 1] + iteration_times[n / 2]) / 2.0;
 
-// Funzione wrapper per run_sequential per adattarla a std::function
-bool run_sequential_wrapper(const Config &config,
-                            std::vector<RangeResult> &results_out) {
-  auto seq_max_steps = run_sequential(config.ranges);
-  results_out.clear();
-  results_out.reserve(config.ranges.size());
-  for (size_t i = 0; i < config.ranges.size(); ++i) {
-    // Dobbiamo creare RangeResult anche qui per coerenza interfaccia
-    results_out.emplace_back(config.ranges[i]);
-    results_out.back().max_steps.store(seq_max_steps[i]);
-  }
-  return true; // run_sequential non ritorna bool, assumiamo successo
+  std::cout << "  → Median execution time: " << std::fixed
+            << std::setprecision(4) << median << " ms over "
+            << iteration_times.size() << " measurements" << std::endl;
+
+  return median;
 }
 
 bool run_performance_suite(const std::vector<int> &thread_counts,
                            const std::vector<ull> &chunk_sizes, int samples,
                            int iterations_per_sample,
                            const std::vector<Range> &workload) {
-  std::cout << "--- Running Performance Suite ---" << std::endl;
-  std::cout << "Samples per config: " << samples
-            << ", Iterations per sample: " << iterations_per_sample
-            << std::endl;
-  std::cout << "Workload Ranges: ";
-  for (const auto &r : workload)
-    std::cout << r.start << "-" << r.end << " ";
-  std::cout << std::endl;
+  std::cout << "\n=== Running Performance Suite ===" << std::endl;
+  std::cout << "Samples/Config: " << samples
+            << ", Iterations/Sample: " << iterations_per_sample << std::endl;
 
-  // Stampa header CSV
-  std::cout << "\nScheduler,Threads,ChunkSize,MedianTimeMs" << std::endl;
+  std::cout << "Workload Ranges: ";
+  for (size_t i = 0; i < workload.size(); ++i) {
+    const auto &r = workload[i];
+    std::cout << "[" << r.start << "-" << r.end << "]";
+    if (i < workload.size() - 1)
+      std::cout << ", ";
+  }
+  std::cout << std::endl << std::endl;
+  std::cout << "Scheduler,Threads,ChunkSize,MedianTimeMs" << std::endl;
 
   Config base_config;
   base_config.ranges = workload;
   base_config.verbose = false;
 
-  // 1. Test Sequenziale (Baseline)
+  // --- Sequential Baseline ---
   Config seq_config = base_config;
-  seq_config.num_threads =
-      1; // Anche se non usato da run_sequential, per coerenza
-  seq_config.chunk_size = 0; // Non applicabile
-  seq_config.scheduling =
-      SchedulingType::STATIC; // Non rilevante ma deve essere qualcosa
-
-  // Creiamo la funzione da passare (lambda che chiama la wrapper)
-  auto seq_func = [](const Config &cfg, std::vector<RangeResult> &res) {
-    return run_sequential_wrapper(cfg, res);
-  };
-
+  seq_config.num_threads = 1;
+  seq_config.chunk_size = 0;
+  seq_config.scheduling = SchedulingType::STATIC;
+  std::function<bool(const Config &, std::vector<RangeResult> &)> seq_func =
+      [](const Config &cfg, std::vector<RangeResult> &res) {
+        return run_sequential_wrapper(cfg, res);
+      };
   double median_seq_ms = measure_median_time_ms(seq_func, seq_config, samples,
                                                 iterations_per_sample);
   if (median_seq_ms >= 0) {
-    std::cout << "Sequential," << 1 << ","
-              << "N/A"
-              << "," << std::fixed << std::setprecision(4) << median_seq_ms
-              << std::endl;
+    std::cout << "Sequential,1,N/A," << std::fixed << std::setprecision(4)
+              << median_seq_ms << std::endl;
   } else {
-    std::cout << "Sequential," << 1 << ","
-              << "N/A"
-              << ","
-              << "ERROR" << std::endl;
-    // Potremmo voler interrompere se il sequenziale fallisce, ma continuiamo
-    // per ora
+    std::cout << "Sequential,1,N/A,ERROR" << std::endl;
   }
 
-  // 2. Test Statico e Dinamico
+  // --- Static and Dynamic Tests ---
   for (int n_threads : thread_counts) {
-    // Se n_threads è 1, potremmo saltare per evitare duplicati col test
-    // sequenziale, ma misurarlo può essere utile per vedere l'overhead della
-    // struttura parallela. Lo misuriamo comunque.
-
     for (ull chunk : chunk_sizes) {
-      // --- Static Test ---
+      // Static
       Config config_static = base_config;
       config_static.scheduling = SchedulingType::STATIC;
       config_static.num_threads = n_threads;
       config_static.chunk_size = chunk;
-
-      // Creiamo la funzione da passare
       auto static_func = [](const Config &cfg, std::vector<RangeResult> &res) {
         return run_static_block_cyclic(cfg, res);
       };
-
       double median_static_ms = measure_median_time_ms(
           static_func, config_static, samples, iterations_per_sample);
-
+      std::cout << "Static," << n_threads << "," << chunk << ",";
       if (median_static_ms >= 0) {
-        std::cout << "Static," << n_threads << "," << chunk << "," << std::fixed
-                  << std::setprecision(4) << median_static_ms << std::endl;
+        std::cout << std::fixed << std::setprecision(4) << median_static_ms;
       } else {
-        std::cout << "Static," << n_threads << "," << chunk << ","
-                  << "ERROR" << std::endl;
+        std::cout << "ERROR";
       }
+      std::cout << std::endl;
 
-      // --- Dynamic Test ---
+      // Dynamic
       Config config_dynamic = base_config;
       config_dynamic.scheduling = SchedulingType::DYNAMIC;
       config_dynamic.num_threads = n_threads;
       config_dynamic.chunk_size = chunk;
-
-      // Creiamo la funzione da passare
       auto dynamic_func = [](const Config &cfg, std::vector<RangeResult> &res) {
         return run_dynamic_task_queue(cfg, res);
       };
-
       double median_dynamic_ms = measure_median_time_ms(
           dynamic_func, config_dynamic, samples, iterations_per_sample);
-
+      std::cout << "Dynamic," << n_threads << "," << chunk << ",";
       if (median_dynamic_ms >= 0) {
-        std::cout << "Dynamic," << n_threads << "," << chunk << ","
-                  << std::fixed << std::setprecision(4) << median_dynamic_ms
-                  << std::endl;
+        std::cout << std::fixed << std::setprecision(4) << median_dynamic_ms;
       } else {
-        std::cout << "Dynamic," << n_threads << "," << chunk << ","
-                  << "ERROR" << std::endl;
+        std::cout << "ERROR";
       }
+      std::cout << std::endl;
     }
   }
-
-  std::cout << "\n--- Performance Suite Finished ---" << std::endl;
-  return true; // Indica che la suite è stata eseguita (non che i tempi sono
-               // buoni o i calcoli corretti)
+  return true;
 }

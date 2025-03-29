@@ -55,10 +55,10 @@ test_correctness: $(BUILDDIR)/$(TARGET)
 # Esegue i test di performance e salva l'output CSV
 # Assicura che la directory dei risultati esista
 test_performance: $(BUILDDIR)/$(TARGET) | $(RESULTDIR)
-	@echo "--- Running Performance Tests (outputting CSV to $(RESULTDIR)/performance_data.csv) ---"
-	./$(BUILDDIR)/$(TARGET) --test-performance > "$(RESULTDIR)/performance_data.csv"
+	@echo "--- Running Performance Tests ---"
+	./$(BUILDDIR)/$(TARGET) --test-performance | grep -E '^(Sequential|Static|Dynamic)' > "$(RESULTDIR)/performance_data.csv"
+	@echo "CSV header" | cat - "$(RESULTDIR)/performance_data.csv" > temp && mv temp "$(RESULTDIR)/performance_data.csv"
 	@echo "--- Performance test data saved to $(RESULTDIR)/performance_data.csv ---"
-
 
 # Phony targets non corrispondono a file
 .PHONY: all clean test_correctness test_performance

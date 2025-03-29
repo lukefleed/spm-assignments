@@ -15,8 +15,6 @@ void static_worker(
                                       // bool verbose // Opzionale per debug
 ) {
   // Calcolo "globale" dei blocchi
-  ull current_global_block_index = 0; // Indice del blocco corrente rispetto a
-                                      // tutti i numeri in tutti i range
   ull total_numbers_processed_in_prev_ranges = 0;
 
   if (block_size == 0) {
@@ -38,8 +36,9 @@ void static_worker(
           total_numbers_processed_in_prev_ranges / block_size +
           block_in_range_idx;
 
-      // Assegnazione block-cyclic
-      if (global_block_idx % num_threads == thread_id) {
+      // Assegnazione block-cyclic - fix signed/unsigned comparison
+      if (global_block_idx % static_cast<ull>(num_threads) ==
+          static_cast<ull>(thread_id)) {
         // Questo thread processa questo blocco
         ull block_start = current_range.start + block_in_range_idx * block_size;
         ull block_end =
@@ -106,7 +105,7 @@ bool run_static_block_cyclic(const Config &config,
                          config.chunk_size,
                          std::cref(config.ranges), // Passa per reference const
                          std::ref(results_out) // Passa per reference non-const
-                         // config.verbose
+                                               // config.verbose
     );
   }
 

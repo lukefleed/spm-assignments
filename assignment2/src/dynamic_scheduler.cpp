@@ -20,7 +20,7 @@ void TaskQueue::push(Task task) {
       return;
     }
     queue_.push(std::move(task));
-  }                       // Lock rilasciato
+  } // Lock rilasciato
   cond_var_.notify_one(); // Notifica un thread in attesa
 }
 
@@ -52,7 +52,7 @@ void TaskQueue::close() {
 // --- Implementazione Scheduler Dinamico ---
 
 // Funzione eseguita da ogni worker thread nello scheduler dinamico
-void dynamic_worker(int thread_id,    // Per debugging
+void dynamic_worker(int thread_id [[maybe_unused]], // Per debugging
                     TaskQueue &queue, // Riferimento alla coda condivisa
                     std::vector<RangeResult> &
                         results_out) { // Riferimento per aggiornare i risultati
@@ -115,7 +115,7 @@ bool run_dynamic_task_queue(const Config &config,
         current_chunk_end = current_start + config.chunk_size - 1;
       }
       ull current_end = std::min(range.end, current_chunk_end);
-      task_queue.push({current_start, current_end, static_cast<int>(i)});
+      task_queue.push({current_start, current_end, i});
 
       // Se abbiamo raggiunto la fine del range, esci dal ciclo
       if (current_end == range.end) {
