@@ -1,0 +1,5 @@
+--- Running Performance Suite ---
+Samples per config: 5, Iterations per sample: 3
+Workload Ranges: 1-1000 50000000-100000000 1000000000-1100000000 
+
+Scheduler,Threads,ChunkSize,MedianTimeMs
