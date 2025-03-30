@@ -3,42 +3,53 @@
 
 #include "common_types.h"
 #include <chrono>
-#include <optional> // For std::optional
+#include <optional>
 #include <string>
 #include <vector>
 
 /**
- * @brief Effettua il parsing di una stringa "start-end" in una struct Range.
- * @param s La stringa da parsare.
- * @param range La struct Range da popolare.
- * @return true se il parsing ha successo, false altrimenti.
+ * @brief Parses a string in the format "start-end" into a Range struct.
+ * @param s The string to parse.
+ * @param range The Range struct to populate.
+ * @return True if parsing is successful, false otherwise.
  */
 bool parse_range_string(const std::string &s, Range &range);
 
 /**
- * @brief Effettua il parsing degli argomenti della linea di comando.
- * @param argc Numero di argomenti.
- * @param argv Array di argomenti stringa.
- * @return Un std::optional<Config> contenente la configurazione se il parsing
- * ha successo, std::nullopt altrimenti (o se viene richiesto aiuto).
+ * @brief Parses command-line arguments.
+ * @param argc Number of arguments.
+ * @param argv Array of string arguments.
+ * @return A std::optional<Config> containing the configuration if parsing is
+ * successful, std::nullopt otherwise (or if help is requested).
  */
 std::optional<Config> parse_arguments(int argc, char *argv[]);
 
-// Semplice classe Timer
+/**
+ * @brief A simple timer class for measuring elapsed time.
+ */
 class Timer {
 public:
   Timer() : start_time(std::chrono::high_resolution_clock::now()) {}
 
+  /**
+   * @brief Resets the timer to the current time.
+   */
   void reset() { start_time = std::chrono::high_resolution_clock::now(); }
 
-  // Ritorna il tempo trascorso in millisecondi
+  /**
+   * @brief Returns the elapsed time in milliseconds.
+   * @return The elapsed time in milliseconds as a double.
+   */
   double elapsed_ms() const {
     auto end_time = std::chrono::high_resolution_clock::now();
     return std::chrono::duration<double, std::milli>(end_time - start_time)
         .count();
   }
 
-  // Ritorna il tempo trascorso in secondi
+  /**
+   * @brief Returns the elapsed time in seconds.
+   * @return The elapsed time in seconds as a double.
+   */
   double elapsed_s() const {
     auto end_time = std::chrono::high_resolution_clock::now();
     return std::chrono::duration<double>(end_time - start_time).count();

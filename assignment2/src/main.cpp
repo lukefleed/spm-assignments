@@ -1,143 +1,26 @@
 #include "common_types.h"
-#include "dynamic_scheduler.h"
-#include "sequential.h"
-#include "static_scheduler.h"
+#include "dynamic_scheduler.h" // Potrebbe non essere più necessario qui se non richiamato direttamente
+#include "sequential.h" // Potrebbe non essere più necessario qui se non richiamato direttamente
+#include "static_scheduler.h" // Potrebbe non essere più necessario qui se non richiamato direttamente
 #include "testing.h"
 #include "utils.h"
 #include <chrono>
+#include <cstdlib> // For EXIT_SUCCESS, EXIT_FAILURE
 #include <iomanip>
 #include <iostream>
 #include <string>
+#include <string_view> // Use string_view for comparisons
 #include <thread>
 #include <vector>
 
-/**
- * @brief Wrapper function for sequential execution mode
- *
- * This function encapsulates the sequential algorithm execution to provide
- * a consistent interface with the parallel implementations.
- *
- * @param config Configuration parameters
- * @param results_out Vector to store computation results
- * @return true if execution completed successfully, false otherwise
- */
-bool run_sequential_wrapper(const Config &config,
-                            std::vector<RangeResult> &results_out) {
-  try {
-    // Run the sequential implementation
-    std::vector<ull> seq_results = run_sequential(config.ranges);
-
-    // Convert results format
-    results_out.clear();
-    results_out.reserve(seq_results.size());
-
-    for (size_t i = 0; i < seq_results.size(); ++i) {
-      RangeResult rr(config.ranges[i]);
-      rr.max_steps.store(seq_results[i]);
-      results_out.push_back(std::move(rr));
-    }
-    return true;
-  } catch (const std::exception &e) {
-    std::cerr << "Sequential execution failed: " << e.what() << std::endl;
-    return false;
-  }
-}
+// --- Constants for Command Line Arguments ---
+namespace AppConstants {
+constexpr const char *TEST_CORRECTNESS_FLAG = "--test-correctness";
+constexpr const char *BENCHMARK_FLAG = "--benchmark"; // Nuovo flag unificato
+} // namespace AppConstants
 
 /**
- * @brief Execute test suites based on command line arguments
- *
- * @param argc Command line argument count
- * @param argv Command line argument values
- * @return int Exit code (0 for success, 1 for failure)
- */
-bool handle_test_mode(int argc, char *argv[]) {
-  if (argc < 2)
-    return false;
-
-  std::string first_arg = argv[1];
-
-  if (first_arg == "--test-correctness") {
-    // Run comprehensive correctness tests
-    return run_correctness_suite();
-  } else if (first_arg == "--test-performance") {
-    // Performance test configuration
-    std::vector<Range> perf_workload = {{1, 1000}, {1000000, 2000000}};
-
-    // Test all available threads to evaluate scalability
-    int max_threads = std::thread::hardware_concurrency();
-    std::vector<int> threads_to_test;
-    for (int i = 1; i <= max_threads; ++i) {
-      threads_to_test.push_back(i);
-    }
-
-    // Test different chunk sizes to evaluate performance impact
-    std::vector<ull> chunks_to_test = {64, 128, 256};
-
-    // Statistical parameters for reliable measurements
-    int samples = 2;               // Number of median measurements
-    int iterations_per_sample = 2; // Executions per measurement
-
-    return run_performance_suite(threads_to_test, chunks_to_test, samples,
-                                 iterations_per_sample, perf_workload);
-  } else if (first_arg == "--test-static-performance") {
-    // Static scheduler variants performance test configuration
-    std::vector<Range> static_workload = {{1, 1000}, {1000000, 2000000}};
-
-    int max_threads = std::thread::hardware_concurrency();
-    std::vector<int> threads_to_test;
-    for (int i = 1; i <= max_threads; ++i) {
-      threads_to_test.push_back(i);
-    }
-
-    // Test more granular chunk sizes for static scheduling analysis
-    std::vector<ull> chunks_to_test = {16, 32, 64, 128, 256};
-
-    int samples = 2;
-    int iterations_per_sample = 2;
-
-    return run_static_performance_comparison(threads_to_test, chunks_to_test,
-                                             samples, iterations_per_sample,
-                                             static_workload);
-  } else if (first_arg == "--test-workload-scaling") {
-    // Define various workloads with different characteristics
-    std::vector<std::vector<Range>> workloads = {
-        // Workload 1: Small range with even distribution
-        {{1, 10000}},
-
-        // Workload 2: Large range
-        {{1, 1000000}},
-
-        // Workload 3: Multiple small ranges
-        {{1, 1000}, {2000, 3000}, {4000, 5000}, {6000, 7000}},
-
-        // Workload 4: Uneven distribution (some ranges much larger)
-        {{1, 100}, {1000, 100000}},
-
-        // Workload 5: Very small range (minimal work)
-        {{1, 100}}};
-
-    // Select thread counts for scaling test
-    std::vector<int> thread_counts;
-    int max_threads = std::thread::hardware_concurrency();
-
-    // Use 1, 2, 3 ... up to max_threads for scaling test
-    for (int t = 1; t <= max_threads; t += 1) {
-      thread_counts.push_back(t);
-    }
-
-    int samples = 2;
-    int iterations_per_sample = 2;
-
-    return run_workload_scaling_tests(thread_counts, workloads, samples,
-                                      iterations_per_sample);
-  }
-
-  return false;
-}
-
-/**
- * @brief Get the scheduler type name as string
- *
+ * @brief Get the scheduler type name as string (usato solo per output normale)
  * @param config Application configuration
  * @return std::string Descriptive name of scheduler
  */
@@ -156,16 +39,21 @@ std::string get_scheduler_name(const Config &config) {
     case StaticVariant::BLOCK_CYCLIC:
       variant_name = "Block-Cyclic";
       break;
+    default:
+      variant_name = "Unknown";
+      break; // Robustezza
     }
     return "Static " + variant_name;
-  } else {
+  } else if (config.scheduling == SchedulingType::DYNAMIC) {
     return "Dynamic Task Queue";
+  } else {
+    return "Unknown Scheduler Type";
   }
 }
 
 /**
  * @brief Execute the appropriate Collatz calculation based on configuration
- *
+ * (usato solo per esecuzione normale)
  * @param config Application configuration
  * @param results Output vector for calculation results
  * @return true on successful execution, false otherwise
@@ -173,99 +61,202 @@ std::string get_scheduler_name(const Config &config) {
 bool execute_collatz_calculation(const Config &config,
                                  std::vector<RangeResult> &results) {
   std::string scheduler_name = get_scheduler_name(config);
+  bool success = false;
 
   if (config.verbose) {
     std::cout << "Running " << scheduler_name << " scheduler..." << std::endl;
   }
 
-  if (config.num_threads == 1) {
-    // Use sequential implementation for single-threaded execution
-    // This optimizes the single-thread case by avoiding thread creation
-    // overhead
-    return run_sequential_wrapper(config, results);
-  } else if (config.scheduling == SchedulingType::STATIC) {
-    // Use static scheduling for predictable workloads with known distribution
-    return run_static_scheduling(config, results);
-  } else {
-    // Use dynamic scheduling for better load balancing with irregular workloads
-    return run_dynamic_task_queue(config, results);
+  try {
+    // NOTA: La logica di scelta dello scheduler è ora centralizzata qui.
+    // run_sequential_wrapper non serve più in main.
+    if (config.num_threads == 1) {
+      // Usa direttamente run_sequential e adatta il risultato
+      std::vector<ull> seq_results = run_sequential(config.ranges);
+      results.clear();
+      results.reserve(seq_results.size());
+      for (size_t i = 0; i < seq_results.size(); ++i) {
+        results.emplace_back(config.ranges[i]);
+        results.back().max_steps.store(seq_results[i]);
+      }
+      success = true;
+    } else if (config.scheduling == SchedulingType::STATIC) {
+      success = run_static_scheduling(config, results);
+    } else if (config.scheduling == SchedulingType::DYNAMIC) {
+      success = run_dynamic_task_queue(config, results);
+    } else {
+      std::cerr << "Error: Unknown scheduling type configured." << std::endl;
+      success = false;
+    }
+  } catch (const std::exception &e) {
+    std::cerr << "Error during " << scheduler_name << " execution: " << e.what()
+              << std::endl;
+    success = false;
+  } catch (...) {
+    std::cerr << "Unknown error during " << scheduler_name << " execution."
+              << std::endl;
+    success = false;
   }
+  return success;
 }
 
 /**
  * @brief Print calculation results and execution statistics
- *
- * @param results Calculation results to display
- * @param config Application configuration
- * @param elapsed_time_s Execution time in seconds
+ * (usato solo per esecuzione normale)
  */
 void print_results(const std::vector<RangeResult> &results,
                    const Config &config, double elapsed_time_s) {
-  // Print calculation results in the required format
+  // Print calculation results
   for (const auto &res : results) {
     std::cout << res.original_range.start << "-" << res.original_range.end
-              << ": " << res.max_steps.load() << std::endl;
+              << ": " << res.max_steps.load(std::memory_order_relaxed)
+              << std::endl;
   }
 
-  // Print performance statistics when verbose mode is enabled
+  // Print performance statistics if verbose
   if (config.verbose) {
     std::string scheduler_name = get_scheduler_name(config);
-
-    std::cout << "\nTotal execution time: " << std::fixed
-              << std::setprecision(4) << elapsed_time_s << " seconds"
-              << std::endl;
-    std::cout << "Using " << config.num_threads << " threads." << std::endl;
+    std::cout << "\n--- Execution Summary ---" << std::endl;
+    std::cout << "Total execution time: " << std::fixed << std::setprecision(4)
+              << elapsed_time_s << " seconds" << std::endl;
+    std::cout << "Threads used: " << config.num_threads << std::endl;
     std::cout << "Scheduling: " << scheduler_name;
-
-    // Print chunk size for applicable schedulers
-    if ((config.scheduling == SchedulingType::STATIC &&
-         config.num_threads > 1) ||
-        config.scheduling == SchedulingType::DYNAMIC) {
+    if (config.num_threads > 1 &&
+        (config.scheduling == SchedulingType::STATIC ||
+         config.scheduling == SchedulingType::DYNAMIC)) {
       std::cout << ", Chunk Size: " << config.chunk_size;
     }
     std::cout << std::endl;
+    std::cout << "------------------------" << std::endl;
   }
 }
 
 /**
+ * @brief Checks if the first command-line argument is a known test/benchmark
+ * flag.
+ */
+[[nodiscard]] bool is_test_or_benchmark_mode(int argc, char *argv[]) {
+  if (argc < 2) {
+    return false;
+  }
+  const std::string_view first_arg(argv[1]);
+  return first_arg == AppConstants::TEST_CORRECTNESS_FLAG ||
+         first_arg == AppConstants::BENCHMARK_FLAG;
+}
+
+/**
+ * @brief Execute test suites or benchmarks based on command line arguments
+ */
+[[nodiscard]] bool handle_test_or_benchmark_mode(int argc, char *argv[]) {
+  if (argc < 2)
+    return false;
+
+  const std::string_view first_arg(argv[1]);
+
+  if (first_arg == AppConstants::TEST_CORRECTNESS_FLAG) {
+    std::cout << "Running Correctness Test Suite..." << std::endl;
+    return run_correctness_suite();
+  }
+
+  if (first_arg == AppConstants::BENCHMARK_FLAG) {
+    std::cout << "Running Performance Benchmark Suite..." << std::endl;
+    // --- Configurazione del Benchmark ---
+    // Puoi rendere questi configurabili tramite altri argomenti se necessario
+
+    // Thread da testare (fino al massimo hardware)
+    const int max_threads = std::thread::hardware_concurrency();
+    std::vector<int> threads_to_test;
+    // Inizia da 2 per i test paralleli, 1 è il baseline sequenziale gestito
+    // automaticamente
+    for (int i = 2; i <= max_threads;
+         i *= 2) { // Scala esponenzialmente o linearmente
+      threads_to_test.push_back(i);
+    }
+    if (threads_to_test.empty() || threads_to_test.back() != max_threads) {
+      if (max_threads > 1)
+        threads_to_test.push_back(
+            max_threads); // Assicura che il massimo sia testato
+    }
+    if (max_threads == 1) {
+      std::cout << "Warning: Only 1 hardware thread detected. Parallel "
+                   "benchmarks might not show speedup."
+                << std::endl;
+      // Considera se aggiungere comunque 2 alla lista per testare l'overhead
+      // threads_to_test.push_back(2);
+    }
+
+    // Chunk size da testare
+    const std::vector<ull> chunks_to_test = {16, 64, 128, 256, 512};
+
+    // Definisci i workloads qui
+    const std::vector<std::vector<Range>> workloads = {
+        {{1, 50000}},   // Workload medio-piccolo bilanciato
+        {{1, 1000000}}, // Workload grande bilanciato
+        {{1, 100},
+         {1000000, 1001000},
+         {50000, 51000}}, // Sbilanciato (piccolo, grande, medio)
+        {{1, 10000},
+         {10001, 20000},
+         {20001, 30000},
+         {30001, 40000}}, // Multipli range piccoli
+        {{9663, 9663},
+         {77671, 77671},
+         {626331, 626331},
+         {837799, 837799}}, // Punti "difficili" (alti passi)
+        {{(1ULL << 20) - 5000,
+          (1ULL << 20) + 5000}} // Range attorno a potenza di 2
+    };
+    const std::vector<std::string> workload_descriptions = {
+        "Medium Balanced",        "Large Balanced",
+        "Unbalanced Mix",         "Multiple Small Balanced",
+        "Known High-Step Points", "Range around 2^20"};
+
+    // Parametri di misurazione
+    const int samples = 2;               // Aumenta per risultati più stabili
+    const int iterations_per_sample = 3; // Aumenta per ridurre varianza
+
+    return run_benchmark_suite(threads_to_test, chunks_to_test, workloads,
+                               workload_descriptions, samples,
+                               iterations_per_sample);
+  }
+
+  // Flag non riconosciuto
+  return false;
+}
+
+/**
  * @brief Main application entry point
- *
- * Parses command line arguments, executes the appropriate scheduler,
- * and displays results.
- *
- * @param argc Command line argument count
- * @param argv Command line argument values
- * @return int Exit code (0 for success, 1 for failure)
  */
 int main(int argc, char *argv[]) {
-  // Handle test mode if test flags are present
-  if (argc >= 2) {
-    bool is_test = argv[1][0] == '-' && argv[1][1] == '-';
-    if (is_test) {
-      bool success = handle_test_mode(argc, argv);
-      return success ? 0 : 1;
+  // Gestisce --test-correctness o --benchmark
+  if (is_test_or_benchmark_mode(argc, argv)) {
+    bool success = handle_test_or_benchmark_mode(argc, argv);
+    if (!success) {
+      std::cerr << "Execution failed for flag '" << argv[1] << "'."
+                << std::endl;
+      return EXIT_FAILURE;
     }
+    return EXIT_SUCCESS;
   }
 
-  // Normal execution mode - parse arguments
+  // Esecuzione normale: Parse arguments, execute, print results
   auto config_opt = parse_arguments(argc, argv);
   if (!config_opt) {
-    return 1;
+    return EXIT_FAILURE; // parse_arguments stampa l'errore
   }
-  Config config = *config_opt;
 
-  // Execute the calculation
+  Config config = *config_opt;
   std::vector<RangeResult> results;
   Timer timer;
+
   bool success = execute_collatz_calculation(config, results);
   double elapsed_time_s = timer.elapsed_s();
 
-  // Print results and exit
   if (success) {
     print_results(results, config, elapsed_time_s);
-    return 0;
+    return EXIT_SUCCESS;
   } else {
     std::cerr << "Error during computation." << std::endl;
-    return 1;
+    return EXIT_FAILURE;
   }
 }

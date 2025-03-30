@@ -3,6 +3,12 @@
   "files.associations": {
     "thread": "cpp",
     "ostream": "cpp",
-    "limits": "cpp"
+    "limits": "cpp",
+    "concepts": "cpp",
+    "string_view": "cpp",
+    "ranges": "cpp",
+    "span": "cpp",
+    "text_encoding": "cpp",
+    "string": "cpp"
   }
 }

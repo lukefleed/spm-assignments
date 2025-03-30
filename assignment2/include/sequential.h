@@ -5,11 +5,11 @@
 #include <vector>
 
 /**
- * @brief Esegue il calcolo del massimo numero di passi Collatz sequenzialmente
- * per ogni range.
- * @param ranges Vettore dei range di input.
- * @return Vettore contenente il massimo numero di passi per ogni range
- * corrispondente.
+ * @brief Calculates the maximum number of Collatz steps sequentially for each
+ * range.
+ * @param ranges A vector of input ranges.
+ * @return A vector containing the maximum number of steps for each
+ * corresponding range.
  */
 std::vector<ull> run_sequential(const std::vector<Range> &ranges);
 

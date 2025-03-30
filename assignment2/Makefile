@@ -1,70 +1,80 @@
-# Compilatore C++ e flags
+# Makefile for Collatz Conjecture Parallel Implementation
+
+# Compiler and flags
 CXX = g++
-CXXFLAGS = -std=c++17 -Wall -Wextra -O3 -pthread -Iinclude
-# Per debug:
-# CXXFLAGS = -std=c++17 -Wall -Wextra -g -pthread -Iinclude
+# C++ Standard: C++17 required for std::filesystem, std::string_view
+# Optimization: -O3 for performance benchmarks
+# Debugging: -g includes debug symbols
+# Warnings: -Wall -Wextra -pedantic enable most useful warnings
+# Threading: -pthread needed for std::thread
+CXXFLAGS = -std=c++17 -Wall -Wextra -pedantic -O3 -g -pthread
+LDFLAGS = -pthread
+# LIBS = -lstdc++fs # Usually not needed with modern g++/clang++ and -std=c++17, uncomment if linking filesystem fails
 
-# Nome dell'eseguibile
-TARGET = collatz_par
+# Build directory
+BUILD_DIR = build
 
-# Directory sorgenti e build
-SRCDIR = src
-BUILDDIR = build
-OBJDIR = $(BUILDDIR)/obj
-RESULTDIR = results
+# Executable name
+EXE = collatz_par
+EXECUTABLE = $(BUILD_DIR)/$(EXE)
 
-# Trova tutti i file sorgente .cpp
-SOURCES = $(wildcard $(SRCDIR)/*.cpp)
+# Source files
+SRCS = src/main.cpp \
+       src/sequential.cpp \
+       src/static_scheduler.cpp \
+       src/dynamic_scheduler.cpp \
+       src/collatz.cpp \
+       src/testing.cpp \
+       src/utils.cpp
 
-# Crea la lista dei file oggetto .o nella directory di build
-OBJECTS = $(patsubst $(SRCDIR)/%.cpp, $(OBJDIR)/%.o, $(SOURCES))
+# Object files: updated pattern to match src/ directory structure
+OBJS = $(patsubst src/%.cpp, $(BUILD_DIR)/obj/%.o, $(SRCS))
 
-# Regola di default: compila l'eseguibile
-all: $(BUILDDIR)/$(TARGET)
+# Default target: build the executable
+all: $(EXECUTABLE)
 
-# Regola per creare l'eseguibile finale linkando gli oggetti
-$(BUILDDIR)/$(TARGET): $(OBJECTS) | $(BUILDDIR)
-	$(CXX) $(CXXFLAGS) $^ -o $@
+# Rule to link the executable
+$(EXECUTABLE): $(OBJS)
+	@echo "Linking executable..."
+	@mkdir -p $(@D) # Create build directory if it doesn't exist (@D is the directory part of $@)
+	$(CXX) $(LDFLAGS) $^ -o $@ $(LIBS)
+	@echo "Executable created: $@"
 
-# Regola per compilare i file sorgente .cpp in file oggetto .o
-# Crea le directory necessarie per gli oggetti
-$(OBJDIR)/%.o: $(SRCDIR)/%.cpp | $(OBJDIR)
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+# Rule to compile .cpp files into .o files in the build directory
+$(BUILD_DIR)/obj/%.o: src/%.cpp
+	@echo "Compiling $<..."
+	@mkdir -p $(@D)
+	$(CXX) $(CXXFLAGS) -Iinclude -c $< -o $@
 
-# Crea le directory necessarie se non esistono
-$(BUILDDIR):
-	@mkdir -p $(BUILDDIR)
-$(OBJDIR):
-	@mkdir -p $(OBJDIR)
-$(RESULTDIR):
-	@mkdir -p $(RESULTDIR)
-
-# Regola per pulire i file generati
+# Target to clean build artifacts
 clean:
-	rm -rf $(BUILDDIR) $(TARGET) # Rimuove build e eseguibile root (se presente)
-	# Opzionale: rimuovere anche i risultati
-	# rm -f $(RESULTDIR)/*.csv
+	@echo "Cleaning build directory..."
+	rm -rf $(BUILD_DIR)
 
-# --- Target per i Test ---
+# --- Testing and Benchmarking Targets ---
 
-test_correctness: $(BUILDDIR)/$(TARGET)
-	@echo "--- Running Correctness Tests ---"
-	./$(BUILDDIR)/$(TARGET) --test-correctness
+# Target to run the correctness test suite
+test_correctness: all
+	@echo "---------------------------"
+	@echo " Running Correctness Tests "
+	@echo "---------------------------"
+	./$(EXECUTABLE) --test-correctness
 
-test_static_performance: $(BUILDDIR)/$(TARGET) | $(RESULTDIR)
-	@echo "--- Running Static Variants Performance Tests ---"
-	./$(BUILDDIR)/$(TARGET) --test-static-performance
-	@echo "--- Static performance test data saved to $(RESULTDIR)/static_performance_data.csv ---"
+# Target to run the performance benchmark suite
+benchmark: all
+	@echo "----------------------------------"
+	@echo " Running Performance Benchmarks "
+	@echo "----------------------------------"
+	./$(EXECUTABLE) --benchmark
 
-test_workload_scaling: $(BUILDDIR)/$(TARGET) | $(RESULTDIR)
-	@echo "--- Running Workload Scaling Tests ---"
-	./$(BUILDDIR)/$(TARGET) --test-workload-scaling
-	@echo "--- Workload scaling test data saved to $(RESULTDIR)/workload_scaling_data.csv ---"
+# Convenience target 'test' runs correctness tests by default
+test: test_correctness
 
-test_performance: $(BUILDDIR)/$(TARGET) | $(RESULTDIR)
-	@echo "--- Running Performance Tests (All Schedulers) ---"
-	./$(BUILDDIR)/$(TARGET) --test-performance
-	@echo "--- Performance test data saved to $(RESULTDIR)/performance_data.csv ---"
+# Declare targets that are not files
+.PHONY: all clean test_correctness benchmark test
 
-# Phony targets non corrispondono a file
-.PHONY: all clean test_correctness test_performance test_static_performance test_workload_scaling
+# Optional: Improve dependency tracking (recompile only if headers change)
+# Uncomment the following lines to enable automatic header dependency generation
+# DEPS = $(OBJS:.o=.d)
+# CXXFLAGS += -MMD -MP
+# -include $(DEPS)
