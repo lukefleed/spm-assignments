@@ -5,11 +5,6 @@
 #include <string>
 #include <vector>
 
-// Non servono più qui se usate solo internamente a testing.cpp o main.cpp
-// std::string get_scheduler_name(const Config &config);
-// bool execute_collatz_calculation(const Config &config,
-// std::vector<RangeResult> &results);
-
 /**
  * @brief Runs the comprehensive correctness test suite.
  * Compares parallel implementations against sequential implementation

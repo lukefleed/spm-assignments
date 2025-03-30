@@ -1,50 +1,47 @@
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go # Per aggiungere linee orizzontali (baseline)
+import plotly.graph_objects as go # For adding horizontal lines (baseline)
 import os
 import argparse
-import numpy as np # Per NaN
+import numpy as np # For NaN representation
 from pathlib import Path
 
-# --- Costanti ---
+# --- Constants ---
 DEFAULT_CSV_PATH = "../results/performance_results.csv"
 DEFAULT_PLOT_DIR = "../results/plots"
-# Chunk size da usare per i grafici Speedup/Time vs Threads
-# Scegli un valore rappresentativo o quello che ha dato risultati migliori
+# Chunk size used for Speedup/Time vs Threads plots
+# Choose a representative value or one that yielded good results
 DEFAULT_FIXED_CHUNK = 64
 
-# --- Funzioni di Plotting ---
+# --- Plotting Functions ---
 
 def plot_speedup_vs_threads(df, plot_dir, fixed_chunk_size, file_suffix="", width=1000, height=600):
-    """Genera grafici Speedup vs Numero di Thread per ogni workload.
+    """Generates Speedup vs Number of Threads plots for each workload.
 
-    Compara gli scheduler a un chunk_size fisso (per quelli che lo usano).
-    Include Sequential e Static Cyclic per riferimento.
+    Compares schedulers at a fixed chunk size (for those that use it).
+    Includes Sequential and Static Cyclic for reference. Adds Amdahl's Law curve.
     """
     print(f"Plotting Speedup vs Threads (fixed chunk: {fixed_chunk_size})...")
     output_dir = plot_dir / "speedup_vs_threads"
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Filtra per chunk size fisso O per scheduler che non usano chunk size
-    # Schedulers che non usano chunk size definito: Sequential, Static Cyclic
+    # Filter for fixed chunk size OR schedulers that don't use chunk size
     schedulers_no_chunk = ["Sequential", "Static Cyclic"]
 
-    # Filtra NaN in NumThreads e Speedup per sicurezza
+    # Ensure clean data for relevant columns
     df_filtered = df.dropna(subset=['NumThreads', 'Speedup'])
+    df_filtered = df_filtered[df_filtered['NumThreads'] >= 1] # Ensure valid thread counts
     df_filtered['NumThreads'] = df_filtered['NumThreads'].astype(int)
 
     df_plot = df_filtered[
         (df_filtered['ChunkSize'] == fixed_chunk_size) |
         (df_filtered['SchedulerName'].isin(schedulers_no_chunk))
-    ].copy() # Usa .copy() per evitare SettingWithCopyWarning
+    ].copy() # Use .copy() to avoid SettingWithCopyWarning
 
-    # Assicurati che NumThreads sia intero per l'asse X
-    df_plot['NumThreads'] = df_plot['NumThreads'].astype(int)
-
-    # Ordina per visualizzazione corretta delle linee
+    # Sort for correct line plotting
     df_plot.sort_values(by=['WorkloadID', 'SchedulerName', 'NumThreads'], inplace=True)
 
-    # Colori specifici (opzionale, ma migliora la consistenza)
+    # Consistent color mapping
     color_map = {
         "Sequential": "black",
         "Static Block": px.colors.qualitative.Plotly[0],
@@ -54,6 +51,7 @@ def plot_speedup_vs_threads(df, plot_dir, fixed_chunk_size, file_suffix="", widt
     }
 
     for workload_id, group in df_plot.groupby('WorkloadID'):
+        if group.empty: continue # Skip empty groups
         workload_desc = group['WorkloadDescription'].iloc[0]
         title = f"Speedup vs Threads - Workload: {workload_desc}<br>(Chunk Size = {fixed_chunk_size} for relevant schedulers)"
         filename = f"speedup_vs_threads_W{workload_id}{file_suffix}.pdf"
@@ -68,42 +66,39 @@ def plot_speedup_vs_threads(df, plot_dir, fixed_chunk_size, file_suffix="", widt
                       labels={'NumThreads': 'Number of Threads', 'Speedup': 'Speedup (relative to Sequential)'},
                       color_discrete_map=color_map)
 
-        # Aggiungi linea orizzontale per speedup = 1 (baseline)
+        # Add baseline speedup line
         fig.add_hline(y=1.0, line_dash="dash", line_color="grey", annotation_text="Baseline", annotation_position="bottom right")
 
-        # Assicura che l'asse X mostri tutti i valori dei thread come categorie se sono pochi, o lineare se molti
+        # Configure X-axis ticks based on the number of unique thread counts
         unique_threads = sorted(group['NumThreads'].unique())
-        if len(unique_threads) < 8: # Soglia arbitraria per decidere se categorico o lineare
-             fig.update_xaxes(type='category') # Tratta i thread come categorie discrete
+        if not unique_threads: continue
+        if len(unique_threads) < 8:
+             fig.update_xaxes(type='category', categoryorder='array', categoryarray=unique_threads)
         else:
-             fig.update_xaxes(type='linear', dtick=2 if max(unique_threads) <= 16 else 4)
+             fig.update_xaxes(type='linear', dtick=2 if max(unique_threads) <= 16 else 4) # Adjust tick frequency
 
-        # Stima la frazione sequenziale analizzando i dati di speedup
-        # Prendiamo il miglior speedup osservato con il massimo numero di thread e calcoliamo
-        # una stima della frazione sequenziale usando la formula inversa di Amdahl
-        max_threads = max(unique_threads)
-        if max_threads > 1:  # Serve più di un thread per avere speedup
-            # Trova il miglior speedup per il massimo numero di thread
+        # Estimate sequential fraction (s) using Amdahl's Law inversion
+        max_threads = max(unique_threads) if unique_threads else 0
+        if max_threads > 1:
             max_thread_data = group[group['NumThreads'] == max_threads]
             if not max_thread_data.empty:
                 best_speedup = max_thread_data['Speedup'].max()
-                if best_speedup > 1:  # Se c'è effettivamente speedup
-                    # Stima della frazione sequenziale usando la formula inversa di Amdahl
-                    # S(n) = 1 / (s + (1-s)/n) => s = (1 - S(n)/n) / (1 - 1/n)
-                    s = (1 - best_speedup/max_threads) / (1 - 1/max_threads)
-                    s = max(0.01, min(0.99, s))  # Limita a valori ragionevoli tra 1% e 50%
+                # Check if best_speedup is valid (not NaN or infinite) and > 0
+                if pd.notna(best_speedup) and np.isfinite(best_speedup) and best_speedup > 0 and best_speedup != 1:
+                    # S(n) = 1 / (s + (1-s)/n) => s = (n/S(n) - 1) / (n - 1)
+                    # Handle edge case n=1 separately, s is undefined. Check n != 1 already done.
+                    s = (max_threads / best_speedup - 1) / (max_threads - 1)
+                    # Clamp s to a reasonable range [0.01, 0.99] to avoid extreme/invalid values
+                    s = max(0.01, min(0.99, s))
 
-                    # Aggiungi curva di Amdahl per la frazione sequenziale stimata
-                    amdahl_x = list(range(1, max(unique_threads) + 1)) if len(unique_threads) < 8 else np.linspace(1, max(unique_threads), 100)
-                    amdahl_y = [1 / (s + (1-s)/n) for n in amdahl_x]
+                    # Generate Amdahl's curve points
+                    amdahl_x = np.linspace(1, max_threads, 100) # Smooth curve
+                    amdahl_y = [1 / (s + (1-s)/n) if n > 0 else 1 for n in amdahl_x] # Handle n=0 case if necessary
 
                     fig.add_trace(go.Scatter(
-                        x=amdahl_x,
-                        y=amdahl_y,
-                        mode='lines',
+                        x=amdahl_x, y=amdahl_y, mode='lines',
                         line=dict(color='red', dash='dash', width=1.5),
-                        name=f"Amdahl's Law (s={s:.2f})",
-                        showlegend=True
+                        name=f"Amdahl's Law (s={s:.2f})", showlegend=True
                     ))
 
         fig.update_layout(legend_title_text='Scheduler', width=width, height=height)
@@ -111,26 +106,27 @@ def plot_speedup_vs_threads(df, plot_dir, fixed_chunk_size, file_suffix="", widt
             fig.write_image(filepath, format="pdf")
             print(f"  Saved: {filepath}")
         except Exception as e:
-            print(f"  ERROR saving {filepath}: {e}. Is Kaleido installed and working?")
+            print(f"  ERROR saving {filepath}: {e}. Ensure Kaleido is installed ('pip install kaleido').")
 
 
 def plot_time_vs_threads(df, plot_dir, fixed_chunk_size, use_log_scale=True, file_suffix="", width=800, height=600):
-    """Genera grafici Execution Time vs Numero di Thread per ogni workload."""
+    """Generates Execution Time vs Number of Threads plots for each workload."""
     print(f"Plotting Execution Time vs Threads (fixed chunk: {fixed_chunk_size}, log_scale: {use_log_scale})...")
     output_dir = plot_dir / "time_vs_threads"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     schedulers_no_chunk = ["Sequential", "Static Cyclic"]
     df_filtered = df.dropna(subset=['NumThreads', 'ExecutionTimeMs'])
-    df_filtered = df_filtered[df_filtered['ExecutionTimeMs'] > 0] # Ignora errori o tempi <= 0
+    df_filtered = df_filtered[df_filtered['ExecutionTimeMs'] > 0] # Ignore errors or non-positive times
+    df_filtered = df_filtered[df_filtered['NumThreads'] >= 1]
     df_filtered['NumThreads'] = df_filtered['NumThreads'].astype(int)
+
 
     df_plot = df_filtered[
         (df_filtered['ChunkSize'] == fixed_chunk_size) |
         (df_filtered['SchedulerName'].isin(schedulers_no_chunk))
     ].copy()
 
-    df_plot['NumThreads'] = df_plot['NumThreads'].astype(int)
     df_plot.sort_values(by=['WorkloadID', 'SchedulerName', 'NumThreads'], inplace=True)
 
     color_map = {
@@ -142,6 +138,7 @@ def plot_time_vs_threads(df, plot_dir, fixed_chunk_size, use_log_scale=True, fil
     }
 
     for workload_id, group in df_plot.groupby('WorkloadID'):
+        if group.empty: continue
         workload_desc = group['WorkloadDescription'].iloc[0]
         y_axis_label = 'Execution Time (ms)' + (' [Log Scale]' if use_log_scale else '')
         title = f"Exec Time vs Threads - Workload: {workload_desc}<br>(Chunk Size = {fixed_chunk_size} for relevant schedulers)"
@@ -159,8 +156,9 @@ def plot_time_vs_threads(df, plot_dir, fixed_chunk_size, use_log_scale=True, fil
                       color_discrete_map=color_map)
 
         unique_threads = sorted(group['NumThreads'].unique())
+        if not unique_threads: continue
         if len(unique_threads) < 8:
-             fig.update_xaxes(type='category')
+             fig.update_xaxes(type='category', categoryorder='array', categoryarray=unique_threads)
         else:
              fig.update_xaxes(type='linear', dtick=2 if max(unique_threads) <= 16 else 4)
 
@@ -172,25 +170,24 @@ def plot_time_vs_threads(df, plot_dir, fixed_chunk_size, use_log_scale=True, fil
             print(f"  ERROR saving {filepath}: {e}")
 
 def plot_chunk_impact_speedup(df, plot_dir, file_suffix="", width=800, height=600):
-    """Genera grafici Speedup vs Chunk Size per ogni workload e num_threads."""
+    """Generates Speedup vs Chunk Size plots for each workload and thread count."""
     print("Plotting Speedup vs Chunk Size impact...")
     output_dir = plot_dir / "chunk_impact_speedup"
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Considera solo scheduler che USANO chunk size > 0 e dove abbiamo risultati validi
-    # Static Block viene incluso perché è stato testato con chunk diversi, anche se potrebbe ignorarlo.
-    # Potremmo escluderlo se confermato che l'implementazione lo ignora.
+    # Consider only schedulers using chunk size > 0 and valid results
+    # Static Block might ignore chunk size in some implementations; included for now.
     relevant_schedulers = ["Static Block", "Static Block-Cyclic", "Dynamic"]
     df_filtered = df.dropna(subset=['ChunkSize', 'NumThreads', 'Speedup'])
-    df_filtered = df_filtered[df_filtered['ChunkSize'] > 0] # Solo chunk size numerici > 0
+    df_filtered = df_filtered[df_filtered['ChunkSize'] > 0] # Only numeric chunk sizes > 0
     df_filtered = df_filtered[df_filtered['SchedulerName'].isin(relevant_schedulers)]
+    df_filtered = df_filtered[df_filtered['NumThreads'] > 1] # Only parallel runs
     df_filtered['ChunkSize'] = df_filtered['ChunkSize'].astype(int)
     df_filtered['NumThreads'] = df_filtered['NumThreads'].astype(int)
 
-    # Ordina per visualizzazione corretta delle linee
     df_filtered.sort_values(by=['WorkloadID', 'NumThreads', 'SchedulerName', 'ChunkSize'], inplace=True)
 
-    # Colori specifici (solo per i rilevanti)
+    # Specific colors for relevant schedulers
     color_map = {
         "Static Block": px.colors.qualitative.Plotly[0],
         "Static Block-Cyclic": px.colors.qualitative.Plotly[2],
@@ -198,26 +195,26 @@ def plot_chunk_impact_speedup(df, plot_dir, file_suffix="", width=800, height=60
     }
 
     for (workload_id, num_threads), group in df_filtered.groupby(['WorkloadID', 'NumThreads']):
-        # Salta num_threads = 1 se presente per errore
-        if num_threads == 1:
-             continue
-
+        if group.empty: continue
         workload_desc = group['WorkloadDescription'].iloc[0]
         title = f"Speedup vs Chunk Size - Workload: {workload_desc}<br>(Threads = {num_threads})"
         filename = f"chunk_speedup_W{workload_id}_T{num_threads}{file_suffix}.pdf"
         filepath = output_dir / filename
 
+        # Use category for chunk size axis as they are discrete values
+        group['ChunkSize_cat'] = group['ChunkSize'].astype(str) # Use string for category axis
+
         fig = px.line(group,
-                      x='ChunkSize',
+                      x='ChunkSize_cat',
                       y='Speedup',
                       color='SchedulerName',
                       markers=True,
                       title=title,
-                      labels={'ChunkSize': 'Chunk Size', 'Speedup': 'Speedup'},
+                      labels={'ChunkSize_cat': 'Chunk Size', 'Speedup': 'Speedup'},
                       color_discrete_map=color_map)
 
-        # Usa asse X categorico perché abbiamo pochi valori discreti di chunk size
-        fig.update_xaxes(type='category')
+        # Ensure chunks are ordered correctly on the category axis
+        fig.update_xaxes(type='category', categoryorder='array', categoryarray=sorted(group['ChunkSize'].unique()))
 
         fig.update_layout(legend_title_text='Scheduler', width=width, height=height)
         try:
@@ -228,7 +225,7 @@ def plot_chunk_impact_speedup(df, plot_dir, file_suffix="", width=800, height=60
 
 
 def plot_chunk_impact_time(df, plot_dir, use_log_scale=True, file_suffix="", width=800, height=600):
-    """Genera grafici Execution Time vs Chunk Size per ogni workload e num_threads."""
+    """Generates Execution Time vs Chunk Size plots for each workload and thread count."""
     print(f"Plotting Execution Time vs Chunk Size impact (log_scale: {use_log_scale})...")
     output_dir = plot_dir / "chunk_impact_time"
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -238,6 +235,7 @@ def plot_chunk_impact_time(df, plot_dir, use_log_scale=True, file_suffix="", wid
     df_filtered = df_filtered[df_filtered['ChunkSize'] > 0]
     df_filtered = df_filtered[df_filtered['ExecutionTimeMs'] > 0]
     df_filtered = df_filtered[df_filtered['SchedulerName'].isin(relevant_schedulers)]
+    df_filtered = df_filtered[df_filtered['NumThreads'] > 1] # Only parallel runs
     df_filtered['ChunkSize'] = df_filtered['ChunkSize'].astype(int)
     df_filtered['NumThreads'] = df_filtered['NumThreads'].astype(int)
 
@@ -250,26 +248,26 @@ def plot_chunk_impact_time(df, plot_dir, use_log_scale=True, file_suffix="", wid
     }
 
     for (workload_id, num_threads), group in df_filtered.groupby(['WorkloadID', 'NumThreads']):
-         if num_threads == 1:
-             continue
-
+         if group.empty: continue
          workload_desc = group['WorkloadDescription'].iloc[0]
          y_axis_label = 'Execution Time (ms)' + (' [Log Scale]' if use_log_scale else '')
          title = f"Exec Time vs Chunk Size - Workload: {workload_desc}<br>(Threads = {num_threads})"
          filename = f"chunk_time_W{workload_id}_T{num_threads}{'_log' if use_log_scale else ''}{file_suffix}.pdf"
          filepath = output_dir / filename
 
+         group['ChunkSize_cat'] = group['ChunkSize'].astype(str)
+
          fig = px.line(group,
-                      x='ChunkSize',
+                      x='ChunkSize_cat',
                       y='ExecutionTimeMs',
                       color='SchedulerName',
                       markers=True,
                       title=title,
-                      labels={'ChunkSize': 'Chunk Size', 'ExecutionTimeMs': y_axis_label},
+                      labels={'ChunkSize_cat': 'Chunk Size', 'ExecutionTimeMs': y_axis_label},
                       log_y=use_log_scale,
                       color_discrete_map=color_map)
 
-         fig.update_xaxes(type='category')
+         fig.update_xaxes(type='category', categoryorder='array', categoryarray=sorted(group['ChunkSize'].unique()))
          fig.update_layout(legend_title_text='Scheduler', width=width, height=height)
          try:
              fig.write_image(filepath, format="pdf")
@@ -279,80 +277,77 @@ def plot_chunk_impact_time(df, plot_dir, use_log_scale=True, file_suffix="", wid
 
 
 def plot_scheduler_chunk_comparison(df, plot_dir, scheduler_name, chunk_sizes=[16, 32, 64, 96, 128, 256], file_suffix="", width=1000, height=600):
-    """Genera grafici Speedup vs Threads per un singolo scheduler con linee multiple per chunk size."""
+    """Generates Speedup vs Threads plots for a single scheduler with multiple lines per chunk size."""
     print(f"Plotting {scheduler_name} Speedup vs Threads for different chunk sizes...")
     output_dir = plot_dir / f"{scheduler_name.lower().replace(' ', '_')}_comparison"
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Filtra il dataframe per lo scheduler specificato
-    df_scheduler = df[df['SchedulerName'] == scheduler_name].copy()
+    # Filter dataframe for the specified scheduler and chunk sizes
+    df_scheduler = df[(df['SchedulerName'] == scheduler_name) & (df['ChunkSize'].isin(chunk_sizes))].copy()
 
-    # Filtra per i chunk size specificati
-    df_filtered = df_scheduler[df_scheduler['ChunkSize'].isin(chunk_sizes)]
+    # Convert types and sort
+    df_scheduler['NumThreads'] = df_scheduler['NumThreads'].astype(int)
+    df_scheduler = df_scheduler[df_scheduler['NumThreads'] > 1] # Only parallel
+    df_scheduler['ChunkSize'] = df_scheduler['ChunkSize'].astype(int)
+    df_scheduler.sort_values(by=['WorkloadID', 'ChunkSize', 'NumThreads'], inplace=True)
 
-    # Converti a int e ordina
-    df_filtered['NumThreads'] = df_filtered['NumThreads'].astype(int)
-    df_filtered['ChunkSize'] = df_filtered['ChunkSize'].astype(int)
-    df_filtered.sort_values(by=['WorkloadID', 'ChunkSize', 'NumThreads'], inplace=True)
-
-    # Genera colori distinti per i chunk size
-    # Usa una colorscale sequenziale per rappresentare la grandezza incrementale
+    # Generate distinct colors for chunk sizes using a sequential colorscale
     color_sequence = px.colors.sequential.Viridis
     n_chunks = len(chunk_sizes)
-    color_map = {chunk: color_sequence[i * len(color_sequence) // n_chunks]
-                for i, chunk in enumerate(chunk_sizes)}
+    if n_chunks == 0: return # Skip if no matching chunks
+    # Map each chunk size to a color in the sequence
+    color_map = {chunk: color_sequence[min(i * len(color_sequence) // n_chunks, len(color_sequence)-1)]
+                 for i, chunk in enumerate(sorted(chunk_sizes))}
 
-    for workload_id, group in df_filtered.groupby('WorkloadID'):
+    for workload_id, group in df_scheduler.groupby('WorkloadID'):
+        if group.empty: continue
         workload_desc = group['WorkloadDescription'].iloc[0]
         title = f"{scheduler_name} Speedup vs Threads - Workload: {workload_desc}<br>(Comparison of different chunk sizes)"
         filename = f"{scheduler_name.lower().replace(' ', '_')}_chunks_W{workload_id}{file_suffix}.pdf"
         filepath = output_dir / filename
 
-        # Converti ChunkSize a stringa per la legenda
+        # Convert ChunkSize to string for a clearer legend
         group['ChunkSize_str'] = "Chunk=" + group['ChunkSize'].astype(str)
 
         fig = px.line(group,
-                     x='NumThreads',
-                     y='Speedup',
-                     color='ChunkSize_str', # Usa stringa per rendere più leggibile la legenda
-                     markers=True,
-                     title=title,
-                     labels={'NumThreads': 'Number of Threads',
-                            'Speedup': 'Speedup (relative to Sequential)',
-                            'ChunkSize_str': 'Chunk Size'})
+                      x='NumThreads',
+                      y='Speedup',
+                      color='ChunkSize_str', # Use string for readable legend
+                      markers=True,
+                      title=title,
+                      labels={'NumThreads': 'Number of Threads',
+                              'Speedup': 'Speedup (relative to Sequential)',
+                              'ChunkSize_str': 'Chunk Size'},
+                      color_discrete_map={f"Chunk={k}": v for k, v in color_map.items()} # Apply color map
+                      )
 
-        # Assicura che l'asse X mostri correttamente i thread
+        # Configure X-axis ticks
         unique_threads = sorted(group['NumThreads'].unique())
+        if not unique_threads: continue
         if len(unique_threads) < 8:
-            fig.update_xaxes(type='category')
+            fig.update_xaxes(type='category', categoryorder='array', categoryarray=unique_threads)
         else:
             fig.update_xaxes(type='linear', dtick=2 if max(unique_threads) <= 16 else 4)
 
-        # Aggiungi linea orizzontale per speedup = 1 (baseline)
+        # Add baseline speedup line
         fig.add_hline(y=1.0, line_dash="dash", line_color="grey", annotation_text="Baseline", annotation_position="bottom right")
 
-        # Stima la frazione sequenziale analizzando i dati di speedup
-        max_threads = max(unique_threads)
+        # Estimate Amdahl's Law curve based on best performance across chunks
+        max_threads = max(unique_threads) if unique_threads else 0
         if max_threads > 1:
-            # Trova il miglior speedup per il massimo numero di thread tra tutti i chunk size
             max_thread_data = group[group['NumThreads'] == max_threads]
             if not max_thread_data.empty:
                 best_speedup = max_thread_data['Speedup'].max()
-                if best_speedup > 1:
-                    s = (1 - best_speedup/max_threads) / (1 - 1/max_threads)
-                    s = max(0.01, min(0.99, s))  # Limita a valori ragionevoli
+                if pd.notna(best_speedup) and np.isfinite(best_speedup) and best_speedup > 0 and best_speedup != 1:
+                    s = (max_threads / best_speedup - 1) / (max_threads - 1)
+                    s = max(0.01, min(0.99, s)) # Clamp
 
-                    # Aggiungi curva di Amdahl
-                    amdahl_x = list(range(1, max(unique_threads) + 1)) if len(unique_threads) < 8 else np.linspace(1, max(unique_threads), 100)
-                    amdahl_y = [1 / (s + (1-s)/n) for n in amdahl_x]
-
+                    amdahl_x = np.linspace(1, max_threads, 100)
+                    amdahl_y = [1 / (s + (1-s)/n) if n > 0 else 1 for n in amdahl_x]
                     fig.add_trace(go.Scatter(
-                        x=amdahl_x,
-                        y=amdahl_y,
-                        mode='lines',
+                        x=amdahl_x, y=amdahl_y, mode='lines',
                         line=dict(color='red', dash='dash', width=1.5),
-                        name=f"Amdahl's Law (s={s:.2f})",
-                        showlegend=True
+                        name=f"Amdahl's Law (s={s:.2f})", showlegend=True
                     ))
 
         fig.update_layout(width=width, height=height)
@@ -364,83 +359,79 @@ def plot_scheduler_chunk_comparison(df, plot_dir, scheduler_name, chunk_sizes=[1
 
 
 def plot_scheduler_heatmaps(df, plot_dir, show_speedup=True, file_suffix="", width=800, height=800):
-    """Genera heatmaps per visualizzare le performance dei diversi scheduler in funzione
-    del numero di thread e chunk size.
-    """
+    """Generates heatmaps visualizing scheduler performance vs. thread count and chunk size."""
     print(f"Plotting scheduler performance heatmaps ({'speedup' if show_speedup else 'execution time'})...")
     output_dir = plot_dir / "scheduler_heatmaps"
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Considera solo scheduler che usano chunk size
+    # Consider only schedulers using chunk size
     relevant_schedulers = ["Static Block", "Static Block-Cyclic", "Dynamic"]
 
-    # Prepara i dati
+    # Prepare data
     metric = 'Speedup' if show_speedup else 'ExecutionTimeMs'
     metric_label = 'Speedup' if show_speedup else 'Execution Time (ms)'
 
-    # Filtra dati validi
+    # Filter valid data
     df_filtered = df.dropna(subset=['ChunkSize', 'NumThreads', metric])
-    if not show_speedup:  # Se mostro execution time, filtra valori > 0
+    if not show_speedup: # Filter non-positive times if plotting time
         df_filtered = df_filtered[df_filtered['ExecutionTimeMs'] > 0]
 
-    df_filtered = df_filtered[df_filtered['ChunkSize'] > 0]  # Solo chunk size numerici > 0
+    df_filtered = df_filtered[df_filtered['ChunkSize'] > 0] # Only numeric chunks > 0
     df_filtered = df_filtered[df_filtered['SchedulerName'].isin(relevant_schedulers)]
+    df_filtered = df_filtered[df_filtered['NumThreads'] > 1] # Only parallel runs
 
-    # Converti a int
+    # Convert types
     df_filtered['ChunkSize'] = df_filtered['ChunkSize'].astype(int)
     df_filtered['NumThreads'] = df_filtered['NumThreads'].astype(int)
 
-    # Per ogni workload e scheduler, genera un heatmap
+    # Generate heatmap for each workload and relevant scheduler
     for workload_id, workload_group in df_filtered.groupby('WorkloadID'):
+        if workload_group.empty: continue
         workload_desc = workload_group['WorkloadDescription'].iloc[0]
 
         for scheduler_name, scheduler_group in workload_group.groupby('SchedulerName'):
-            # Pivotta i dati per ottenere una matrice thread x chunk
-            pivot_data = scheduler_group.pivot_table(
-                index='ChunkSize',
-                columns='NumThreads',
-                values=metric,
-                aggfunc='mean'  # In caso di duplicati, usa la media
-            )
+            if scheduler_group.empty: continue
+            # Pivot data to create a matrix: ChunkSize (rows) x NumThreads (columns)
+            try:
+                pivot_data = scheduler_group.pivot_table(
+                    index='ChunkSize', columns='NumThreads', values=metric, aggfunc='mean' # Use mean for potential duplicates
+                )
+            except Exception as e:
+                print(f"  ERROR creating pivot table for W{workload_id}, {scheduler_name}: {e}")
+                continue
 
-            # Ordina gli indici per avere un display più comprensibile
-            pivot_data = pivot_data.sort_index()
+            if pivot_data.empty: continue
 
-            # Crea il plot
+            # Sort indices for better display
+            pivot_data = pivot_data.sort_index(axis=0) # Sort rows (ChunkSize)
+            pivot_data = pivot_data.sort_index(axis=1) # Sort columns (NumThreads)
+
+
             title = f"{scheduler_name} {metric_label} Heatmap - {workload_desc}"
             filename = f"heatmap_{metric.lower()}_{scheduler_name.lower().replace(' ', '_')}_W{workload_id}{file_suffix}.pdf"
             filepath = output_dir / filename
 
-            # Scegli la colorscale appropriata per il tipo di metrica
-            # Per speedup, più alto è meglio (viridis)
-            # Per execution time, più basso è meglio (viridis_r - invertito)
-            colorscale = 'Viridis' if show_speedup else 'Viridis_r'
+            # Choose appropriate colorscale (higher is better for speedup, lower for time)
+            colorscale = 'Viridis' if show_speedup else 'Viridis_r' # _r reverses the scale
 
             fig = px.imshow(
                 pivot_data,
-                labels=dict(
-                    x="Number of Threads",
-                    y="Chunk Size",
-                    color=metric_label
-                ),
+                labels=dict(x="Number of Threads", y="Chunk Size", color=metric_label),
+                # Explicitly set x and y to ensure correct order if pivot table is sparse
                 x=pivot_data.columns.tolist(),
                 y=pivot_data.index.tolist(),
                 color_continuous_scale=colorscale,
                 title=title,
-                aspect="auto"
+                aspect="auto" # Adjust aspect ratio automatically
             )
 
-            # # Aggiungi annotazioni con i valori per ogni cella
-            # for i, row in enumerate(pivot_data.index):
-            #     for j, col in enumerate(pivot_data.columns):
-            #         value = pivot_data.iloc[i, j]
-            #         # Formatta con 2 decimali
-            #         text = f"{value:.2f}" if not pd.isna(value) else ""
-            #         fig.add_annotation(
-            #             x=col, y=row, text=text,
-            #             showarrow=False,
-            #             font=dict(color="white" if abs(value) > (pivot_data.max().max() / 2) else "black")
-            #         )
+            # Optional: Add text annotations to cells (can be cluttered)
+            # for y_val in pivot_data.index:
+            #     for x_val in pivot_data.columns:
+            #         value = pivot_data.loc[y_val, x_val]
+            #         text = f"{value:.2f}" if pd.notna(value) else ""
+            #         fig.add_annotation(x=x_val, y=y_val, text=text, showarrow=False, font=dict(size=8))
+
 
             fig.update_layout(width=width, height=height)
             try:
@@ -450,7 +441,7 @@ def plot_scheduler_heatmaps(df, plot_dir, show_speedup=True, file_suffix="", wid
                 print(f"  ERROR saving {filepath}: {e}")
 
 
-# --- Funzione Principale ---
+# --- Main Function ---
 
 def main():
     parser = argparse.ArgumentParser(description="Plot benchmark results for Collatz implementations.")
@@ -459,9 +450,9 @@ def main():
     parser.add_argument('--plot-dir', type=str, default=DEFAULT_PLOT_DIR,
                         help=f"Directory to save the plots (default: {DEFAULT_PLOT_DIR})")
     parser.add_argument('--fixed-chunk', type=int, default=DEFAULT_FIXED_CHUNK,
-                        help=f"Fixed chunk size to use for Speedup/Time vs Threads plots (default: {DEFAULT_FIXED_CHUNK})")
+                        help=f"Fixed chunk size for Speedup/Time vs Threads plots (default: {DEFAULT_FIXED_CHUNK})")
 
-    # Argomenti per selezionare i tipi di plot
+    # Arguments to select plot types
     parser.add_argument('--speedup-vs-threads', action='store_true', help="Plot Speedup vs Number of Threads.")
     parser.add_argument('--time-vs-threads', action='store_true', help="Plot Execution Time vs Number of Threads (linear scale).")
     parser.add_argument('--time-vs-threads-log', action='store_true', help="Plot Execution Time vs Number of Threads (log scale).")
@@ -469,14 +460,14 @@ def main():
     parser.add_argument('--chunk-impact-time', action='store_true', help="Plot Execution Time vs Chunk Size (linear scale).")
     parser.add_argument('--chunk-impact-time-log', action='store_true', help="Plot Execution Time vs Chunk Size (log scale).")
     parser.add_argument('--dynamic-chunks-comparison', action='store_true',
-                        help="Plot Dynamic scheduler performance with multiple chunk sizes")
+                        help="Plot Dynamic scheduler speedup vs threads for multiple chunk sizes.")
     parser.add_argument('--blockcyclic-chunks-comparison', action='store_true',
-                        help="Plot Static Block-Cyclic scheduler performance with multiple chunk sizes")
+                        help="Plot Static Block-Cyclic speedup vs threads for multiple chunk sizes.")
     parser.add_argument('--scheduler-heatmaps', action='store_true',
-                        help="Plot heatmaps of scheduler performance (speedup) across thread counts and chunk sizes")
-    # parser.add_argument('--scheduler-heatmaps-time', action='store_true',
-    #                     help="Plot heatmaps of execution time across thread counts and chunk sizes")
-    parser.add_argument('--all', action='store_true', help="Generate all plot types.")
+                        help="Plot heatmaps of scheduler speedup across thread counts and chunk sizes.")
+    parser.add_argument('--scheduler-heatmaps-time', action='store_true',
+                        help="Plot heatmaps of execution time across thread counts and chunk sizes.")
+    parser.add_argument('--all', action='store_true', help="Generate all supported plot types.")
 
     args = parser.parse_args()
 
@@ -487,11 +478,11 @@ def main():
         print(f"Error: CSV file not found at {csv_file}")
         return
 
-    # Crea directory di output
+    # Create output directory
     plot_dir.mkdir(parents=True, exist_ok=True)
     print(f"Plots will be saved in: {plot_dir.resolve()}")
 
-    # Carica e Preprocessa i Dati
+    # Load and Preprocess Data
     print(f"Loading data from {csv_file}...")
     try:
         df = pd.read_csv(csv_file)
@@ -500,22 +491,19 @@ def main():
         return
 
     print("Preprocessing data...")
-    # Converti 'N/A' in ChunkSize a NaN numerico
-    df['ChunkSize'] = pd.to_numeric(df['ChunkSize'], errors='coerce') # 'coerce' trasforma non numerici in NaN
-    # Converti tempi e speedup, gestendo errori
+    # Convert 'N/A' or other non-numeric ChunkSize to NaN, then potentially handle later
+    df['ChunkSize'] = pd.to_numeric(df['ChunkSize'], errors='coerce')
+    # Convert times and speedup, coercing errors to NaN
     df['ExecutionTimeMs'] = pd.to_numeric(df['ExecutionTimeMs'], errors='coerce')
     df['Speedup'] = pd.to_numeric(df['Speedup'], errors='coerce')
-    df['NumThreads'] = pd.to_numeric(df['NumThreads'], errors='coerce').fillna(0).astype(int) # Assumi 0 se NaN, poi int
+    # Convert NumThreads, filling potential NaNs after coercion (e.g., if empty) with 1 (for Sequential) before casting to int
+    df['NumThreads'] = pd.to_numeric(df['NumThreads'], errors='coerce').fillna(1).astype(int)
 
-    # print("Data loaded and preprocessed:")
-    # print(df.info())
-    # print(df.head()) # Descommenta per vedere le prime righe
-
-    # Definisci dimensioni standard per tutti i plot
+    # Standard plot dimensions
     plot_width = 1000
     plot_height = 600
 
-    # Logica per decidere quali plot generare
+    # Determine which plots to generate based on flags
     generate_all = args.all
     plots_to_generate = {
         'speedup_vs_threads': generate_all or args.speedup_vs_threads,
@@ -527,7 +515,7 @@ def main():
         'dynamic_chunks_comparison': generate_all or args.dynamic_chunks_comparison,
         'blockcyclic_chunks_comparison': generate_all or args.blockcyclic_chunks_comparison,
         'scheduler_heatmaps': generate_all or args.scheduler_heatmaps,
-        # 'scheduler_heatmaps_time': generate_all or args.scheduler_heatmaps_time,
+        'scheduler_heatmaps_time': generate_all or args.scheduler_heatmaps_time,
     }
 
     if not any(plots_to_generate.values()):
@@ -535,15 +523,15 @@ def main():
         parser.print_help()
         return
 
-    # Genera i plot selezionati
+    # Generate selected plots (pass copies of df to avoid unintended modifications)
     if plots_to_generate['speedup_vs_threads']:
         plot_speedup_vs_threads(df.copy(), plot_dir, args.fixed_chunk, width=plot_width, height=plot_height)
 
     if plots_to_generate['time_vs_threads']:
         plot_time_vs_threads(df.copy(), plot_dir, args.fixed_chunk, use_log_scale=False, width=plot_width, height=plot_height)
 
-    # if plots_to_generate['time_vs_threads_log']:
-    #     plot_time_vs_threads(df.copy(), plot_dir, args.fixed_chunk, use_log_scale=True, file_suffix="_log", width=plot_width, height=plot_height)
+    if plots_to_generate['time_vs_threads_log']:
+        plot_time_vs_threads(df.copy(), plot_dir, args.fixed_chunk, use_log_scale=True, file_suffix="_log", width=plot_width, height=plot_height)
 
     if plots_to_generate['chunk_impact_speedup']:
         plot_chunk_impact_speedup(df.copy(), plot_dir, width=plot_width, height=plot_height)
@@ -551,20 +539,23 @@ def main():
     if plots_to_generate['chunk_impact_time']:
         plot_chunk_impact_time(df.copy(), plot_dir, use_log_scale=False, width=plot_width, height=plot_height)
 
-    # if plots_to_generate['chunk_impact_time_log']:
-    #     plot_chunk_impact_time(df.copy(), plot_dir, use_log_scale=True, file_suffix="_log", width=plot_width, height=plot_height)
+    if plots_to_generate['chunk_impact_time_log']:
+        plot_chunk_impact_time(df.copy(), plot_dir, use_log_scale=True, file_suffix="_log", width=plot_width, height=plot_height)
 
     if plots_to_generate['dynamic_chunks_comparison']:
-        plot_scheduler_chunk_comparison(df.copy(), plot_dir, "Dynamic", width=plot_width, height=plot_height)
+        # Define chunk sizes likely present in the data for comparison
+        dynamic_chunks = df[df['SchedulerName'] == 'Dynamic']['ChunkSize'].dropna().unique()
+        plot_scheduler_chunk_comparison(df.copy(), plot_dir, "Dynamic", chunk_sizes=sorted(dynamic_chunks), width=plot_width, height=plot_height)
 
     if plots_to_generate['blockcyclic_chunks_comparison']:
-        plot_scheduler_chunk_comparison(df.copy(), plot_dir, "Static Block-Cyclic", width=plot_width, height=plot_height)
+        blockcyclic_chunks = df[df['SchedulerName'] == 'Static Block-Cyclic']['ChunkSize'].dropna().unique()
+        plot_scheduler_chunk_comparison(df.copy(), plot_dir, "Static Block-Cyclic", chunk_sizes=sorted(blockcyclic_chunks), width=plot_width, height=plot_height)
 
     if plots_to_generate['scheduler_heatmaps']:
-        plot_scheduler_heatmaps(df.copy(), plot_dir, show_speedup=True, width=plot_width, height=plot_height)
+        plot_scheduler_heatmaps(df.copy(), plot_dir, show_speedup=True, width=800, height=800) # Heatmaps often benefit from square aspect
 
     if plots_to_generate['scheduler_heatmaps_time']:
-        plot_scheduler_heatmaps(df.copy(), plot_dir, show_speedup=False, width=plot_width, height=plot_height)
+        plot_scheduler_heatmaps(df.copy(), plot_dir, show_speedup=False, width=800, height=800)
 
     print("\nPlot generation finished.")
 

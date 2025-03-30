@@ -1,22 +1,23 @@
 #ifndef COLLATZ_H
 #define COLLATZ_H
 
-#include "common_types.h"
+#include "common_types.h" // Defines ull (unsigned long long)
 
 /**
- * @brief Calcola il numero di passi della sequenza di Collatz per n.
- * @param n Il numero di partenza (intero positivo).
- * @return Il numero di passi per raggiungere 1.
+ * @brief Calculates the number of steps in the Collatz sequence for n.
+ * @param n The starting positive integer.
+ * @return The number of steps to reach 1.
+ * @throws std::overflow_error If an arithmetic overflow occurs during
+ * calculation.
  */
 ull collatz_steps(ull n);
 
 /**
- * @brief Trova il massimo numero di passi Collatz in un sotto-intervallo
- * [start, end].
- * @param start Inizio dell'intervallo (incluso).
- * @param end Fine dell'intervallo (incluso).
- * @return Il massimo numero di passi trovato nell'intervallo. Ritorna 0 se
- * start > end.
+ * @brief Finds the maximum Collatz steps within the range [start, end].
+ * @param start The beginning of the range (inclusive).
+ * @param end The end of the range (inclusive).
+ * @return The maximum step count found, or 0 if start > end or calculation
+ * fails due to overflow.
  */
 ull find_max_steps_in_subrange(ull start, ull end);
 
