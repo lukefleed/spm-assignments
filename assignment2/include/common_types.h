@@ -50,10 +50,15 @@ struct RangeResult {
 // Struttura per contenere la configurazione del programma letta dagli argomenti
 enum class SchedulingType { STATIC, DYNAMIC };
 
+// Nuovo enum per varianti di scheduling statico
+enum class StaticVariant { BLOCK, CYCLIC, BLOCK_CYCLIC };
+
 struct Config {
   SchedulingType scheduling = SchedulingType::STATIC; // Default statico
-  int num_threads = 16;                               // Default threads
-  ull chunk_size = 1; // Default chunk/block size
+  StaticVariant static_variant =
+      StaticVariant::BLOCK_CYCLIC; // Default block-cyclic
+  int num_threads = 16;            // Default threads
+  ull chunk_size = 1;              // Default chunk/block size
   std::vector<Range> ranges;
   bool verbose = false; // Opzionale per debug
 };

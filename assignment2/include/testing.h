@@ -6,35 +6,60 @@
 #include <vector>
 
 /**
- * @brief Esegue la suite di test di correttezza.
- * Confronta i risultati delle implementazioni parallele (statica e dinamica)
- * con l'implementazione sequenziale per un set predefinito di casi di test.
- * Stampa i risultati (PASS/FAIL) su std::cout.
+ * @brief Runs the comprehensive correctness test suite.
+ * Compares parallel implementations against sequential implementation
+ * for various test cases including edge cases.
  *
- * @return true se tutti i test passano, false altrimenti.
+ * @return true if all tests pass, false otherwise.
  */
 bool run_correctness_suite();
 
 /**
- * @brief Esegue la suite di test di performance.
- * Misura il tempo di esecuzione (mediana su più run) per le implementazioni
- * sequenziale, statica e dinamica su un workload fisso, variando il numero
- * di thread e (opzionalmente) la dimensione del chunk/blocco.
- * Stampa i risultati in formato CSV su std::cout.
+ * @brief Runs performance tests comparing static schedulers.
+ * Results are saved to static_comparison.csv.
  *
- * @param thread_counts Vettore con i numeri di thread da testare.
- * @param chunk_sizes Vettore con le dimensioni di chunk/blocco da testare.
- * @param samples Numero di campioni da raccogliere per ogni configurazione.
- * @param iterations_per_sample Numero di esecuzioni per ogni campione (per
- * ridurre rumore).
- * @param workload Vettore di Range che definisce il carico di lavoro fisso per
- * i test.
- * @return true se l'esecuzione avviene senza errori (non implica correttezza),
- * false altrimenti.
+ * @param thread_counts Thread counts to test
+ * @param chunk_sizes Chunk sizes to test
+ * @param samples Number of samples per configuration
+ * @param iterations_per_sample Iterations per sample
+ * @param workload Workload ranges
+ * @return true if tests run successfully
+ */
+bool run_static_performance_comparison(const std::vector<int> &thread_counts,
+                                       const std::vector<ull> &chunk_sizes,
+                                       int samples, int iterations_per_sample,
+                                       const std::vector<Range> &workload);
+
+/**
+ * @brief Runs performance tests comparing all scheduler implementations.
+ * Uses sequential implementation as baseline for speedup.
+ * Results are saved to all_schedulers.csv.
+ *
+ * @param thread_counts Thread counts to test
+ * @param chunk_sizes Chunk sizes to test
+ * @param samples Number of samples per configuration
+ * @param iterations_per_sample Iterations per sample
+ * @param workload Workload ranges
+ * @return true if tests run successfully
  */
 bool run_performance_suite(const std::vector<int> &thread_counts,
                            const std::vector<ull> &chunk_sizes, int samples,
                            int iterations_per_sample,
                            const std::vector<Range> &workload);
+
+/**
+ * @brief Runs additional performance tests with varying workloads.
+ * Results are saved to workload_scaling.csv.
+ *
+ * @param thread_counts Thread counts to test
+ * @param workloads Different workloads to test
+ * @param samples Number of samples per configuration
+ * @param iterations_per_sample Iterations per sample
+ * @return true if tests run successfully
+ */
+bool run_workload_scaling_tests(
+    const std::vector<int> &thread_counts,
+    const std::vector<std::vector<Range>> &workloads, int samples,
+    int iterations_per_sample);
 
 #endif // TESTING_H

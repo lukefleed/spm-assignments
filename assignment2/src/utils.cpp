@@ -55,6 +55,11 @@ void print_usage(const char *prog_name) {
       << std::endl;
   std::cerr << "  -n <threads>  Number of threads (default: 16)" << std::endl;
   std::cerr << "  -c <size>     Block/Chunk size (default: 1)" << std::endl;
+  std::cerr << "  -s <variant>  Static scheduling variant (block, cyclic, "
+               "block-cyclic)"
+            << std::endl;
+  std::cerr << "                Only relevant when using static scheduling"
+            << std::endl;
   std::cerr << "  -h, --help    Show this help message" << std::endl;
   std::cerr << "  -v            Verbose output (for debugging)" << std::endl;
 }
@@ -68,6 +73,25 @@ std::optional<Config> parse_arguments(int argc, char *argv[]) {
 
     if (arg == "-d") {
       config.scheduling = SchedulingType::DYNAMIC;
+    } else if (arg == "-s") {
+      if (++i < argc) {
+        std::string variant = argv[i];
+        if (variant == "block") {
+          config.static_variant = StaticVariant::BLOCK;
+        } else if (variant == "cyclic") {
+          config.static_variant = StaticVariant::CYCLIC;
+        } else if (variant == "block-cyclic") {
+          config.static_variant = StaticVariant::BLOCK_CYCLIC;
+        } else {
+          std::cerr << "Error: Unknown static scheduling variant '" << variant
+                    << "'. Valid options: block, cyclic, block-cyclic"
+                    << std::endl;
+          return std::nullopt;
+        }
+      } else {
+        std::cerr << "Error: Missing argument for -s" << std::endl;
+        return std::nullopt;
+      }
     } else if (arg == "-n") {
       if (++i < argc) {
         try {

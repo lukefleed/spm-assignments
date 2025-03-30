@@ -47,18 +47,24 @@ clean:
 
 # --- Target per i Test ---
 
-# Esegue i test di correttezza
 test_correctness: $(BUILDDIR)/$(TARGET)
 	@echo "--- Running Correctness Tests ---"
 	./$(BUILDDIR)/$(TARGET) --test-correctness
 
-# Esegue i test di performance e salva l'output CSV
-# Assicura che la directory dei risultati esista
+test_static_performance: $(BUILDDIR)/$(TARGET) | $(RESULTDIR)
+	@echo "--- Running Static Variants Performance Tests ---"
+	./$(BUILDDIR)/$(TARGET) --test-static-performance
+	@echo "--- Static performance test data saved to $(RESULTDIR)/static_performance_data.csv ---"
+
+test_workload_scaling: $(BUILDDIR)/$(TARGET) | $(RESULTDIR)
+	@echo "--- Running Workload Scaling Tests ---"
+	./$(BUILDDIR)/$(TARGET) --test-workload-scaling
+	@echo "--- Workload scaling test data saved to $(RESULTDIR)/workload_scaling_data.csv ---"
+
 test_performance: $(BUILDDIR)/$(TARGET) | $(RESULTDIR)
-	@echo "--- Running Performance Tests ---"
-	./$(BUILDDIR)/$(TARGET) --test-performance | grep -E '^(Sequential|Static|Dynamic)' > "$(RESULTDIR)/performance_data.csv"
-	@echo "CSV header" | cat - "$(RESULTDIR)/performance_data.csv" > temp && mv temp "$(RESULTDIR)/performance_data.csv"
+	@echo "--- Running Performance Tests (All Schedulers) ---"
+	./$(BUILDDIR)/$(TARGET) --test-performance
 	@echo "--- Performance test data saved to $(RESULTDIR)/performance_data.csv ---"
 
 # Phony targets non corrispondono a file
-.PHONY: all clean test_correctness test_performance
+.PHONY: all clean test_correctness test_performance test_static_performance test_workload_scaling

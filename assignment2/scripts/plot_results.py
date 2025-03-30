@@ -78,11 +78,13 @@ def plot_speedup_plotly(df, baseline_time_ms, output_filename="collatz_speedup_p
         title="Parallel Collatz Performance Speedup (Plotly)",
         xaxis_title="Number of Threads",
         yaxis_title="Speedup (T_sequential / T_parallel)",
+        width=1000,
+        height=600,
         legend=dict(
             title="Configuration",
-            x=0,  # left
-            y=1,  # top
-            font=dict(size=10)  # smaller font size
+            x=0.01,  # left
+            y=0.99,  # top
+            font=dict(size=8)  # smaller font size
         ),
         xaxis=dict(tickmode='array', tickvals=sorted(df['Threads'].unique())),
         yaxis=dict(range=[0, max(max(df['Speedup']), max_threads) * 1.1])
