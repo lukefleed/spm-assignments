@@ -1,0 +1,246 @@
+WorkloadIdx,Scheduler,Threads,ChunkSize,TimeMs,Speedup
+0,Sequential,1,N/A,3.1177,1.0000
+0,Static Block,1,64,3.4194,0.9118
+0,Static Block,2,64,2.0694,1.5066
+0,Static Block,3,64,1.5339,2.0325
+0,Static Block,4,64,1.0617,2.9366
+0,Static Block,5,64,1.0375,3.0052
+0,Static Block,6,64,1.1717,2.6610
+0,Static Block,7,64,1.0542,2.9576
+0,Static Block,8,64,1.0849,2.8738
+0,Static Block,9,64,0.9851,3.1650
+0,Static Block,10,64,1.0528,2.9614
+0,Static Block,11,64,1.0612,2.9378
+0,Static Block,12,64,1.0812,2.8836
+0,Static Cyclic,1,64,3.3938,0.9187
+0,Static Cyclic,2,64,1.7747,1.7568
+0,Static Cyclic,3,64,1.1911,2.6176
+0,Static Cyclic,4,64,1.0806,2.8851
+0,Static Cyclic,5,64,0.9025,3.4545
+0,Static Cyclic,6,64,0.8859,3.5193
+0,Static Cyclic,7,64,0.9001,3.4639
+0,Static Cyclic,8,64,0.9873,3.1577
+0,Static Cyclic,9,64,0.9425,3.3079
+0,Static Cyclic,10,64,0.9709,3.2110
+0,Static Cyclic,11,64,1.0590,2.9440
+0,Static Cyclic,12,64,1.0470,2.9777
+0,Static Block-Cyclic,1,64,1.3888,2.2449
+0,Static Block-Cyclic,2,64,1.7357,1.7962
+0,Static Block-Cyclic,3,64,1.2436,2.5071
+0,Static Block-Cyclic,4,64,1.2720,2.4510
+0,Static Block-Cyclic,5,64,1.0517,2.9644
+0,Static Block-Cyclic,6,64,0.9086,3.4312
+0,Static Block-Cyclic,7,64,0.9094,3.4285
+0,Static Block-Cyclic,8,64,0.8423,3.7013
+0,Static Block-Cyclic,9,64,0.8619,3.6173
+0,Static Block-Cyclic,10,64,0.9366,3.3288
+0,Static Block-Cyclic,11,64,0.9058,3.4418
+0,Static Block-Cyclic,12,64,0.9945,3.1351
+0,Dynamic,1,64,3.2753,0.9519
+0,Dynamic,2,64,1.7728,1.7586
+0,Dynamic,3,64,1.2429,2.5085
+0,Dynamic,4,64,1.0184,3.0613
+0,Dynamic,5,64,1.0619,2.9360
+0,Dynamic,6,64,1.0318,3.0218
+0,Dynamic,7,64,0.9889,3.1526
+0,Dynamic,8,64,1.0225,3.0492
+0,Dynamic,9,64,1.0246,3.0429
+0,Dynamic,10,64,0.7809,3.9923
+0,Dynamic,11,64,0.7092,4.3964
+0,Dynamic,12,64,0.6744,4.6227
+1,Sequential,1,N/A,202.1328,1.0000
+1,Static Block,1,64,211.9751,0.9536
+1,Static Block,2,64,112.5847,1.7954
+1,Static Block,3,64,82.7410,2.4430
+1,Static Block,4,64,65.1669,3.1018
+1,Static Block,5,64,53.7609,3.7599
+1,Static Block,6,64,42.4703,4.7594
+1,Static Block,7,64,43.1034,4.6895
+1,Static Block,8,64,38.2625,5.2828
+1,Static Block,9,64,34.6276,5.8373
+1,Static Block,10,64,35.3477,5.7184
+1,Static Block,11,64,37.5900,5.3773
+1,Static Block,12,64,36.9212,5.4747
+1,Static Cyclic,1,64,203.5231,0.9932
+1,Static Cyclic,2,64,113.1085,1.7871
+1,Static Cyclic,3,64,84.9864,2.3784
+1,Static Cyclic,4,64,64.1578,3.1506
+1,Static Cyclic,5,64,51.6379,3.9144
+1,Static Cyclic,6,64,47.3616,4.2679
+1,Static Cyclic,7,64,43.8591,4.6087
+1,Static Cyclic,8,64,43.3675,4.6609
+1,Static Cyclic,9,64,36.9841,5.4654
+1,Static Cyclic,10,64,33.0617,6.1138
+1,Static Cyclic,11,64,30.2503,6.6820
+1,Static Cyclic,12,64,36.8795,5.4809
+1,Static Block-Cyclic,1,64,209.4137,0.9652
+1,Static Block-Cyclic,2,64,114.2719,1.7689
+1,Static Block-Cyclic,3,64,81.0507,2.4939
+1,Static Block-Cyclic,4,64,56.8011,3.5586
+1,Static Block-Cyclic,5,64,45.5131,4.4412
+1,Static Block-Cyclic,6,64,42.4833,4.7579
+1,Static Block-Cyclic,7,64,42.1323,4.7976
+1,Static Block-Cyclic,8,64,37.8764,5.3366
+1,Static Block-Cyclic,9,64,39.4648,5.1219
+1,Static Block-Cyclic,10,64,31.8732,6.3418
+1,Static Block-Cyclic,11,64,33.3303,6.0645
+1,Static Block-Cyclic,12,64,36.2445,5.5769
+1,Dynamic,1,64,204.1831,0.9900
+1,Dynamic,2,64,110.6031,1.8276
+1,Dynamic,3,64,72.1908,2.8000
+1,Dynamic,4,64,60.1207,3.3621
+1,Dynamic,5,64,52.3259,3.8630
+1,Dynamic,6,64,42.6107,4.7437
+1,Dynamic,7,64,40.9195,4.9398
+1,Dynamic,8,64,37.6369,5.3706
+1,Dynamic,9,64,35.0007,5.7751
+1,Dynamic,10,64,35.6029,5.6774
+1,Dynamic,11,64,29.5005,6.8518
+1,Dynamic,12,64,29.5128,6.8490
+2,Sequential,1,N/A,0.4986,1.0000
+2,Static Block,1,64,0.5445,0.9158
+2,Static Block,2,64,0.4534,1.0997
+2,Static Block,3,64,0.2507,1.9893
+2,Static Block,4,64,0.2188,2.2790
+2,Static Block,5,64,0.2751,1.8126
+2,Static Block,6,64,0.2648,1.8828
+2,Static Block,7,64,0.2690,1.8537
+2,Static Block,8,64,0.2837,1.7579
+2,Static Block,9,64,0.3354,1.4865
+2,Static Block,10,64,0.3542,1.4080
+2,Static Block,11,64,0.3697,1.3488
+2,Static Block,12,64,0.3958,1.2600
+2,Static Cyclic,1,64,0.5536,0.9007
+2,Static Cyclic,2,64,0.3215,1.5508
+2,Static Cyclic,3,64,0.3078,1.6200
+2,Static Cyclic,4,64,0.2425,2.0562
+2,Static Cyclic,5,64,0.2365,2.1080
+2,Static Cyclic,6,64,0.2381,2.0943
+2,Static Cyclic,7,64,0.2775,1.7966
+2,Static Cyclic,8,64,0.2865,1.7407
+2,Static Cyclic,9,64,0.3243,1.5375
+2,Static Cyclic,10,64,0.3517,1.4178
+2,Static Cyclic,11,64,0.3830,1.3019
+2,Static Cyclic,12,64,0.3844,1.2973
+2,Static Block-Cyclic,1,64,0.5512,0.9046
+2,Static Block-Cyclic,2,64,0.4279,1.1652
+2,Static Block-Cyclic,3,64,0.3012,1.6555
+2,Static Block-Cyclic,4,64,0.2347,2.1244
+2,Static Block-Cyclic,5,64,0.2369,2.1044
+2,Static Block-Cyclic,6,64,0.2507,1.9893
+2,Static Block-Cyclic,7,64,0.2699,1.8476
+2,Static Block-Cyclic,8,64,0.3209,1.5537
+2,Static Block-Cyclic,9,64,0.3370,1.4797
+2,Static Block-Cyclic,10,64,0.3542,1.4077
+2,Static Block-Cyclic,11,64,0.3707,1.3451
+2,Static Block-Cyclic,12,64,0.4036,1.2355
+2,Dynamic,1,64,0.5457,0.9137
+2,Dynamic,2,64,0.3588,1.3897
+2,Dynamic,3,64,0.2624,1.9006
+2,Dynamic,4,64,0.2461,2.0265
+2,Dynamic,5,64,0.2454,2.0322
+2,Dynamic,6,64,0.3057,1.6313
+2,Dynamic,7,64,0.3065,1.6266
+2,Dynamic,8,64,0.3424,1.4564
+2,Dynamic,9,64,0.3727,1.3379
+2,Dynamic,10,64,0.4129,1.2077
+2,Dynamic,11,64,0.4524,1.1021
+2,Dynamic,12,64,0.4927,1.0121
+3,Sequential,1,N/A,16.5648,1.0000
+3,Static Block,1,64,20.9407,0.7910
+3,Static Block,2,64,16.1556,1.0253
+3,Static Block,3,64,9.9384,1.6667
+3,Static Block,4,64,11.1147,1.4903
+3,Static Block,5,64,9.4900,1.7455
+3,Static Block,6,64,11.3587,1.4583
+3,Static Block,7,64,8.6818,1.9080
+3,Static Block,8,64,8.3238,1.9901
+3,Static Block,9,64,8.3478,1.9843
+3,Static Block,10,64,7.5437,2.1959
+3,Static Block,11,64,6.0974,2.7167
+3,Static Block,12,64,4.9105,3.3733
+3,Static Cyclic,1,64,16.6173,0.9968
+3,Static Cyclic,2,64,10.1771,1.6277
+3,Static Cyclic,3,64,14.5143,1.1413
+3,Static Cyclic,4,64,12.9588,1.2783
+3,Static Cyclic,5,64,9.5227,1.7395
+3,Static Cyclic,6,64,9.4362,1.7555
+3,Static Cyclic,7,64,8.1033,2.0442
+3,Static Cyclic,8,64,8.6620,1.9124
+3,Static Cyclic,9,64,8.2582,2.0058
+3,Static Cyclic,10,64,6.9223,2.3930
+3,Static Cyclic,11,64,6.9693,2.3768
+3,Static Cyclic,12,64,5.9885,2.7661
+3,Static Block-Cyclic,1,64,16.5250,1.0024
+3,Static Block-Cyclic,2,64,15.7930,1.0489
+3,Static Block-Cyclic,3,64,16.7988,0.9861
+3,Static Block-Cyclic,4,64,12.4655,1.3288
+3,Static Block-Cyclic,5,64,10.3307,1.6035
+3,Static Block-Cyclic,6,64,8.0168,2.0663
+3,Static Block-Cyclic,7,64,8.2388,2.0106
+3,Static Block-Cyclic,8,64,7.2884,2.2728
+3,Static Block-Cyclic,9,64,6.5111,2.5441
+3,Static Block-Cyclic,10,64,5.8533,2.8300
+3,Static Block-Cyclic,11,64,5.6633,2.9249
+3,Static Block-Cyclic,12,64,5.0097,3.3065
+3,Dynamic,1,64,16.6554,0.9946
+3,Dynamic,2,64,11.9810,1.3826
+3,Dynamic,3,64,9.3351,1.7745
+3,Dynamic,4,64,6.2141,2.6657
+3,Dynamic,5,64,5.8465,2.8333
+3,Dynamic,6,64,5.2384,3.1622
+3,Dynamic,7,64,5.3123,3.1182
+3,Dynamic,8,64,4.8490,3.4161
+3,Dynamic,9,64,4.0965,4.0437
+3,Dynamic,10,64,3.4907,4.7454
+3,Dynamic,11,64,3.1635,5.2362
+3,Dynamic,12,64,3.0842,5.3708
+4,Sequential,1,N/A,0.0041,1.0000
+4,Static Block,1,64,0.0649,0.0631
+4,Static Block,2,64,0.0591,0.0692
+4,Static Block,3,64,0.0791,0.0517
+4,Static Block,4,64,0.0900,0.0455
+4,Static Block,5,64,0.1351,0.0303
+4,Static Block,6,64,0.1655,0.0247
+4,Static Block,7,64,0.1991,0.0205
+4,Static Block,8,64,0.2419,0.0169
+4,Static Block,9,64,0.2742,0.0149
+4,Static Block,10,64,0.3339,0.0123
+4,Static Block,11,64,0.3614,0.0113
+4,Static Block,12,64,0.3696,0.0111
+4,Static Cyclic,1,64,0.0535,0.0764
+4,Static Cyclic,2,64,0.0723,0.0566
+4,Static Cyclic,3,64,0.0826,0.0495
+4,Static Cyclic,4,64,0.0893,0.0458
+4,Static Cyclic,5,64,0.1484,0.0276
+4,Static Cyclic,6,64,0.1700,0.0241
+4,Static Cyclic,7,64,0.2072,0.0197
+4,Static Cyclic,8,64,0.2326,0.0176
+4,Static Cyclic,9,64,0.2650,0.0154
+4,Static Cyclic,10,64,0.3384,0.0121
+4,Static Cyclic,11,64,0.3658,0.0112
+4,Static Cyclic,12,64,0.3860,0.0106
+4,Static Block-Cyclic,1,64,0.0625,0.0654
+4,Static Block-Cyclic,2,64,0.0663,0.0617
+4,Static Block-Cyclic,3,64,0.0789,0.0518
+4,Static Block-Cyclic,4,64,0.0990,0.0413
+4,Static Block-Cyclic,5,64,0.1355,0.0302
+4,Static Block-Cyclic,6,64,0.1765,0.0232
+4,Static Block-Cyclic,7,64,0.1901,0.0215
+4,Static Block-Cyclic,8,64,0.2376,0.0172
+4,Static Block-Cyclic,9,64,0.2764,0.0148
+4,Static Block-Cyclic,10,64,0.3159,0.0129
+4,Static Block-Cyclic,11,64,0.3627,0.0113
+4,Static Block-Cyclic,12,64,0.3824,0.0107
+4,Dynamic,1,64,0.0514,0.0795
+4,Dynamic,2,64,0.0633,0.0646
+4,Dynamic,3,64,0.0831,0.0492
+4,Dynamic,4,64,0.1125,0.0364
+4,Dynamic,5,64,0.1610,0.0254
+4,Dynamic,6,64,0.1735,0.0236
+4,Dynamic,7,64,0.2274,0.0180
+4,Dynamic,8,64,0.2644,0.0155
+4,Dynamic,9,64,0.2906,0.0141
+4,Dynamic,10,64,0.4160,0.0098
+4,Dynamic,11,64,0.3869,0.0106
+4,Dynamic,12,64,0.4034,0.0101

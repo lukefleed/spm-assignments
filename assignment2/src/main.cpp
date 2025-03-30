@@ -22,7 +22,26 @@
  * @return true if execution completed successfully, false otherwise
  */
 bool run_sequential_wrapper(const Config &config,
-                            std::vector<RangeResult> &results_out);
+                            std::vector<RangeResult> &results_out) {
+  try {
+    // Run the sequential implementation
+    std::vector<ull> seq_results = run_sequential(config.ranges);
+
+    // Convert results format
+    results_out.clear();
+    results_out.reserve(seq_results.size());
+
+    for (size_t i = 0; i < seq_results.size(); ++i) {
+      RangeResult rr(config.ranges[i]);
+      rr.max_steps.store(seq_results[i]);
+      results_out.push_back(std::move(rr));
+    }
+    return true;
+  } catch (const std::exception &e) {
+    std::cerr << "Sequential execution failed: " << e.what() << std::endl;
+    return false;
+  }
+}
 
 /**
  * @brief Execute test suites based on command line arguments
@@ -55,7 +74,7 @@ bool handle_test_mode(int argc, char *argv[]) {
     std::vector<ull> chunks_to_test = {64, 128, 256};
 
     // Statistical parameters for reliable measurements
-    int samples = 5;               // Number of median measurements
+    int samples = 2;               // Number of median measurements
     int iterations_per_sample = 2; // Executions per measurement
 
     return run_performance_suite(threads_to_test, chunks_to_test, samples,
@@ -73,8 +92,8 @@ bool handle_test_mode(int argc, char *argv[]) {
     // Test more granular chunk sizes for static scheduling analysis
     std::vector<ull> chunks_to_test = {16, 32, 64, 128, 256};
 
-    int samples = 10;
-    int iterations_per_sample = 100;
+    int samples = 2;
+    int iterations_per_sample = 2;
 
     return run_static_performance_comparison(threads_to_test, chunks_to_test,
                                              samples, iterations_per_sample,
@@ -106,8 +125,8 @@ bool handle_test_mode(int argc, char *argv[]) {
       thread_counts.push_back(t);
     }
 
-    int samples = 10;
-    int iterations_per_sample = 100;
+    int samples = 2;
+    int iterations_per_sample = 2;
 
     return run_workload_scaling_tests(thread_counts, workloads, samples,
                                       iterations_per_sample);

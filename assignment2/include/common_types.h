@@ -48,7 +48,7 @@ struct RangeResult {
 };
 
 // Struttura per contenere la configurazione del programma letta dagli argomenti
-enum class SchedulingType { STATIC, DYNAMIC };
+enum class SchedulingType { SEQUENTIAL, STATIC, DYNAMIC };
 
 // Nuovo enum per varianti di scheduling statico
 enum class StaticVariant { BLOCK, CYCLIC, BLOCK_CYCLIC };

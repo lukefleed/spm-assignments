@@ -1,79 +1,182 @@
-Sequential,1,N/A,245.945
-Block,1,16,246.284,0.998622
-Cyclic,1,16,245.973,0.999884
-BlockCyclic,1,16,245.307,1.0026
-Block,1,32,246.229,0.998845
-Cyclic,1,32,245.884,1.00025
-BlockCyclic,1,32,245.606,1.00138
-Block,1,64,246.143,0.999193
-Cyclic,1,64,245.954,0.999961
-BlockCyclic,1,64,245.862,1.00034
-Block,1,128,246.268,0.998689
-Cyclic,1,128,245.855,1.00037
-BlockCyclic,1,128,246.024,0.999678
-Block,1,256,246.236,0.998819
-Cyclic,1,256,245.881,1.00026
-BlockCyclic,1,256,246.028,0.99966
-Block,2,16,129.07,1.90552
-Cyclic,2,16,143.881,1.70936
-BlockCyclic,2,16,131.212,1.8744
-Block,2,32,128.572,1.9129
-Cyclic,2,32,142.756,1.72283
-BlockCyclic,2,32,130.518,1.88437
-Block,2,64,129.523,1.89885
-Cyclic,2,64,141.577,1.73718
-BlockCyclic,2,64,129.907,1.89324
-Block,2,128,133.165,1.84691
-Cyclic,2,128,142.177,1.72985
-BlockCyclic,2,128,129.202,1.90357
-Block,2,256,128.793,1.90962
-Cyclic,2,256,142.938,1.72064
-BlockCyclic,2,256,127.36,1.93109
-Block,3,16,89.1101,2.76001
-Cyclic,3,16,96.7575,2.54187
-BlockCyclic,3,16,94.3348,2.60715
-Block,3,32,88.3674,2.78321
-Cyclic,3,32,98.0497,2.50837
-BlockCyclic,3,32,91.2981,2.69386
-Block,3,64,92.5021,2.6588
-Cyclic,3,64,97.2569,2.52882
-BlockCyclic,3,64,93.5905,2.62788
-Block,3,128,88.8618,2.76772
-Cyclic,3,128,96.4544,2.54986
-BlockCyclic,3,128,94.5106,2.6023
-Block,3,256,89.3844,2.75154
-Cyclic,3,256,96.9822,2.53598
-BlockCyclic,3,256,93.3125,2.63571
-Block,4,16,69.3443,3.54672
-Cyclic,4,16,79.1299,3.10811
-BlockCyclic,4,16,70.3266,3.49718
-Block,4,32,68.9046,3.56935
-Cyclic,4,32,78.8168,3.12046
-BlockCyclic,4,32,69.5807,3.53467
-Block,4,64,68.0873,3.6122
-Cyclic,4,64,78.8405,3.11952
-BlockCyclic,4,64,71.4513,3.44213
-Block,4,128,69.9662,3.5152
-Cyclic,4,128,79.1498,3.10733
-BlockCyclic,4,128,70.8472,3.47148
-Block,4,256,70.9964,3.46419
-Cyclic,4,256,78.7139,3.12454
-BlockCyclic,4,256,70.8209,3.47277
-Block,5,16,58.2892,4.21939
-Cyclic,5,16,64.6125,3.80646
-BlockCyclic,5,16,60.8001,4.04514
-Block,5,32,58.3473,4.21519
-Cyclic,5,32,64.3993,3.81906
-BlockCyclic,5,32,60.3531,4.0751
-Block,5,64,57.137,4.30448
-Cyclic,5,64,64.3158,3.82402
-BlockCyclic,5,64,60.0721,4.09416
-Block,5,128,58.1822,4.22715
-Cyclic,5,128,64.0232,3.8415
-BlockCyclic,5,128,59.5954,4.12691
-Block,5,256,56.8724,4.3245
-Cyclic,5,256,64.3859,3.81985
-BlockCyclic,5,256,59.2733,4.14933
-Block,6,16,54.2308,4.53515
-Cyclic,6,16,61.0077,4.03137
-BlockCyclic,6,16,56.1136,4.38298
+Scheduler,Threads,ChunkSize,TimeMs,Speedup
+Sequential,1,N/A,222.9122,1.0000
+Static Block,1,16,227.8868,0.9782
+Static Block,1,32,220.8526,1.0093
+Static Block,1,64,220.8197,1.0095
+Static Block,1,128,222.1706,1.0033
+Static Block,1,256,220.6722,1.0102
+Static Block,2,16,122.8233,1.8149
+Static Block,2,32,121.6893,1.8318
+Static Block,2,64,116.9135,1.9066
+Static Block,2,128,115.5437,1.9292
+Static Block,2,256,121.4213,1.8359
+Static Block,3,16,80.2502,2.7777
+Static Block,3,32,77.9930,2.8581
+Static Block,3,64,75.4758,2.9534
+Static Block,3,128,76.1232,2.9283
+Static Block,3,256,76.5067,2.9136
+Static Block,4,16,63.4643,3.5124
+Static Block,4,32,58.0009,3.8433
+Static Block,4,64,59.4628,3.7488
+Static Block,4,128,57.3499,3.8869
+Static Block,4,256,56.6367,3.9358
+Static Block,5,16,51.5253,4.3263
+Static Block,5,32,47.2370,4.7190
+Static Block,5,64,54.2925,4.1058
+Static Block,5,128,52.2440,4.2667
+Static Block,5,256,48.4444,4.6014
+Static Block,6,16,54.0093,4.1273
+Static Block,6,32,53.6868,4.1521
+Static Block,6,64,53.7100,4.1503
+Static Block,6,128,51.9611,4.2900
+Static Block,6,256,47.0876,4.7340
+Static Block,7,16,45.9325,4.8530
+Static Block,7,32,45.8442,4.8624
+Static Block,7,64,45.6165,4.8867
+Static Block,7,128,45.7021,4.8775
+Static Block,7,256,45.7681,4.8705
+Static Block,8,16,40.5665,5.4950
+Static Block,8,32,40.2137,5.5432
+Static Block,8,64,40.3721,5.5214
+Static Block,8,128,41.4088,5.3832
+Static Block,8,256,40.3928,5.5186
+Static Block,9,16,36.1439,6.1673
+Static Block,9,32,36.1307,6.1696
+Static Block,9,64,36.1981,6.1581
+Static Block,9,128,36.1050,6.1740
+Static Block,9,256,36.1591,6.1648
+Static Block,10,16,32.7141,6.8139
+Static Block,10,32,32.8486,6.7861
+Static Block,10,64,32.6902,6.8189
+Static Block,10,128,32.7846,6.7993
+Static Block,10,256,32.6398,6.8295
+Static Block,11,16,29.8824,7.4596
+Static Block,11,32,29.7387,7.4957
+Static Block,11,64,29.8508,7.4675
+Static Block,11,128,29.7719,7.4873
+Static Block,11,256,29.8826,7.4596
+Static Block,12,16,27.4907,8.1086
+Static Block,12,32,27.3806,8.1412
+Static Block,12,64,27.4396,8.1238
+Static Block,12,128,28.0126,7.9576
+Static Block,12,256,28.0394,7.9500
+Static Cyclic,1,16,223.7130,0.9964
+Static Cyclic,1,32,220.5784,1.0106
+Static Cyclic,1,64,220.3863,1.0115
+Static Cyclic,1,128,220.4402,1.0112
+Static Cyclic,1,256,220.5144,1.0109
+Static Cyclic,2,16,130.2384,1.7116
+Static Cyclic,2,32,131.5861,1.6940
+Static Cyclic,2,64,126.1536,1.7670
+Static Cyclic,2,128,130.4290,1.7091
+Static Cyclic,2,256,133.9996,1.6635
+Static Cyclic,3,16,93.2518,2.3904
+Static Cyclic,3,32,84.9568,2.6238
+Static Cyclic,3,64,87.4933,2.5478
+Static Cyclic,3,128,86.3248,2.5822
+Static Cyclic,3,256,82.1280,2.7142
+Static Cyclic,4,16,69.0180,3.2298
+Static Cyclic,4,32,70.3863,3.1670
+Static Cyclic,4,64,75.4813,2.9532
+Static Cyclic,4,128,75.2140,2.9637
+Static Cyclic,4,256,75.3146,2.9597
+Static Cyclic,5,16,62.5217,3.5654
+Static Cyclic,5,32,57.2384,3.8944
+Static Cyclic,5,64,57.6392,3.8674
+Static Cyclic,5,128,56.2979,3.9595
+Static Cyclic,5,256,56.4566,3.9484
+Static Cyclic,6,16,49.7453,4.4811
+Static Cyclic,6,32,48.6000,4.5867
+Static Cyclic,6,64,47.9009,4.6536
+Static Cyclic,6,128,47.5036,4.6925
+Static Cyclic,6,256,52.0084,4.2861
+Static Cyclic,7,16,53.5168,4.1653
+Static Cyclic,7,32,48.5718,4.5893
+Static Cyclic,7,64,48.2673,4.6183
+Static Cyclic,7,128,48.4820,4.5978
+Static Cyclic,7,256,50.5855,4.4066
+Static Cyclic,8,16,49.0655,4.5432
+Static Cyclic,8,32,49.2093,4.5299
+Static Cyclic,8,64,49.0160,4.5477
+Static Cyclic,8,128,48.8892,4.5595
+Static Cyclic,8,256,48.8729,4.5611
+Static Cyclic,9,16,38.3264,5.8162
+Static Cyclic,9,32,38.4860,5.7920
+Static Cyclic,9,64,38.4070,5.8039
+Static Cyclic,9,128,38.4753,5.7936
+Static Cyclic,9,256,40.3457,5.5251
+Static Cyclic,10,16,36.2339,6.1520
+Static Cyclic,10,32,38.7718,5.7493
+Static Cyclic,10,64,38.8073,5.7441
+Static Cyclic,10,128,38.5221,5.7866
+Static Cyclic,10,256,38.4217,5.8017
+Static Cyclic,11,16,34.0506,6.5465
+Static Cyclic,11,32,33.8625,6.5829
+Static Cyclic,11,64,33.6892,6.6167
+Static Cyclic,11,128,34.1800,6.5217
+Static Cyclic,11,256,33.6955,6.6155
+Static Cyclic,12,16,44.4343,5.0167
+Static Cyclic,12,32,39.5741,5.6328
+Static Cyclic,12,64,32.1490,6.9337
+Static Cyclic,12,128,32.1222,6.9395
+Static Cyclic,12,256,32.4062,6.8787
+Static Block-Cyclic,1,16,221.1162,1.0081
+Static Block-Cyclic,1,32,220.3460,1.0116
+Static Block-Cyclic,1,64,221.1824,1.0078
+Static Block-Cyclic,1,128,220.5189,1.0109
+Static Block-Cyclic,1,256,224.3862,0.9934
+Static Block-Cyclic,2,16,116.8669,1.9074
+Static Block-Cyclic,2,32,119.6119,1.8636
+Static Block-Cyclic,2,64,119.1271,1.8712
+Static Block-Cyclic,2,128,117.3325,1.8998
+Static Block-Cyclic,2,256,122.0790,1.8260
+Static Block-Cyclic,3,16,88.7620,2.5113
+Static Block-Cyclic,3,32,89.2621,2.4973
+Static Block-Cyclic,3,64,78.6180,2.8354
+Static Block-Cyclic,3,128,77.6044,2.8724
+Static Block-Cyclic,3,256,75.5424,2.9508
+Static Block-Cyclic,4,16,63.2201,3.5260
+Static Block-Cyclic,4,32,61.0733,3.6499
+Static Block-Cyclic,4,64,59.2750,3.7606
+Static Block-Cyclic,4,128,57.3563,3.8864
+Static Block-Cyclic,4,256,57.2164,3.8959
+Static Block-Cyclic,5,16,56.7195,3.9301
+Static Block-Cyclic,5,32,53.3742,4.1764
+Static Block-Cyclic,5,64,49.5734,4.4966
+Static Block-Cyclic,5,128,50.2005,4.4404
+Static Block-Cyclic,5,256,48.6242,4.5844
+Static Block-Cyclic,6,16,57.5693,3.8721
+Static Block-Cyclic,6,32,54.5323,4.0877
+Static Block-Cyclic,6,64,53.9184,4.1343
+Static Block-Cyclic,6,128,41.3414,5.3920
+Static Block-Cyclic,6,256,46.0543,4.8402
+Static Block-Cyclic,7,16,46.9620,4.7467
+Static Block-Cyclic,7,32,46.3014,4.8144
+Static Block-Cyclic,7,64,45.8943,4.8571
+Static Block-Cyclic,7,128,46.0045,4.8454
+Static Block-Cyclic,7,256,45.3227,4.9183
+Static Block-Cyclic,8,16,42.8640,5.2005
+Static Block-Cyclic,8,32,43.5353,5.1203
+Static Block-Cyclic,8,64,48.7070,4.5766
+Static Block-Cyclic,8,128,40.9115,5.4486
+Static Block-Cyclic,8,256,40.6949,5.4776
+Static Block-Cyclic,9,16,39.3169,5.6696
+Static Block-Cyclic,9,32,38.7616,5.7509
+Static Block-Cyclic,9,64,37.7524,5.9046
+Static Block-Cyclic,9,128,37.3429,5.9693
+Static Block-Cyclic,9,256,37.2138,5.9900
+Static Block-Cyclic,10,16,34.2316,6.5119
+Static Block-Cyclic,10,32,34.1111,6.5349
+Static Block-Cyclic,10,64,33.3631,6.6814
+Static Block-Cyclic,10,128,32.8919,6.7771
+Static Block-Cyclic,10,256,32.8076,6.7945
+Static Block-Cyclic,11,16,31.1931,7.1462
+Static Block-Cyclic,11,32,30.8079,7.2355
+Static Block-Cyclic,11,64,30.3786,7.3378
+Static Block-Cyclic,11,128,30.1324,7.3978
+Static Block-Cyclic,11,256,35.7697,6.2319
+Static Block-Cyclic,12,16,29.2502,7.6209
+Static Block-Cyclic,12,32,35.7537,6.2347
+Static Block-Cyclic,12,64,29.3892,7.5848
+Static Block-Cyclic,12,128,38.0594,5.8569
+Static Block-Cyclic,12,256,37.5491,5.9365
