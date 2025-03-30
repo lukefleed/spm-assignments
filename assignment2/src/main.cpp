@@ -169,7 +169,7 @@ void print_results(const std::vector<RangeResult> &results,
     // Inizia da 2 per i test paralleli, 1 è il baseline sequenziale gestito
     // automaticamente
     for (int i = 2; i <= max_threads;
-         i *= 2) { // Scala esponenzialmente o linearmente
+         i += 1) { // Scala esponenzialmente o linearmente
       threads_to_test.push_back(i);
     }
     if (threads_to_test.empty() || threads_to_test.back() != max_threads) {
@@ -181,12 +181,11 @@ void print_results(const std::vector<RangeResult> &results,
       std::cout << "Warning: Only 1 hardware thread detected. Parallel "
                    "benchmarks might not show speedup."
                 << std::endl;
-      // Considera se aggiungere comunque 2 alla lista per testare l'overhead
-      // threads_to_test.push_back(2);
     }
 
     // Chunk size da testare
-    const std::vector<ull> chunks_to_test = {16, 64, 128, 256, 512};
+    const std::vector<ull> chunks_to_test = {16,  32,  64,  96,
+                                             128, 256, 512, 1024};
 
     // Definisci i workloads qui
     const std::vector<std::vector<Range>> workloads = {
@@ -195,25 +194,52 @@ void print_results(const std::vector<RangeResult> &results,
         {{1, 100},
          {1000000, 1001000},
          {50000, 51000}}, // Sbilanciato (piccolo, grande, medio)
-        {{1, 10000},
-         {10001, 20000},
-         {20001, 30000},
-         {30001, 40000}}, // Multipli range piccoli
+        []() {
+          // Multipli range piccoli (generati programmaticamente)
+          std::vector<Range> ranges;
+          const ull range_size = 1000;
+          const ull total_size = 100000;
+
+          // Genera 100 range di 1000 numeri ciascuno
+          for (ull start = 1; start < total_size; start += range_size) {
+            ranges.push_back({start, start + range_size - 1});
+          }
+          return ranges;
+        }(),
         {{9663, 9663},
          {77671, 77671},
          {626331, 626331},
          {837799, 837799}}, // Punti "difficili" (alti passi)
-        {{(1ULL << 20) - 5000,
-          (1ULL << 20) + 5000}} // Range attorno a potenza di 2
-    };
+        []() {
+          // Genera range intorno a diverse potenze di due
+          std::vector<Range> ranges;
+          const ull range_width = 1000; // Larghezza di ogni range
+
+          // Crea range intorno alle potenze di 2 da 2^10 a 2^22
+          for (int power = 10; power <= 22; power++) {
+            ull center = 1ULL << power; // Potenza di 2
+            ranges.push_back(
+                {center - range_width / 2, center + range_width / 2});
+
+            // Aggiungi anche un range poco prima e poco dopo per ogni potenza
+            if (power > 10) { // Evita underflow per potenze piccole
+              ranges.push_back(
+                  {center - 3 * range_width, center - 2 * range_width});
+              ranges.push_back(
+                  {center + 2 * range_width, center + 3 * range_width});
+            }
+          }
+          return ranges;
+        }()};
+
     const std::vector<std::string> workload_descriptions = {
         "Medium Balanced",        "Large Balanced",
         "Unbalanced Mix",         "Multiple Small Balanced",
-        "Known High-Step Points", "Range around 2^20"};
+        "Known High-Step Points", "Multiple Power-of-2 Ranges"};
 
     // Parametri di misurazione
-    const int samples = 2;               // Aumenta per risultati più stabili
-    const int iterations_per_sample = 3; // Aumenta per ridurre varianza
+    const int samples = 10;               // Aumenta per risultati più stabili
+    const int iterations_per_sample = 50; // Aumenta per ridurre varianza
 
     return run_benchmark_suite(threads_to_test, chunks_to_test, workloads,
                                workload_descriptions, samples,
