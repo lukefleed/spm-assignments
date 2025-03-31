@@ -55,7 +55,7 @@ void static_worker(int thread_id, int num_threads, ull block_size,
 
   // Iterate through each range provided in the input configuration.
   for (size_t range_idx = 0; range_idx < global_ranges.size(); ++range_idx) {
-    const auto ¤t_range = global_ranges[range_idx];
+    const auto current_range = global_ranges[range_idx];
 
     // Skip ranges where the start is greater than the end (invalid or empty
     // range).
@@ -184,7 +184,7 @@ void static_block_worker(int thread_id, int num_threads,
                          bool verbose = false) {
   // Iterate through each range provided in the input configuration.
   for (size_t range_idx = 0; range_idx < global_ranges.size(); ++range_idx) {
-    const auto ¤t_range = global_ranges[range_idx];
+    const auto current_range = global_ranges[range_idx];
 
     // Skip ranges where the start is greater than the end.
     if (current_range.start > current_range.end) {
@@ -291,7 +291,7 @@ void static_cyclic_worker(int thread_id, int num_threads,
                           bool verbose = false) {
   // Iterate through each range provided in the input configuration.
   for (size_t range_idx = 0; range_idx < global_ranges.size(); ++range_idx) {
-    const auto ¤t_range = global_ranges[range_idx];
+    const auto current_range = global_ranges[range_idx];
 
     // Skip ranges where the start is greater than the end.
     if (current_range.start > current_range.end) {

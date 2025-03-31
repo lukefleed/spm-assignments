@@ -456,7 +456,7 @@ bool run_dynamic_task_queue(const Config &config,
 
   // Launch worker threads.
   threads.reserve(config.num_threads);
-  for (int i = 0; i < config.num_threads; ++i) {
+  for (unsigned int i = 0; i < config.num_threads; ++i) {
     // Pass queue and results by reference using std::ref.
     threads.emplace_back(dynamic_worker, i, std::ref(task_queue),
                          std::ref(results_out));
@@ -553,7 +553,7 @@ bool run_dynamic_work_stealing(const Config &config,
 
   // Launch worker threads.
   threads.reserve(config.num_threads);
-  for (int i = 0; i < config.num_threads; ++i) {
+  for (unsigned int i = 0; i < config.num_threads; ++i) {
     // Pass the vector of queues and results by reference.
     threads.emplace_back(dynamic_work_stealing_worker, i, config.num_threads,
                          std::ref(queues), std::ref(results_out));

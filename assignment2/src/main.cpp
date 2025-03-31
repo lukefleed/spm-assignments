@@ -1,7 +1,9 @@
-#include "common_types.h" // Core data structures (Range, Config, etc.)
-#include "testing.h"      // Contains benchmark and correctness test suites
-#include "utils.h"        // Utilities like Timer and argument parsing
-
+#include "common_types.h"     // Core data types (Range, Config, etc.)
+#include "sequential.h"       // Declaration for run_sequential
+#include "static_scheduler.h" // Declaration for run_static_scheduling
+#include "dynamic_scheduler.h"// Declaration for run_dynamic_task_queue
+#include "testing.h"          // Benchmark and correctness test suites
+#include "utils.h"            // Utilities like Timer and argument parsing
 #include <chrono>      // For potential timing
 #include <cstdlib>     // For EXIT_SUCCESS, EXIT_FAILURE
 #include <iomanip>     // For formatted output (std::setprecision, std::fixed)
@@ -190,7 +192,7 @@ void print_results(const std::vector<RangeResult> &results,
  * hardcoded within this function but could be made configurable via additional
  * command-line args.
  */
-[[nodiscard]] bool handle_test_or_benchmark_mode(int argc, char *argv[]) {
+[[nodiscard]] bool handle_test_or_benchmark_mode([[maybe_unused]] int argc, char *argv[]) {
   // This function assumes argc >= 2 based on the caller
   // (is_test_or_benchmark_mode).
   const std::string_view first_arg(argv[1]);
@@ -253,11 +255,11 @@ void print_results(const std::vector<RangeResult> &results,
     // - Many small tasks vs. Few large tasks.
     // - Specific inputs known to stress the algorithm (e.g., high step counts).
     const std::vector<std::vector<Range>> workloads = {
-        {{1, 500000}},    // Medium-sized, reasonably balanced workload.
-        {{1, 100000000}}, // Large, balanced workload to test scalability.
+        {{1, 50000}},    // Medium-sized, reasonably balanced workload.
+        {{1, 500000}}, // Large, balanced workload to test scalability.
         {{1, 100},
-         {1000000, 10100000},
-         {50000, 55000}}, // Unbalanced: mix of tiny, large, medium ranges.
+         {10000, 101000},
+         {5000, 50000}}, // Unbalanced: mix of tiny, large, medium ranges.
                           // Tests load balancing effectiveness.
         []() { // Workload with many small, uniform ranges. Tests overhead of
                // task management.
@@ -265,7 +267,7 @@ void print_results(const std::vector<RangeResult> &results,
           const ull num_ranges = 500;
           const ull range_size = 1000;
           ull current_start = 1;
-          for (int i = 0; i < num_ranges; ++i) {
+          for (ull i = 0; i < num_ranges; ++i) {
             ranges.push_back({current_start, current_start + range_size - 1});
             current_start += range_size;
           }
@@ -281,7 +283,7 @@ void print_results(const std::vector<RangeResult> &results,
                // or algorithm behavior near powers of 2.
           std::vector<Range> ranges;
           const ull range_width = 1000; // Width around the center power-of-2.
-          for (int power = 10; power <= 24;
+          for (int power = 8; power <= 18;
                ++power) { // Test a wide range of magnitudes.
             ull center = 1ULL << power;
             // Ensure start is at least 1.
@@ -295,12 +297,12 @@ void print_results(const std::vector<RangeResult> &results,
     // Corresponding descriptions for each workload defined above. Used for CSV
     // output clarity.
     const std::vector<std::string> workload_descriptions = {
-        "Medium Balanced (1-500k)",
-        "Large Balanced (1-100M)",
+        "Medium Balanced (1-50k)",
+        "Large Balanced (1-500k)",
         "Unbalanced Mix (Small, Large, Medium)",
         "Many Small Uniform Ranges (500x1k)",
         "Known High-Step Points",
-        "Ranges Around Powers of 2 (2^10 to 2^24)"};
+        "Ranges Around Powers of 2 (2^8 to 2^18)"};
 
     // Parameters for the TimeMeasurer (used by ExperimentRunner).
     // Higher values yield more statistically robust results but increase
@@ -308,8 +310,8 @@ void print_results(const std::vector<RangeResult> &results,
     // - Samples: Independent repetitions of the measurement process.
     // - Iterations per sample: Runs within a sample to mitigate cold start
     // effects and variability.
-    const int samples = 5;                // Number of measurement samples.
-    const int iterations_per_sample = 10; // Runs per sample.
+    const int samples = 10;                // Number of measurement samples.
+    const int iterations_per_sample = 20; // Runs per sample.
 
     // Delegate execution to the benchmark suite function from testing.h.
     return run_benchmark_suite(threads_to_test, chunks_to_test, workloads,

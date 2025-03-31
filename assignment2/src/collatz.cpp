@@ -2,6 +2,7 @@
 #include <algorithm> // For std::max
 #include <limits>    // For std::numeric_limits
 #include <stdexcept> // For std::overflow_error
+#include <iostream>  // For std::cerr
 
 /**
  * @brief Calculates the number of steps required for a given positive integer
