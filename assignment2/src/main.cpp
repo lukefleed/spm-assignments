@@ -1,11 +1,13 @@
-#include "common_types.h"      // Core data types (Range, Config, etc.)
-#include "dynamic_scheduler.h" // Declaration for run_dynamic_task_queue
-#include "sequential.h"        // Declaration for run_sequential
-#include "static_scheduler.h"  // Declaration for run_static_scheduling
-#include "testing.h"           // Benchmark and correctness test suites
-#include "utils.h"             // Utilities like Timer and argument parsing
-#include <chrono>              // For potential timing
-#include <cstdlib>             // For EXIT_SUCCESS, EXIT_FAILURE
+#include "common_types.h"         // Core data types (Range, Config, etc.)
+#include "dynamic_scheduler.h"    // Declaration for run_dynamic_task_queue
+#include "sequential.h"           // Declaration for run_sequential
+#include "static_scheduler.h"     // Declaration for run_static_scheduling
+#include "testing.h"              // Benchmark and correctness test suites
+#include "theoretical_analysis.h" // Theoretical analysis functions
+#include "utils.h"                // Utilities like Timer and argument parsing
+#include <algorithm>              // For std::find
+#include <chrono>                 // For potential timing
+#include <cstdlib>                // For EXIT_SUCCESS, EXIT_FAILURE
 #include <iomanip>     // For formatted output (std::setprecision, std::fixed)
 #include <iostream>    // For console input/output (std::cout, std::cerr)
 #include <string>      // For std::string
@@ -161,6 +163,12 @@ void print_results(const std::vector<RangeResult> &results,
   }
 }
 
+// Forward declaration of the theoretical analysis function
+bool run_theoretical_analysis(
+    const std::vector<std::vector<Range>> &workloads,
+    const std::vector<std::string> &workload_descriptions,
+    const std::string &output_filename);
+
 /**
  * @brief Checks if the program was invoked with a flag indicating a special
  * mode (correctness testing or benchmarking).
@@ -178,12 +186,13 @@ void print_results(const std::vector<RangeResult> &results,
   // Efficiently compare the first argument without creating a std::string.
   const std::string_view first_arg(argv[1]);
   return first_arg == AppConstants::TEST_CORRECTNESS_FLAG ||
-         first_arg == AppConstants::BENCHMARK_FLAG;
+         first_arg == AppConstants::BENCHMARK_FLAG || first_arg == "--theory" ||
+         first_arg == "-t";
 }
 
 /**
  * @brief Handles the execution flow when a test or benchmark flag is detected.
- *        Parses the specific flag and runs the corresponding suite.
+ * Parses the specific flag and runs the corresponding suite.
  * @param argc Argument count from main.
  * @param argv Argument vector from main.
  * @return true if the specified suite ran successfully, false on failure or
@@ -198,6 +207,85 @@ void print_results(const std::vector<RangeResult> &results,
   // (is_test_or_benchmark_mode).
   const std::string_view first_arg(argv[1]);
 
+  // Define workload pairs (workload and its description)
+  // Define the struct first
+  struct WorkloadPair {
+    std::vector<Range> ranges;
+    std::string description;
+  };
+
+  // Helper functions to create more complex workloads
+  auto create_small_uniform_ranges = []() {
+    std::vector<Range> ranges;
+    const ull num_ranges = 500;
+    const ull range_size = 1000;
+
+    for (ull i = 0; i < num_ranges; ++i) {
+      ull start = 1 + (i * range_size);
+      ranges.push_back({start, start + range_size - 1});
+    }
+    return ranges;
+  };
+
+  // Helper function to create ranges around powers of 2
+  auto create_power_of_two_ranges = []() {
+    std::vector<Range> ranges;
+    const ull range_width = 1000;
+
+    for (int power = 8; power <= 20; ++power) {
+      ull center = 1ULL << power;
+      ull start = (center > range_width / 2) ? (center - range_width / 2) : 1;
+      ranges.push_back({start, center + range_width / 2});
+    }
+    return ranges;
+  };
+
+  // Helper function to create extreme imbalance with isolated expensive
+  // This should be where the dynamic scheduler shines
+  auto create_extreme_imbalance = []() {
+    std::vector<Range> ranges;
+
+    // Basic range mix
+    ranges.push_back({1, 10000});         // Mostly cheap calculations
+    ranges.push_back({2000000, 2001000}); // Medium cost
+
+    // Very expensive isolated calculations
+    for (ull i = 0; i < 100; i++) {
+      ull expensive_start = 100000000 + (i * 5000000);
+      ranges.push_back({expensive_start, expensive_start + 5});
+    }
+
+    // Known difficult numbers in isolated ranges
+    const std::vector<ull> difficult_numbers = {27,    73,     9663,
+                                                77671, 837799, 8400511};
+
+    for (ull num : difficult_numbers) {
+      ranges.push_back({num, num});
+    }
+
+    return ranges;
+  };
+
+  // Define the actual workload pairs using the helpers and struct
+  const std::vector<WorkloadPair> workload_pairs = {
+      {{{1, 100000}}, "Medium Balanced (1-100k)"},
+
+      {{{1, 1000000}}, "Large Balanced (1-1M)"},
+
+      {{{1, 100}, {10000, 501000}, {5000, 50000}},
+       "Unbalanced Mix (Small, Large, Medium)"},
+
+      {create_small_uniform_ranges(), "Many Small Uniform Ranges (500x1k)"},
+
+      // {{{9663, 9663}, {77671, 77671}, {626331, 626331}, {837799, 837799}},
+      //  "Known High-Step Points"},
+
+      {create_power_of_two_ranges(), "Ranges Around Powers of 2 (2^8 to 2^20)"},
+
+      {create_extreme_imbalance(),
+       "Extreme Imbalance with Isolated Expensive Calculations"}};
+  // --- End Moved Definitions ---
+
   if (first_arg == AppConstants::TEST_CORRECTNESS_FLAG) {
     std::cout << "Running Correctness Test Suite..." << std::endl;
     // Delegate execution to the correctness suite function from testing.h.
@@ -208,140 +296,39 @@ void print_results(const std::vector<RangeResult> &results,
     std::cout << "Running Performance Benchmark Suite..." << std::endl;
 
     // --- Benchmark Configuration ---
-    // These parameters define the scope of the performance benchmark.
-
     // Determine thread counts to test, scaling up to available hardware cores.
     const int max_threads = std::thread::hardware_concurrency();
     std::vector<int> threads_to_test;
-    // Start from 2 threads for parallel benchmarks; 1 thread is the sequential
-    // baseline handled automatically by the ExperimentRunner. A linear scaling
-    // strategy is used here for simplicity. Other strategies (e.g., powers of
-    // 2, specific core counts) could be employed depending on the machine
-    // architecture and testing goals.
     for (int i = 2; i <= max_threads; ++i) {
       threads_to_test.push_back(i);
     }
-    // Ensure the maximum hardware concurrency is always included if > 1.
     if (max_threads > 1 &&
         (threads_to_test.empty() || threads_to_test.back() != max_threads)) {
       threads_to_test.push_back(max_threads);
     }
     if (max_threads <= 1) {
-      // Inform the user if parallelism is limited by hardware.
       std::cout << "Warning: Only " << max_threads
                 << " hardware thread(s) detected. "
                 << "Parallel benchmarks might not show significant speedup."
                 << std::endl;
-      if (max_threads == 1 && threads_to_test.empty()) {
-        // Add 2 threads anyway to test overhead if user insists on parallel run
-        // threads_to_test.push_back(2); // Or just rely on sequential baseline.
-        // Let's stick to baseline.
-      }
     }
 
-    // Define chunk sizes to test for relevant schedulers (Static Block-Cyclic,
-    // Dynamic). This selection covers a range from small (potentially
-    // cache-friendly) to large. The optimal chunk size often depends on
-    // workload characteristics, cache sizes, and scheduling overhead. Testing a
-    // range helps identify this sensitivity.
     const std::vector<ull> chunks_to_test = {16, 32, 64, 128, 256, 512, 1024};
 
-    // --- Benchmark Workload Configuration ---
-
-    // Helper functions to create more complex workloads
-    auto create_small_uniform_ranges = []() {
-      std::vector<Range> ranges;
-      const ull num_ranges = 500;
-      const ull range_size = 1000;
-
-      for (ull i = 0; i < num_ranges; ++i) {
-        ull start = 1 + (i * range_size);
-        ranges.push_back({start, start + range_size - 1});
-      }
-      return ranges;
-    };
-
-    // Helper function to create ranges around powers of 2
-    auto create_power_of_two_ranges = []() {
-      std::vector<Range> ranges;
-      const ull range_width = 1000;
-
-      for (int power = 8; power <= 20; ++power) {
-        ull center = 1ULL << power;
-        ull start = (center > range_width / 2) ? (center - range_width / 2) : 1;
-        ranges.push_back({start, center + range_width / 2});
-      }
-      return ranges;
-    };
-
-    // Helper function to create extreme imbalance with isolated expensive
-    // This should be where the dynamic scheduler shines
-    auto create_extreme_imbalance = []() {
-      std::vector<Range> ranges;
-
-      // Basic range mix
-      ranges.push_back({1, 10000});         // Mostly cheap calculations
-      ranges.push_back({2000000, 2001000}); // Medium cost
-
-      // Very expensive isolated calculations
-      for (ull i = 0; i < 100; i++) {
-        ull expensive_start = 100000000 + (i * 5000000);
-        ranges.push_back({expensive_start, expensive_start + 5});
-      }
-
-      // Known difficult numbers in isolated ranges
-      const std::vector<ull> difficult_numbers = {27,    73,     9663,
-                                                  77671, 837799, 8400511};
-
-      for (ull num : difficult_numbers) {
-        ranges.push_back({num, num});
-      }
-
-      return ranges;
-    };
-
-    // Define workload pairs (workload and its description)
-    struct WorkloadPair {
-      std::vector<Range> ranges;
-      std::string description;
-    };
-
-    const std::vector<WorkloadPair> workload_pairs = {
-        {{{1, 100000}}, "Medium Balanced (1-100k)"},
-
-        {{{1, 1000000}}, "Large Balanced (1-1M)"},
-
-        {{{1, 100}, {10000, 501000}, {5000, 50000}},
-         "Unbalanced Mix (Small, Large, Medium)"},
-
-        {create_small_uniform_ranges(), "Many Small Uniform Ranges (500x1k)"},
-
-        // {{{9663, 9663}, {77671, 77671}, {626331, 626331}, {837799, 837799}},
-        //  "Known High-Step Points"},
-
-        {create_power_of_two_ranges(),
-         "Ranges Around Powers of 2 (2^8 to 2^20)"},
-
-        {create_extreme_imbalance(),
-         "Extreme Imbalance with Isolated Expensive Calculations"}};
-
-    // Extract workloads and descriptions for the benchmark suite
+    // Extract workloads and descriptions for the benchmark suite from the
+    // shared config
     std::vector<std::vector<Range>> workloads;
     std::vector<std::string> workload_descriptions;
+    workloads.reserve(workload_pairs.size()); // Optional: pre-allocate memory
+    workload_descriptions.reserve(workload_pairs.size());
 
     for (const auto &pair : workload_pairs) {
       workloads.push_back(pair.ranges);
       workload_descriptions.push_back(pair.description);
     }
 
-    // Parameters for the TimeMeasurer (used by ExperimentRunner).
-    // Higher values yield more statistically robust results but increase
-    // benchmark duration.
-    // - Samples: Independent repetitions of the measurement process.
-    // - Iterations per sample: Runs within a sample to mitigate cold start
-    // effects and variability.
-    const int samples = 10;               // Number of measurement samples.
-    const int iterations_per_sample = 20; // Runs per sample.
+    const int samples = 10;
+    const int iterations_per_sample = 20;
 
     // Delegate execution to the benchmark suite function from testing.h.
     return run_benchmark_suite(threads_to_test, chunks_to_test, workloads,
@@ -349,10 +336,55 @@ void print_results(const std::vector<RangeResult> &results,
                                iterations_per_sample);
   }
 
+  if (first_arg == "--theory" || first_arg == "-t") {
+    // Run theoretical analysis - Reuse the workload definitions from the shared
+    // config
+    std::vector<std::vector<Range>> workloads;
+    std::vector<std::string> workload_descriptions;
+    workloads.reserve(workload_pairs.size()); // Optional: pre-allocate memory
+    workload_descriptions.reserve(workload_pairs.size());
+
+    // Use the same workload pairs defined earlier
+    for (const auto &pair : workload_pairs) { // Now workload_pairs is in scope
+      workloads.push_back(pair.ranges);
+      workload_descriptions.push_back(pair.description);
+    }
+
+    std::string output_file = "results/theoretical_speedup.csv";
+    // Call the theoretical analysis function (assuming it's defined elsewhere
+    // or below)
+    if (run_theoretical_analysis(workloads, workload_descriptions,
+                                 output_file)) {
+      std::cout << "Theoretical analysis complete. Results saved to: "
+                << output_file << std::endl;
+    } else {
+      std::cerr << "Error running theoretical analysis." << std::endl;
+      return false;
+    }
+    return true;
+  }
+
   // If the flag is not recognized (should not happen if called after
   // is_test_or_benchmark_mode).
   std::cerr << "Error: Unrecognized flag '" << first_arg << "'." << std::endl;
   return false;
+}
+/**
+ * @brief Generates theoretical speedup data and writes it to a CSV file.
+ * @param workloads The workloads to analyze.
+ * @param workload_descriptions Descriptions of the workloads.
+ * @param output_filename The name of the output CSV file.
+ * @return true if the analysis completes successfully, false otherwise.
+ */
+bool run_theoretical_analysis(
+    const std::vector<std::vector<Range>> &workloads,
+    const std::vector<std::string> &workload_descriptions,
+    const std::string &output_filename) {
+
+  std::cout << "\n=== Running Theoretical Analysis ===" << std::endl;
+
+  return generate_theoretical_speedup_csv(workloads, workload_descriptions,
+                                          output_filename);
 }
 
 /**

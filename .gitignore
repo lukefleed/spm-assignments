@@ -18,7 +18,7 @@ assignment1/softmax_test
 assignment1/softmax_auto
 assignment1/softmax_avx
 assignment1/softmax_plain
-assignment2/build/
+assignment2/build
 
 # object files
 assignment1/softmax_test.o

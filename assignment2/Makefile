@@ -25,7 +25,8 @@ SRCS = src/main.cpp \
        src/dynamic_scheduler.cpp \
        src/collatz.cpp \
        src/testing.cpp \
-       src/utils.cpp
+       src/utils.cpp \
+	   src/theoretical_analysis.cpp
 
 # Object files: updated pattern to match src/ directory structure
 OBJS = $(patsubst src/%.cpp, $(BUILD_DIR)/obj/%.o, $(SRCS))
@@ -66,6 +67,12 @@ benchmark: all
 	@echo " Running Performance Benchmarks "
 	@echo "----------------------------------"
 	./$(EXECUTABLE) --benchmark
+
+theory:
+	@echo "----------------------------------"
+	@echo " Running Theoretical Analysis "
+	@echo "----------------------------------"
+	./$(EXECUTABLE) --theory
 
 # Convenience target 'test' runs correctness tests by default
 test: test_correctness

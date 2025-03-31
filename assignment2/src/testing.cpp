@@ -28,7 +28,8 @@ namespace BenchmarkConfig {
 const std::string RESULTS_DIR = "results/";
 /** @brief The single CSV file consolidating all performance benchmark results.
  */
-const std::string BENCHMARK_CSV_FILE = RESULTS_DIR + "performance_results.csv";
+const std::string BENCHMARK_CSV_FILE =
+    RESULTS_DIR + "performance_results_spmnuma.csv";
 // Note: Default parameters like thread counts or chunk sizes are now expected
 // to be passed via main() rather than being hardcoded here.
 } // namespace BenchmarkConfig
@@ -409,9 +410,8 @@ public:
    * @param workload_descriptions Descriptions corresponding to each workload.
    */
   ExperimentRunner(std::string filename, int samples, int iterations,
-                   const std::vector<std::string>& workload_descriptions)
-      : measurer(samples, iterations),
-        csv_filename(std::move(filename)),
+                   const std::vector<std::string> &workload_descriptions)
+      : measurer(samples, iterations), csv_filename(std::move(filename)),
         workload_descriptions(workload_descriptions) {
     // Open the CSV file and write the header.
     csv_file = TestUtils::open_csv_file(csv_filename, CSV_HEADER);
@@ -453,10 +453,10 @@ public:
     }
 
     // --- Workload Loop ---
-      for (size_t workload_idx = 0; workload_idx < workloads.size();
-            ++workload_idx) {
-        const auto current_workload = workloads[workload_idx];
-        const auto current_description = workload_descriptions[workload_idx];
+    for (size_t workload_idx = 0; workload_idx < workloads.size();
+         ++workload_idx) {
+      const auto current_workload = workloads[workload_idx];
+      const auto current_description = workload_descriptions[workload_idx];
       std::cout << "\n--- Testing Workload " << workload_idx << ": "
                 << current_description << " ---" << std::endl;
       // Display ranges for context
@@ -554,9 +554,9 @@ public:
               overall_success = false; // Mark the suite as having issues.
             }
           } // end chunk loop
-        } // end thread loop
-      } // end scheduler loop
-    } // end workload loop
+        }   // end thread loop
+      }     // end scheduler loop
+    }       // end workload loop
 
     finalize(); // Close the CSV file.
     return overall_success;
@@ -923,8 +923,8 @@ bool run_correctness_suite() {
                                          // if any config fails.
           }
         } // end chunk loop
-      } // end thread loop
-    } // end scheduler loop
+      }   // end thread loop
+    }     // end scheduler loop
 
     std::cout << "  Case Summary: " << sub_test_passed << "/" << sub_test_count
               << " parallel configurations passed." << std::endl;

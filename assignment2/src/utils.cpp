@@ -126,6 +126,12 @@ void print_usage(const char *prog_name) {
   std::cerr
       << "  -v            Enable verbose output (prints execution details)."
       << std::endl;
+  std::cerr << "  -t, --theory  Run theoretical analysis and generate speedup "
+               "predictions."
+            << std::endl;
+  std::cerr << "                Results are saved to "
+               "'results/theoretical_speedup.csv'."
+            << std::endl;
   std::cerr << "  -h, --help    Show this help message and exit." << std::endl
             << std::endl;
   std::cerr << "Examples:" << std::endl;
@@ -142,6 +148,9 @@ void print_usage(const char *prog_name) {
   std::cerr << "  " << prog_name
             << " -s block -n 4 1-1k 10k-20k # Static block, 4 threads, "
                "multiple ranges (use k for thousand)"
+            << std::endl;
+  std::cerr << "  " << prog_name
+            << " --theory               # Run theoretical analysis only"
             << std::endl;
 }
 
@@ -246,6 +255,8 @@ std::optional<Config> parse_arguments(int argc, char *argv[]) {
       }
     } else if (arg == "-v") {
       config.verbose = true;
+    } else if (arg == "-t" || arg == "--theory") {
+      // config.theoretical_analysis = true;
     } else if (arg == "-h" || arg == "--help") {
       print_usage(argv[0]);
       // Returning nullopt for help request signals the caller (main) not to
