@@ -29,7 +29,7 @@ const std::string RESULTS_DIR = "results/";
 /** @brief The single CSV file consolidating all performance benchmark results.
  */
 const std::string BENCHMARK_CSV_FILE =
-    RESULTS_DIR + "performance_results_spmnuma.csv";
+    RESULTS_DIR + "performance_results_sencha.csv";
 // Note: Default parameters like thread counts or chunk sizes are now expected
 // to be passed via main() rather than being hardcoded here.
 } // namespace BenchmarkConfig
