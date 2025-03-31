@@ -1,11 +1,11 @@
-#include "common_types.h"     // Core data types (Range, Config, etc.)
-#include "sequential.h"       // Declaration for run_sequential
-#include "static_scheduler.h" // Declaration for run_static_scheduling
-#include "dynamic_scheduler.h"// Declaration for run_dynamic_task_queue
-#include "testing.h"          // Benchmark and correctness test suites
-#include "utils.h"            // Utilities like Timer and argument parsing
-#include <chrono>      // For potential timing
-#include <cstdlib>     // For EXIT_SUCCESS, EXIT_FAILURE
+#include "common_types.h"      // Core data types (Range, Config, etc.)
+#include "dynamic_scheduler.h" // Declaration for run_dynamic_task_queue
+#include "sequential.h"        // Declaration for run_sequential
+#include "static_scheduler.h"  // Declaration for run_static_scheduling
+#include "testing.h"           // Benchmark and correctness test suites
+#include "utils.h"             // Utilities like Timer and argument parsing
+#include <chrono>              // For potential timing
+#include <cstdlib>             // For EXIT_SUCCESS, EXIT_FAILURE
 #include <iomanip>     // For formatted output (std::setprecision, std::fixed)
 #include <iostream>    // For console input/output (std::cout, std::cerr)
 #include <string>      // For std::string
@@ -192,7 +192,8 @@ void print_results(const std::vector<RangeResult> &results,
  * hardcoded within this function but could be made configurable via additional
  * command-line args.
  */
-[[nodiscard]] bool handle_test_or_benchmark_mode([[maybe_unused]] int argc, char *argv[]) {
+[[nodiscard]] bool handle_test_or_benchmark_mode([[maybe_unused]] int argc,
+                                                 char *argv[]) {
   // This function assumes argc >= 2 based on the caller
   // (is_test_or_benchmark_mode).
   const std::string_view first_arg(argv[1]);
@@ -243,66 +244,95 @@ void print_results(const std::vector<RangeResult> &results,
     // cache-friendly) to large. The optimal chunk size often depends on
     // workload characteristics, cache sizes, and scheduling overhead. Testing a
     // range helps identify this sensitivity.
-    const std::vector<ull> chunks_to_test = {16,  32,   64,   128,  256,
-                                             512, 1024, 4096, 8192, 65536};
+    const std::vector<ull> chunks_to_test = {16, 32, 64, 128, 256, 512, 1024};
 
-    // Define different workloads to test varying scenarios.
-    // Workload design is crucial for comprehensive benchmarking. It should
-    // include:
-    // - Balanced vs. Unbalanced tasks (uniform vs. varying computation per
-    // range/item).
-    // - Large vs. Small total problem size.
-    // - Many small tasks vs. Few large tasks.
-    // - Specific inputs known to stress the algorithm (e.g., high step counts).
-    const std::vector<std::vector<Range>> workloads = {
-        {{1, 50000}},    // Medium-sized, reasonably balanced workload.
-        {{1, 500000}}, // Large, balanced workload to test scalability.
-        {{1, 100},
-         {10000, 101000},
-         {5000, 50000}}, // Unbalanced: mix of tiny, large, medium ranges.
-                          // Tests load balancing effectiveness.
-        []() { // Workload with many small, uniform ranges. Tests overhead of
-               // task management.
-          std::vector<Range> ranges;
-          const ull num_ranges = 500;
-          const ull range_size = 1000;
-          ull current_start = 1;
-          for (ull i = 0; i < num_ranges; ++i) {
-            ranges.push_back({current_start, current_start + range_size - 1});
-            current_start += range_size;
-          }
-          return ranges;
-        }(),
-        {{9663, 9663},
-         {77671, 77671},
-         {626331, 626331},
-         {837799, 837799}}, // Specific points known for high Collatz step
-                            // counts. Can create computational hotspots.
-        []() { // Workload with ranges clustered around powers of two. May
-               // reveal performance artifacts related to number representation
-               // or algorithm behavior near powers of 2.
-          std::vector<Range> ranges;
-          const ull range_width = 1000; // Width around the center power-of-2.
-          for (int power = 8; power <= 18;
-               ++power) { // Test a wide range of magnitudes.
-            ull center = 1ULL << power;
-            // Ensure start is at least 1.
-            ull start =
-                (center > range_width / 2) ? (center - range_width / 2) : 1;
-            ranges.push_back({start, center + range_width / 2});
-          }
-          return ranges;
-        }()};
+    // --- Benchmark Workload Configuration ---
 
-    // Corresponding descriptions for each workload defined above. Used for CSV
-    // output clarity.
-    const std::vector<std::string> workload_descriptions = {
-        "Medium Balanced (1-50k)",
-        "Large Balanced (1-500k)",
-        "Unbalanced Mix (Small, Large, Medium)",
-        "Many Small Uniform Ranges (500x1k)",
-        "Known High-Step Points",
-        "Ranges Around Powers of 2 (2^8 to 2^18)"};
+    // Helper functions to create more complex workloads
+    auto create_small_uniform_ranges = []() {
+      std::vector<Range> ranges;
+      const ull num_ranges = 500;
+      const ull range_size = 1000;
+
+      for (ull i = 0; i < num_ranges; ++i) {
+        ull start = 1 + (i * range_size);
+        ranges.push_back({start, start + range_size - 1});
+      }
+      return ranges;
+    };
+
+    // Helper function to create ranges around powers of 2
+    auto create_power_of_two_ranges = []() {
+      std::vector<Range> ranges;
+      const ull range_width = 1000;
+
+      for (int power = 8; power <= 20; ++power) {
+        ull center = 1ULL << power;
+        ull start = (center > range_width / 2) ? (center - range_width / 2) : 1;
+        ranges.push_back({start, center + range_width / 2});
+      }
+      return ranges;
+    };
+
+    // Helper function to create extreme imbalance with isolated expensive
+    // This should be where the dynamic scheduler shines
+    auto create_extreme_imbalance = []() {
+      std::vector<Range> ranges;
+
+      // Basic range mix
+      ranges.push_back({1, 10000});         // Mostly cheap calculations
+      ranges.push_back({2000000, 2001000}); // Medium cost
+
+      // Very expensive isolated calculations
+      for (ull i = 0; i < 100; i++) {
+        ull expensive_start = 100000000 + (i * 5000000);
+        ranges.push_back({expensive_start, expensive_start + 5});
+      }
+
+      // Known difficult numbers in isolated ranges
+      const std::vector<ull> difficult_numbers = {27,    73,     9663,
+                                                  77671, 837799, 8400511};
+
+      for (ull num : difficult_numbers) {
+        ranges.push_back({num, num});
+      }
+
+      return ranges;
+    };
+
+    // Define workload pairs (workload and its description)
+    struct WorkloadPair {
+      std::vector<Range> ranges;
+      std::string description;
+    };
+
+    const std::vector<WorkloadPair> workload_pairs = {
+        {{{1, 100000}}, "Medium Balanced (1-100k)"},
+
+        {{{1, 1000000}}, "Large Balanced (1-1M)"},
+
+        {{{1, 100}, {10000, 501000}, {5000, 50000}},
+         "Unbalanced Mix (Small, Large, Medium)"},
+
+        {create_small_uniform_ranges(), "Many Small Uniform Ranges (500x1k)"},
+
+        // {{{9663, 9663}, {77671, 77671}, {626331, 626331}, {837799, 837799}},
+        //  "Known High-Step Points"},
+
+        {create_power_of_two_ranges(),
+         "Ranges Around Powers of 2 (2^8 to 2^20)"},
+
+        {create_extreme_imbalance(),
+         "Extreme Imbalance with Isolated Expensive Calculations"}};
+
+    // Extract workloads and descriptions for the benchmark suite
+    std::vector<std::vector<Range>> workloads;
+    std::vector<std::string> workload_descriptions;
+
+    for (const auto &pair : workload_pairs) {
+      workloads.push_back(pair.ranges);
+      workload_descriptions.push_back(pair.description);
+    }
 
     // Parameters for the TimeMeasurer (used by ExperimentRunner).
     // Higher values yield more statistically robust results but increase
@@ -310,7 +340,7 @@ void print_results(const std::vector<RangeResult> &results,
     // - Samples: Independent repetitions of the measurement process.
     // - Iterations per sample: Runs within a sample to mitigate cold start
     // effects and variability.
-    const int samples = 10;                // Number of measurement samples.
+    const int samples = 10;               // Number of measurement samples.
     const int iterations_per_sample = 20; // Runs per sample.
 
     // Delegate execution to the benchmark suite function from testing.h.
