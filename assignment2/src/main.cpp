@@ -315,8 +315,7 @@ bool run_theoretical_analysis(
         threads_to_test.push_back(2);
     }
 
-    // Refined chunk sizes, focusing on powers of 2 which are common.
-    const std::vector<ull> chunks_to_test = {32, 64, 128, 256, 512, 1024, 2048};
+    const std::vector<ull> chunks_to_test = {16, 32, 64, 128, 256, 512, 1024};
 
     std::vector<std::vector<Range>> workloads;
     std::vector<std::string> workload_descriptions;
