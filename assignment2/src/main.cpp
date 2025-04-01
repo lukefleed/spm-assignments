@@ -327,8 +327,8 @@ bool run_theoretical_analysis(
       workload_descriptions.push_back(pair.description);
     }
 
-    const int samples = 5;
-    const int iterations_per_sample = 10;
+    const int samples = 10;
+    const int iterations_per_sample = 50;
 
     return run_benchmark_suite(threads_to_test, chunks_to_test, workloads,
                                workload_descriptions, samples,

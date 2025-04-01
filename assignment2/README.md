@@ -1,10 +1,4 @@
-## Project Overview
-
-The project implements and benchmarks different scheduling algorithms for calculating the maximum number of steps in the Collatz sequence (also known as the 3n+1 problem) for ranges of numbers. It compares:
-
-- Sequential execution (baseline)
-- Static scheduling (Block, Cyclic, and Block-Cyclic variants)
-- Dynamic scheduling (task queue-based)
+This project implements and benchmarks various scheduling algorithms for calculating the maximum number of steps in the Collatz sequence (3n+1 problem) across ranges of numbers. It provides a comprehensive framework for comparing different parallel execution strategies and analyzing their performance.
 
 ## Building the Project
 
@@ -15,6 +9,12 @@ make
 ```
 
 This will compile all source files and create the `collatz_par` executable in the build directory.
+
+For a clean build:
+
+```bash
+make clean && make
+```
 
 ## Running Tests
 
@@ -45,7 +45,7 @@ This executes multiple configurations across:
 - Chunk sizes (16, 32, 64, 128, 256, 512, 1024)
 - All scheduler types
 
-Results are saved to `performance_results.csv`.
+Results are saved to `results/performance_results.csv`.
 
 ## Benchmark Design
 
@@ -73,17 +73,9 @@ Results are saved to `performance_results.csv`.
    - Thread counts from 2 to max hardware threads
    - Various chunk sizes to find optimal granularity
 
-### Why These Tests
-
-- **Different workloads**: To evaluate how each scheduler performs under various load distributions. For example, dynamic scheduling typically excels with imbalanced workloads.
-
-- **Various chunk sizes**: Chunk size impacts load balancing and overhead. Too small causes excessive scheduling overhead, too large results in poor load balancing.
-
-- **Thread scaling**: To measure performance scaling with increased thread count and identify potential bottlenecks.
-
 ### Measurement Methodology
 
-- Each configuration is measured with multiple samples (10) and iterations per sample (20)
+- Each configuration is measured with multiple samples (10) and iterations per sample (50)
 - Median execution time is used to reduce the impact of outliers
 - Speedup is calculated relative to sequential execution for each specific workload
 
@@ -98,7 +90,7 @@ cd scripts
 python3 plot_benchmarks.py --all
 ```
 
-or run for more info
+For more information and options:
 
 ```bash
 python3 plot_benchmarks.py --help
@@ -109,21 +101,6 @@ This script reads the CSV results and generates various plots:
 - Speedup vs. threads for each scheduler type
 - Execution time vs. chunk size for different thread counts
 - Comparative performance across different workloads
+- Heatmaps showing the relationship between chunk size, thread count, and speedup
 
-You will find the results in the `plots` directory.
-
-### Key Metrics
-
-The CSV file contains the following metrics:
-
-- `WorkloadID`: Numerical ID of the workload
-- `WorkloadDescription`: Description of the workload type
-- `SchedulerName`: Name of the scheduling algorithm
-- `SchedulerType`: General category (Sequential, Static, Dynamic)
-- `StaticVariant`: For static schedulers, the specific approach (Block, Cyclic, Block-Cyclic)
-- `DynamicVariant`: For dynamic schedulers, the specific approach (Task Queue, Work Stealing)
-- `NumThreads`: Number of threads used
-- `ChunkSize`: Size of work chunks (where applicable)
-- `ExecutionTimeMs`: Measured execution time in milliseconds
-- `BaselineTimeMs`: Sequential baseline time for the same workload
-- `Speedup`: Ratio of baseline to execution time (higher is better)
+Generated plots are saved in the `results/plots/` directory with subdirectories for each visualization type.

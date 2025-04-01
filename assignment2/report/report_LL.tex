@@ -131,14 +131,14 @@ The performance comparison between static and dynamic schedulers highlights the 
     \centering
     \begin{subfigure}[b]{0.49\textwidth}
         \centering
-        \includegraphics[width=\textwidth]{../results/plots_sencha/speedup_vs_threads/speedup_vs_threads_W1.pdf}
+        \includegraphics[width=\textwidth]{../results/plots/speedup_vs_threads/speedup_vs_threads_W1.pdf}
         \caption{Large Balanced (1-1M) - Optimal Chunk 1024}
         \label{fig:speedup_large_balanced}
     \end{subfigure}
     \hfill
     \begin{subfigure}[b]{0.49\textwidth}
         \centering
-        \includegraphics[width=\textwidth]{../results/plots_sencha/speedup_vs_threads/speedup_vs_threads_W5.pdf}
+        \includegraphics[width=\textwidth]{../results/plots/speedup_vs_threads/speedup_vs_threads_W5.pdf}
         \caption{Extreme Imbalance - Optimal Chunk 256}
         \label{fig:speedup_extreme_imbalance}
     \end{subfigure}
@@ -147,14 +147,14 @@ The performance comparison between static and dynamic schedulers highlights the 
 
     \begin{subfigure}[b]{0.49\textwidth}
         \centering
-        \includegraphics[width=\textwidth]{../results/plots_sencha/speedup_vs_threads/speedup_vs_threads_W2.pdf}
+        \includegraphics[width=\textwidth]{../results/plots/speedup_vs_threads/speedup_vs_threads_W2.pdf}
         \caption{Unbalanced Mix (Small, Large, Medium)}
         \label{fig:speedup_unbalanced_mix}
     \end{subfigure}
     \hfill
     \begin{subfigure}[b]{0.49\textwidth}
         \centering
-        \includegraphics[width=\textwidth]{../results/plots_sencha/speedup_vs_threads/speedup_vs_threads_W3.pdf}
+        \includegraphics[width=\textwidth]{../results/plots/speedup_vs_threads/speedup_vs_threads_W3.pdf}
         \caption{Many Small Uniform Ranges (500x1k)}
         \label{fig:speedup_many_small}
     \end{subfigure}
@@ -174,14 +174,14 @@ The chunk size parameter mediates the trade-off between scheduling overhead (fav
     \centering
     \begin{subfigure}[b]{0.49\textwidth}
         \centering
-        \includegraphics[width=\textwidth]{../results/plots_sencha/dynamic_taskqueue_chunk_comparison/dynamic_taskqueue_chunks_W1.pdf}
+        \includegraphics[width=\textwidth]{../results/plots/dynamic_taskqueue_chunk_comparison/dynamic_taskqueue_chunks_W1.pdf}
         \caption{Dynamic TaskQueue: Large Balanced}
         \label{fig:chunk_impact_dynamic_balanced_TQ}
     \end{subfigure}
     \hfill
     \begin{subfigure}[b]{0.49\textwidth}
         \centering
-        \includegraphics[width=\textwidth]{../results/plots_sencha/dynamic_taskqueue_chunk_comparison/dynamic_taskqueue_chunks_W5.pdf}
+        \includegraphics[width=\textwidth]{../results/plots/dynamic_taskqueue_chunk_comparison/dynamic_taskqueue_chunks_W5.pdf}
         \caption{Dynamic TaskQueue: Extreme Imbalance}
         \label{fig:chunk_impact_dynamic_imbalance_TQ}
     \end{subfigure}
@@ -190,14 +190,14 @@ The chunk size parameter mediates the trade-off between scheduling overhead (fav
 
     \begin{subfigure}[b]{0.49\textwidth}
         \centering
-        \includegraphics[width=\textwidth]{../results/plots_sencha/dynamic_workstealing_chunk_comparison/dynamic_workstealing_chunks_W1.pdf}
+        \includegraphics[width=\textwidth]{../results/plots/dynamic_workstealing_chunk_comparison/dynamic_workstealing_chunks_W1.pdf}
         \caption{Dynamic WorkStealing: Large Balanced}
         \label{fig:chunk_impact_dynamic_balanced_WS}
     \end{subfigure}
     \hfill
     \begin{subfigure}[b]{0.49\textwidth}
         \centering
-        \includegraphics[width=\textwidth]{../results/plots_sencha/dynamic_workstealing_chunk_comparison/dynamic_workstealing_chunks_W5.pdf}
+        \includegraphics[width=\textwidth]{../results/plots/dynamic_workstealing_chunk_comparison/dynamic_workstealing_chunks_W5.pdf}
         \caption{Dynamic WorkStealing: Extreme Imbalance}
         \label{fig:chunk_impact_dynamic_imbalance_WS}
     \end{subfigure}
@@ -206,14 +206,14 @@ The chunk size parameter mediates the trade-off between scheduling overhead (fav
 
     \begin{subfigure}[b]{0.49\textwidth}
         \centering
-        \includegraphics[width=\textwidth]{../results/plots_sencha/static_block_cyclic_chunk_comparison/static_block_cyclic_chunks_W1.pdf}
+        \includegraphics[width=\textwidth]{../results/plots/static_block_cyclic_chunk_comparison/static_block_cyclic_chunks_W1.pdf}
         \caption{Static Block-Cyclic: Large Balanced}
         \label{fig:chunk_impact_sbc_balanced}
     \end{subfigure}
     \hfill
     \begin{subfigure}[b]{0.49\textwidth}
         \centering
-        \includegraphics[width=\textwidth]{../results/plots_sencha/static_block_cyclic_chunk_comparison/static_block_cyclic_chunks_W5.pdf}
+        \includegraphics[width=\textwidth]{../results/plots/static_block_cyclic_chunk_comparison/static_block_cyclic_chunks_W5.pdf}
         \caption{Static Block-Cyclic: Extreme Imbalance}
         \label{fig:chunk_impact_sbc_imbalance}
     \end{subfigure}
@@ -231,21 +231,21 @@ Heatmaps provide a comprehensive visualization of performance across the entire 
     \centering
     \begin{subfigure}[b]{0.32\textwidth}
         \centering
-        \includegraphics[width=\textwidth]{../results/plots_sencha/speedup_heatmaps_chunk_vs_threads/heatmap_speedup_dynamic_taskqueue_W1.pdf}
+        \includegraphics[width=\textwidth]{../results/plots/speedup_heatmaps_chunk_vs_threads/heatmap_speedup_dynamic_taskqueue_W1.pdf}
         \caption{Dyn TQ: Large Balanced}
         \label{fig:heatmap_dynamic_TQ_balanced}
     \end{subfigure}
     \hfill
     \begin{subfigure}[b]{0.32\textwidth}
         \centering
-        \includegraphics[width=\textwidth]{../results/plots_sencha/speedup_heatmaps_chunk_vs_threads/heatmap_speedup_dynamic_workstealing_W1.pdf}
+        \includegraphics[width=\textwidth]{../results/plots/speedup_heatmaps_chunk_vs_threads/heatmap_speedup_dynamic_workstealing_W1.pdf}
         \caption{Dyn WS: Large Balanced}
         \label{fig:heatmap_dynamic_WS_balanced}
     \end{subfigure}
     \hfill
     \begin{subfigure}[b]{0.32\textwidth}
         \centering
-        \includegraphics[width=\textwidth]{../results/plots_sencha/speedup_heatmaps_chunk_vs_threads/heatmap_speedup_static_block_cyclic_W1.pdf}
+        \includegraphics[width=\textwidth]{../results/plots/speedup_heatmaps_chunk_vs_threads/heatmap_speedup_static_block_cyclic_W1.pdf}
         \caption{Static BC: Large Balanced}
         \label{fig:heatmap_sbc_balanced}
     \end{subfigure}
@@ -254,21 +254,21 @@ Heatmaps provide a comprehensive visualization of performance across the entire 
 
     \begin{subfigure}[b]{0.32\textwidth}
         \centering
-        \includegraphics[width=\textwidth]{../results/plots_sencha/speedup_heatmaps_chunk_vs_threads/heatmap_speedup_dynamic_taskqueue_W5.pdf}
+        \includegraphics[width=\textwidth]{../results/plots/speedup_heatmaps_chunk_vs_threads/heatmap_speedup_dynamic_taskqueue_W5.pdf}
         \caption{Dyn TQ: Extreme Imbalance}
         \label{fig:heatmap_dynamic_TQ_imbalance}
     \end{subfigure}
     \hfill
     \begin{subfigure}[b]{0.32\textwidth}
         \centering
-        \includegraphics[width=\textwidth]{../results/plots_sencha/speedup_heatmaps_chunk_vs_threads/heatmap_speedup_dynamic_workstealing_W5.pdf}
+        \includegraphics[width=\textwidth]{../results/plots/speedup_heatmaps_chunk_vs_threads/heatmap_speedup_dynamic_workstealing_W5.pdf}
         \caption{Dyn WS: Extreme Imbalance}
         \label{fig:heatmap_dynamic_WS_imbalance}
     \end{subfigure}
     \hfill
     \begin{subfigure}[b]{0.32\textwidth}
         \centering
-        \includegraphics[width=\textwidth]{../results/plots_sencha/speedup_heatmaps_chunk_vs_threads/heatmap_speedup_static_block_cyclic_W5.pdf}
+        \includegraphics[width=\textwidth]{../results/plots/speedup_heatmaps_chunk_vs_threads/heatmap_speedup_static_block_cyclic_W5.pdf}
         \caption{Static BC: Extreme Imbalance}
         \label{fig:heatmap_sbc_imbalance}
     \end{subfigure}

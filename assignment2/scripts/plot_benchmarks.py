@@ -20,9 +20,9 @@ if not hasattr(np, 'bool_'):
         print(f"WARNING: Could not map np.bool_ = bool. Error: {e}")
 
 # --- Constants & Configuration ---
-DEFAULT_CSV_PATH = "../results/performance_results_sencha.csv"
+DEFAULT_CSV_PATH = "../results/performance_results.csv"
 DEFAULT_THEORETICAL_CSV_PATH = "../results/theoretical_speedup.csv"
-DEFAULT_PLOT_DIR = "../results/plots_sencha"
+DEFAULT_PLOT_DIR = "../results/plots"
 DEFAULT_WIDTH = 1000
 DEFAULT_HEIGHT = 600
 HEATMAP_WIDTH = 800

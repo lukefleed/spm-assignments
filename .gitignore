@@ -27,6 +27,4 @@ assignment1/softmax_avx.o
 assignment1/softmax_plain.o
 
 # plots
-assignment2/results/plots_sencha/
-assignment2/results/plots_spmnuma/
-assignment2/results/plots_spmcluster/
+assignment2/results/plots/

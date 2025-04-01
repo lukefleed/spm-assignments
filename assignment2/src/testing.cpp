@@ -20,8 +20,7 @@
 // === Configuration and Constants ===
 namespace BenchmarkConfig {
 const std::string RESULTS_DIR = "results/";
-const std::string BENCHMARK_CSV_FILE =
-    RESULTS_DIR + "performance_results_sencha.csv";
+const std::string BENCHMARK_CSV_FILE = RESULTS_DIR + "performance_results.csv";
 } // namespace BenchmarkConfig
 
 // === Utility Functions (Internal Implementation Detail) ===
