@@ -15,7 +15,6 @@ if not hasattr(np, 'bool'):
     np.bool_ = bool # Use alias np.bool_ if needed, or just use bool directly
 
 # --- Constants & Configuration ---
-# UPDATED Default CSV path to match the new filename from testing.cpp
 DEFAULT_CSV_PATH = "../results/performance_results_with_taskqueue.csv"
 DEFAULT_THEORETICAL_CSV_PATH = "../results/theoretical_speedup.csv"
 DEFAULT_PLOT_DIR = "../results/plots_sencha"
@@ -25,7 +24,6 @@ HEATMAP_WIDTH = 800
 HEATMAP_HEIGHT = 800
 MAX_FILTER_CHUNK_SIZE = 1024 # Increased max chunk size based on benchmark args
 
-# --- UPDATED Scheduler Definitions ---
 SCHEDULER_COLOR_MAP = {
     "Sequential": "black",
     "Static Block": px.colors.qualitative.Plotly[0],
@@ -38,8 +36,8 @@ SCHEDULER_COLOR_MAP = {
 # Schedulers that use ChunkSize meaningfully
 SCHEDULERS_WITH_CHUNK = [
     "Static Block-Cyclic",
-    "Dynamic TaskQueue",      # Added
-    "Dynamic WorkStealing"    # Added (replaced "Dynamic")
+    "Dynamic TaskQueue",
+    "Dynamic WorkStealing"
 ]
 # Schedulers that DO NOT use ChunkSize (or where it's N/A)
 SCHEDULERS_NO_CHUNK = ["Sequential", "Static Cyclic", "Static Block"]
@@ -47,8 +45,8 @@ SCHEDULERS_NO_CHUNK = ["Sequential", "Static Cyclic", "Static Block"]
 # Schedulers specifically for the "Chunk Impact" plot (compares perf vs chunk size)
 CHUNK_IMPACT_SCHEDULER_COLOR_MAP = {
     "Static Block-Cyclic": px.colors.qualitative.Plotly[2],
-    "Dynamic TaskQueue": px.colors.qualitative.Plotly[4],   # Added
-    "Dynamic WorkStealing": px.colors.qualitative.Plotly[3] # Added
+    "Dynamic TaskQueue": px.colors.qualitative.Plotly[4],
+    "Dynamic WorkStealing": px.colors.qualitative.Plotly[3]
 }
 
 
@@ -122,7 +120,7 @@ def _configure_xaxis_ticks(fig: go.Figure, unique_values: List[Any], is_threads:
 def _add_amdahl_trace(fig: go.Figure, group_df: pd.DataFrame, threads_col='NumThreads', speedup_col='Speedup'):
     """Calculates and adds Amdahl's Law trace to a speedup plot."""
     if threads_col not in group_df.columns or speedup_col not in group_df.columns:
-        # print("  Warning: Cannot add Amdahl trace. Missing columns.")
+        print("  Warning: Cannot add Amdahl trace. Missing columns.")
         return
 
     df_amdahl = group_df[[threads_col, speedup_col]].copy()
@@ -132,7 +130,7 @@ def _add_amdahl_trace(fig: go.Figure, group_df: pd.DataFrame, threads_col='NumTh
     df_amdahl = df_amdahl[df_amdahl[threads_col] >= 1]
 
     if df_amdahl.empty:
-        # print("  Warning: Cannot add Amdahl trace. No valid data points.")
+        print("  Warning: Cannot add Amdahl trace. No valid data points.")
         return
 
     unique_threads = sorted(df_amdahl[threads_col].unique())
@@ -151,7 +149,7 @@ def _add_amdahl_trace(fig: go.Figure, group_df: pd.DataFrame, threads_col='NumTh
     effective_threads = max_threads
 
     if pd.isna(effective_speedup) or not np.isfinite(effective_speedup) or effective_speedup <= 1:
-        # print(f"  Note: Cannot add Amdahl trace. Best speedup ({effective_speedup:.2f}) is not > 1.")
+        print(f"  Note: Cannot add Amdahl trace. Best speedup ({effective_speedup:.2f}) is not > 1.")
         return
 
     s = (effective_threads / effective_speedup - 1) / (effective_threads - 1) if effective_threads > 1 else 0.5 # Avoid division by zero
@@ -202,7 +200,6 @@ def _filter_and_sort(df: pd.DataFrame, required_cols: List[str], sort_by: List[s
 
     if 'Speedup' in df_filtered.columns:
         df_filtered['Speedup'] = pd.to_numeric(df_filtered['Speedup'], errors='coerce')
-        # Allow NaN speedup for now
 
     if filters:
         for col, value in filters.items():
@@ -225,7 +222,6 @@ def _filter_and_sort(df: pd.DataFrame, required_cols: List[str], sort_by: List[s
     return df_filtered
 
 
-# --- Optimal Chunk Size Finding (No changes needed, uses updated SCHEDULERS_WITH_CHUNK) ---
 
 def find_optimal_chunk_sizes(df: pd.DataFrame, default_chunk: int = 64) -> Dict[int, int]:
     """Determines the most performant chunk size for each workload based on mean speedup."""
@@ -237,7 +233,6 @@ def find_optimal_chunk_sizes(df: pd.DataFrame, default_chunk: int = 64) -> Dict[
         print("  Warning: Missing required columns for optimal chunk calculation. Returning defaults.")
         return {wid: default_chunk for wid in df['WorkloadID'].unique()} if 'WorkloadID' in df.columns else {}
 
-    # Include data from *all* schedulers that use chunks
     df_chunk_opt = df[df['SchedulerName'].isin(SCHEDULERS_WITH_CHUNK)].copy()
 
     # Filter only parallel runs and valid numeric chunk/speedup values
@@ -266,7 +261,6 @@ def find_optimal_chunk_sizes(df: pd.DataFrame, default_chunk: int = 64) -> Dict[
         print("  Warning: No valid data found for chunk optimization after filtering. Returning defaults.")
         return {wid: default_chunk for wid in df['WorkloadID'].unique()}
 
-    # Find optimal chunk size per workload based on highest *mean* speedup across threads
     for workload_id, group in df_filtered.groupby('WorkloadID'):
         if group.empty:
             optimal_chunks[workload_id] = default_chunk
@@ -297,7 +291,6 @@ def find_optimal_chunk_sizes(df: pd.DataFrame, default_chunk: int = 64) -> Dict[
     return optimal_chunks
 
 
-# --- Plotting Functions (Minor updates for new names/colors, logic largely reused) ---
 
 def plot_speedup_vs_threads(df: pd.DataFrame, plot_dir: Path, optimal_chunks: Dict[int, int], file_suffix: str = ""):
     """Generates Speedup vs Number of Threads plots using workload-specific optimal chunk sizes."""
@@ -334,7 +327,6 @@ def plot_speedup_vs_threads(df: pd.DataFrame, plot_dir: Path, optimal_chunks: Di
         filename = f"speedup_vs_threads_W{workload_id}{file_suffix}.pdf"
         filepath = output_dir / filename
 
-        # Use updated SCHEDULER_COLOR_MAP and category_orders
         fig = px.line(df_plot, x='NumThreads', y='Speedup', color='SchedulerName', markers=True, title=title,
                      labels={'NumThreads': 'Number of Threads', 'Speedup': 'Speedup (relative to Sequential)'},
                      color_discrete_map=SCHEDULER_COLOR_MAP,
@@ -450,7 +442,6 @@ def plot_chunk_impact(df: pd.DataFrame, plot_dir: Path, metric: str, use_log_sca
         group['ChunkSize_cat'] = group['ChunkSize'].astype(str)
         sorted_chunks_str = sorted(group['ChunkSize'].unique()) # Sort numerically
 
-        # Use updated CHUNK_IMPACT_SCHEDULER_COLOR_MAP and category_orders
         fig = px.line(group, x='ChunkSize_cat', y=metric_col, color='SchedulerName', markers=True, title=title,
                       labels={'ChunkSize_cat': 'Chunk Size', metric_col: y_axis_label},
                       log_y=use_log_scale if metric_col == 'ExecutionTimeMs' else False,
@@ -663,9 +654,6 @@ def plot_theoretical_comparison(measured_df, theoretical_df, plot_dir, file_suff
 
     if all_plots_empty: print("  Warning: No theoretical comparison plots generated.")
 
-
-# --- Main Function ---
-
 def main():
     parser = argparse.ArgumentParser(description="Plot benchmark results from CSV data.")
     parser.add_argument('--csv-path', type=str, default=DEFAULT_CSV_PATH,
@@ -798,7 +786,6 @@ def main():
                 tasks_executed_count += 1
             except Exception as e:
                 print(f"\n!!! ERROR generating plots for '{task_name}': {e} !!!")
-                # import traceback; traceback.print_exc() # Uncomment for debugging
                 print("--- Attempting to continue ---")
 
     print("\n--- Plot Generation Summary ---")
