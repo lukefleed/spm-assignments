@@ -5,15 +5,11 @@
 #include <atomic>         // For std::atomic used in work-stealing termination
 #include <condition_variable> // For TaskQueue synchronization
 #include <deque> // Use std::deque for efficient push/pop at both ends (WorkStealingQueue)
-#include <iostream> // For potential debug/error output (used in .cpp)
 #include <mutex> // For thread synchronization (std::mutex, std::lock_guard, std::unique_lock)
 #include <optional> // For returning tasks that might not exist (std::optional<Task>)
 #include <queue>  // For std::queue (used in the simple TaskQueue)
 #include <thread> // For std::thread (used in .cpp)
 #include <vector> // For std::vector<RangeResult>, std::vector<WorkStealingQueue>
-
-// Forward declaration of Config if not fully defined in common_types.h
-// struct Config;
 
 /**
  * @brief A simple thread-safe queue for distributing tasks among worker
@@ -78,14 +74,12 @@ public:
 
   /**
    * @brief Pushes a task onto the back (LIFO end) of the queue.
-   *        Intended primarily for the owner thread. Thread-safe.
    * @param task The task to add.
    */
   void push(Task task);
 
   /**
    * @brief Pops a task from the back (LIFO end) of the queue.
-   *        Intended primarily for the owner thread. Thread-safe.
    * @return An optional containing the task if the queue is not empty,
    *         std::nullopt otherwise.
    */
@@ -93,8 +87,6 @@ public:
 
   /**
    * @brief Steals a task from the front (FIFO end) of the queue.
-   *        Intended for thief threads calling on another thread's queue.
-   * Thread-safe.
    * @return An optional containing the stolen task if the queue is not empty,
    *         std::nullopt otherwise.
    */

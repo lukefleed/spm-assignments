@@ -22,9 +22,9 @@ constexpr const char *TEST_CORRECTNESS_FLAG = "--test-correctness";
 /** @brief Command-line flag to trigger the performance benchmark suite. */
 constexpr const char *BENCHMARK_FLAG = "--benchmark";
 /** @brief Command-line flag to trigger the theoretical analysis. */
-constexpr const char *THEORY_FLAG = "--theory"; // Added constant for clarity
+constexpr const char *THEORY_FLAG = "--theory";
 /** @brief Short command-line flag for theoretical analysis. */
-constexpr const char *THEORY_FLAG_SHORT = "-t"; // Added constant for clarity
+constexpr const char *THEORY_FLAG_SHORT = "-t";
 } // namespace AppConstants
 
 /**
@@ -57,8 +57,6 @@ std::string get_scheduler_name(const Config &config) {
     }
     return "Static " + variant_name;
   } else if (config.scheduling == SchedulingType::DYNAMIC) {
-    // --- UPDATED NAME for Clarity ---
-    // The implementation pointed to by DYNAMIC is now the work-stealing one.
     return "Dynamic Work Stealing";
   } else {
     // Should not happen with proper validation, but handle defensively.
@@ -108,9 +106,6 @@ bool execute_collatz_calculation(const Config &config,
       // Delegate to the static scheduling function.
       success = run_static_scheduling(config, results);
     } else if (config.scheduling == SchedulingType::DYNAMIC) {
-      // --- CORRECT DISPATCH ---
-      // This already points to the function you want
-      // (run_dynamic_work_stealing) as per dynamic_scheduler.h/cpp.
       success = run_dynamic_work_stealing(config, results);
     } else {
       // This case should ideally be prevented by argument parsing validation.
@@ -171,11 +166,24 @@ void print_results(const std::vector<RangeResult> &results,
   }
 }
 
-// Forward declaration of the theoretical analysis function
+/**
+ * @brief Generates theoretical speedup data and writes it to a CSV file.
+ *        (This just calls the function from theoretical_analysis.h)
+ * @param workloads The workloads to analyze.
+ * @param workload_descriptions Descriptions of the workloads.
+ * @param output_filename The name of the output CSV file.
+ * @return true if the analysis completes successfully, false otherwise.
+ */
 bool run_theoretical_analysis(
     const std::vector<std::vector<Range>> &workloads,
     const std::vector<std::string> &workload_descriptions,
-    const std::string &output_filename);
+    const std::string &output_filename) {
+  std::cout << "\n=== Running Theoretical Analysis ===" << std::endl;
+  // Assumes generate_theoretical_speedup_csv is declared in
+  // theoretical_analysis.h
+  return generate_theoretical_speedup_csv(workloads, workload_descriptions,
+                                          output_filename);
+}
 
 /**
  * @brief Checks if the program was invoked with a flag indicating a special
@@ -208,7 +216,8 @@ bool run_theoretical_analysis(
  * unknown flag.
  * @note Benchmark parameters (threads, chunks, workloads) are defined here.
  */
-[[nodiscard]] bool handle_special_mode(int argc, char *argv[]) {
+[[nodiscard]] bool handle_special_mode([[maybe_unused]] int argc,
+                                       char *argv[]) {
   // This function assumes argc >= 2 based on the caller (is_special_mode).
   const std::string_view first_arg(argv[1]);
 
@@ -351,25 +360,6 @@ bool run_theoretical_analysis(
 
   std::cerr << "Error: Unrecognized flag '" << first_arg << "'." << std::endl;
   return false;
-}
-
-/**
- * @brief Generates theoretical speedup data and writes it to a CSV file.
- *        (This just calls the function from theoretical_analysis.h)
- * @param workloads The workloads to analyze.
- * @param workload_descriptions Descriptions of the workloads.
- * @param output_filename The name of the output CSV file.
- * @return true if the analysis completes successfully, false otherwise.
- */
-bool run_theoretical_analysis(
-    const std::vector<std::vector<Range>> &workloads,
-    const std::vector<std::string> &workload_descriptions,
-    const std::string &output_filename) {
-  std::cout << "\n=== Running Theoretical Analysis ===" << std::endl;
-  // Assumes generate_theoretical_speedup_csv is declared in
-  // theoretical_analysis.h
-  return generate_theoretical_speedup_csv(workloads, workload_descriptions,
-                                          output_filename);
 }
 
 /**

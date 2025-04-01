@@ -6,6 +6,14 @@
 #include <iomanip>
 #include <iostream>
 
+/**
+ * @brief Analyzes the theoretical metrics of a given workload.
+ *
+ * Calculates total work, critical path, and parallelism for a set of ranges.
+ *
+ * @param ranges A vector of Range objects representing the workload.
+ * @return TheoreticalMetrics struct containing the analysis results.
+ */
 TheoreticalMetrics analyze_workload_theory(const std::vector<Range> &ranges) {
   TheoreticalMetrics metrics;
   metrics.total_work = 0;
@@ -24,7 +32,7 @@ TheoreticalMetrics analyze_workload_theory(const std::vector<Range> &ranges) {
         metrics.total_work += steps;
         metrics.critical_path = std::max(metrics.critical_path, steps);
 
-        // Handle loop termination for max value
+        // Handle loop termination for max value to prevent infinite loop
         if (n == std::numeric_limits<ull>::max())
           break;
       } catch (const std::overflow_error &e) {
@@ -44,6 +52,20 @@ TheoreticalMetrics analyze_workload_theory(const std::vector<Range> &ranges) {
   return metrics;
 }
 
+/**
+ * @brief Generates a CSV file containing theoretical speedup data for different
+ * workloads.
+ *
+ * Analyzes each workload and writes the results (WorkloadID,
+ * WorkloadDescription, WorkTotal, CriticalPath, Parallelism) to a CSV file.
+ *
+ * @param workloads A vector of vectors of Range objects, representing multiple
+ * workloads.
+ * @param workload_descriptions A vector of strings, providing descriptions for
+ * each workload.
+ * @param output_filename The name of the CSV file to be generated.
+ * @return True if the CSV file was successfully generated, false otherwise.
+ */
 bool generate_theoretical_speedup_csv(
     const std::vector<std::vector<Range>> &workloads,
     const std::vector<std::string> &workload_descriptions,
@@ -57,7 +79,7 @@ bool generate_theoretical_speedup_csv(
     return false;
   }
 
-  // Write CSV header - modificato per rimuovere le colonne ridondanti
+  // Write CSV header
   csv_file
       << "WorkloadID,WorkloadDescription,WorkTotal,CriticalPath,Parallelism"
       << std::endl;
@@ -78,7 +100,7 @@ bool generate_theoretical_speedup_csv(
     std::cout << "  Span (S): " << metrics.critical_path << std::endl;
     std::cout << "  Parallelism (W/S): " << metrics.parallelism << std::endl;
 
-    // Scrivi una sola riga per workload - senza loop sui thread
+    // Write workload data to CSV file
     csv_file << workload_idx << ","
              << "\"" << description << "\"," << metrics.total_work << ","
              << metrics.critical_path << "," << std::fixed

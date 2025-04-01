@@ -36,17 +36,36 @@ bool parse_range_string(const std::string &s, Range &range) {
   std::string end_str = s.substr(dash_pos + 1);
 
   try {
-    // Convert substrings to unsigned long long (ull).
-    // std::stoull is chosen as the Collatz sequence can involve large numbers,
-    // and ranges might cover significant portions of the ull space.
-    range.start = std::stoull(start_str);
-    range.end = std::stoull(end_str);
+    // Helper function to parse numeric values with optional suffixes (k, M)
+    auto parse_with_suffix = [](const std::string &num_str) -> ull {
+      // Check if the string is empty
+      if (num_str.empty()) {
+        throw std::invalid_argument("Empty number string");
+      }
+
+      // Get the last character to check for suffix
+      char last_char = num_str.back();
+      std::string value_str = num_str;
+      ull multiplier = 1;
+
+      // Handle suffixes
+      if (last_char == 'k' || last_char == 'K') {
+        value_str = num_str.substr(0, num_str.length() - 1);
+        multiplier = 1000; // thousand
+      } else if (last_char == 'M') {
+        value_str = num_str.substr(0, num_str.length() - 1);
+        multiplier = 1000000; // million
+      }
+
+      // Convert to number and apply multiplier
+      return std::stoull(value_str) * multiplier;
+    };
+
+    // Convert substrings to unsigned long long with suffix support
+    range.start = parse_with_suffix(start_str);
+    range.end = parse_with_suffix(end_str);
 
     // Handle the specific case of start being 0.
-    // The Collatz conjecture is typically defined for positive integers.
-    // Here, we choose to adjust start=0 to start=1 and issue a warning,
-    // allowing the program to proceed with a corrected range.
-    // Alternatively, this could be treated as a hard error.
     if (range.start == 0) {
       std::cerr
           << "Warning: Range start is 0 in '" << s << "'. "
@@ -55,15 +74,12 @@ bool parse_range_string(const std::string &s, Range &range) {
       range.start = 1;
     }
 
-    // Validate the logical order of the range. start > end signifies an empty
-    // or invalid range. We treat this as a non-fatal issue for this specific
-    // range (return false), allowing parsing of other potentially valid ranges.
+    // Validate the logical order of the range.
     if (range.start > range.end) {
       std::cerr << "Warning: Range start (" << range.start
                 << ") is greater than end (" << range.end << ") in '" << s
                 << "'. Skipping this range." << std::endl;
-      return false; // Indicate this specific range is invalid, but parsing
-                    // didn't fail fundamentally.
+      return false;
     }
 
     // If all conversions and checks pass, the range is valid.
@@ -82,9 +98,6 @@ bool parse_range_string(const std::string &s, Range &range) {
         << s << "'. " << e.what() << std::endl;
     return false;
   }
-  // This line should technically be unreachable due to the logic above,
-  // but ensures all paths return a value.
-  // return false;
 }
 
 /**
@@ -110,7 +123,7 @@ void print_usage(const char *prog_name) {
   std::cerr
       << "                (Effective only when -n > 1 and -d is not specified)."
       << std::endl;
-  std::cerr << "  -d            Use dynamic task queue scheduling."
+  std::cerr << "  -d            Use dynamic work stealing scheduling."
             << std::endl;
   std::cerr << "                (Overrides static scheduling if both are "
                "specified implicitly or explicitly)."
@@ -330,9 +343,11 @@ std::optional<Config> parse_arguments(int argc, char *argv[]) {
     config.scheduling = SchedulingType::SEQUENTIAL;
     config.static_variant = StaticVariant::BLOCK; // Reset variant to default
     // Chunk size is ignored in sequential mode, no need to reset.
+  } else if (config.scheduling == SchedulingType::SEQUENTIAL) {
+    // If num_threads > 1 and no scheduling option was given, default to static
+    config.scheduling = SchedulingType::STATIC;
   }
 
   // If all parsing and validation steps passed, return the populated Config
-  // object.
   return config;
 }

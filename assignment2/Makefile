@@ -1,20 +1,8 @@
-# Makefile for Collatz Conjecture Parallel Implementation
-
-# Compiler and flags
 CXX = g++
-# C++ Standard: C++17 required for std::filesystem, std::string_view
-# Optimization: -O3 for performance benchmarks
-# Debugging: -g includes debug symbols
-# Warnings: -Wall -Wextra -pedantic enable most useful warnings
-# Threading: -pthread needed for std::thread
 CXXFLAGS = -std=c++17 -Wall -Wextra -pedantic -O3 -g -pthread
 LDFLAGS = -pthread
-# LIBS = -lstdc++fs # Usually not needed with modern g++/clang++ and -std=c++17, uncomment if linking filesystem fails
-
-# Build directory
 BUILD_DIR = build
 
-# Executable name
 EXE = collatz_par
 EXECUTABLE = $(BUILD_DIR)/$(EXE)
 
@@ -79,9 +67,3 @@ test: test_correctness
 
 # Declare targets that are not files
 .PHONY: all clean test_correctness benchmark test
-
-# Optional: Improve dependency tracking (recompile only if headers change)
-# Uncomment the following lines to enable automatic header dependency generation
-# DEPS = $(OBJS:.o=.d)
-# CXXFLAGS += -MMD -MP
-# -include $(DEPS)

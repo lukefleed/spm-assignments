@@ -34,8 +34,7 @@
  * goal is just to find the maximum value without enforcing strict ordering
  * relative to other memory operations, as the final result is only needed
  * after thread joins. `memory_order_release` on success in the CAS ensures
- * visibility to other threads if needed, while `memory_order_relaxed` on
- * failure is standard practice.
+ * visibility to other threads if needed.
  */
 void static_worker(int thread_id, int num_threads, ull block_size,
                    const std::vector<Range> &global_ranges,
@@ -60,7 +59,6 @@ void static_worker(int thread_id, int num_threads, ull block_size,
     // Skip ranges where the start is greater than the end (invalid or empty
     // range).
     if (current_range.start > current_range.end) {
-      // This check prevents processing ill-defined ranges.
       continue;
     }
 
@@ -320,13 +318,6 @@ void static_cyclic_worker(int thread_id, int num_threads,
     // Increment by `num_threads` to jump to the next number assigned to this
     // thread.
     for (ull num = first_num; num <= current_range.end; num += num_threads) {
-      // Optional verbose logging, potentially throttled to avoid excessive
-      // output. if (verbose && (num % 10000 == first_num % 10000)) { //
-      // Throttle verbose output
-      //   std::cout << "Thread " << thread_id << " processing number " << num
-      //             << " in range " << range_idx << std::endl;
-      // }
-
       // Perform the core Collatz computation for the single assigned number.
       ull steps = collatz_steps(num);
 
@@ -394,8 +385,6 @@ bool run_static_scheduling(const Config &config,
               << std::endl;
     return false;
   }
-  // Block and Cyclic variants do not use chunk_size, so no check needed for
-  // them.
 
   // --- Thread Pool Setup ---
   // Determine the actual number of threads to use. It's often beneficial

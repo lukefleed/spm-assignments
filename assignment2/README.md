@@ -67,6 +67,7 @@ Results are saved to `performance_results.csv`.
    - Static Cyclic
    - Static Block-Cyclic
    - Dynamic Task Queue
+   - Dynamic Work-Stealing
 
 3. **Parallelization Parameters**:
    - Thread counts from 2 to max hardware threads
@@ -120,6 +121,7 @@ The CSV file contains the following metrics:
 - `SchedulerName`: Name of the scheduling algorithm
 - `SchedulerType`: General category (Sequential, Static, Dynamic)
 - `StaticVariant`: For static schedulers, the specific approach (Block, Cyclic, Block-Cyclic)
+- `DynamicVariant`: For dynamic schedulers, the specific approach (Task Queue, Work Stealing)
 - `NumThreads`: Number of threads used
 - `ChunkSize`: Size of work chunks (where applicable)
 - `ExecutionTimeMs`: Measured execution time in milliseconds

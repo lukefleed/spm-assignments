@@ -1,7 +1,7 @@
 WorkloadID,WorkloadDescription,WorkTotal,CriticalPath,Parallelism
 0,"Medium Balanced (1-100k)",10753840,350,30725.2571
 1,"Large Balanced (1-1M)",131434424,524,250829.0534
-2,"Unbalanced Mix (Small, Large, Medium)",66057430,448,147449.6205
-3,"Many Small Uniform Ranges (500x1k)",62134795,448,138693.7388
-4,"Ranges Around Powers of 2 (2^8 to 2^20)",1271514,363,3502.7934
-5,"Extreme Imbalance with Isolated Expensive Calculations",1113876,685,1626.0964
+2,"Unbalanced Mix",66057430,448,147449.6205
+3,"Many Small Uniform (500x1k)",62134795,448,138693.7388
+4,"Ranges Around Powers of 2",1271514,363,3502.7934
+5,"Extreme Imbalance",1113876,685,1626.0964

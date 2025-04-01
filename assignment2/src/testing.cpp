@@ -1,9 +1,8 @@
 #include "testing.h"
-#include "dynamic_scheduler.h" // Now need both functions declared here
+#include "dynamic_scheduler.h"
 #include "sequential.h"
 #include "static_scheduler.h"
 #include "utils.h" // For Timer
-
 #include <algorithm>
 #include <cmath>
 #include <filesystem> // Requires C++17 for filesystem operations
@@ -21,15 +20,12 @@
 // === Configuration and Constants ===
 namespace BenchmarkConfig {
 const std::string RESULTS_DIR = "results/";
-// UPDATED FILENAME to reflect the inclusion of TaskQueue results
 const std::string BENCHMARK_CSV_FILE =
     RESULTS_DIR + "performance_results_sencha.csv";
 } // namespace BenchmarkConfig
 
 // === Utility Functions (Internal Implementation Detail) ===
 namespace TestUtils {
-// ... (ensure_directory_exists, open_csv_file, print_summary_line,
-// compare_results remain exactly the same) ...
 
 /**
  * @brief Creates a directory if it doesn't already exist.
@@ -132,7 +128,6 @@ bool compare_results(const std::vector<ull> &expected,
 // Forward declaration
 class ExperimentRunner;
 
-// Schedulable struct remains the same
 struct Schedulable {
   using ExecutionFunc =
       std::function<bool(const Config &, std::vector<RangeResult> &)>;
@@ -156,8 +151,7 @@ struct Schedulable {
       type_enum = SchedulingType::SEQUENTIAL;
     else if (type_str == "Static")
       type_enum = SchedulingType::STATIC;
-    else if (type_str == "Dynamic") // Both TaskQueue and WorkStealing are
-                                    // Dynamic type
+    else if (type_str == "Dynamic")
       type_enum = SchedulingType::DYNAMIC;
 
     if (type_enum == SchedulingType::STATIC) {
@@ -192,9 +186,7 @@ struct Schedulable {
   }
 };
 
-// TimeMeasurer class remains the same
 class TimeMeasurer {
-  // ... (implementation is identical) ...
 private:
   int samples;
   int iterations_per_sample;
@@ -275,17 +267,13 @@ public:
   }
 };
 
-// ExperimentRunner class remains mostly the same, just needs correct header
 class ExperimentRunner {
-  // ... (private members and constructor are identical) ...
 private:
   std::ofstream csv_file;
   TimeMeasurer measurer;
   std::string csv_filename;
   std::vector<std::string> workload_descriptions;
 
-  // --- USE CORRECT HEADER ---
-  // Use the same header as before, the columns accommodate both dynamic types
   const std::string CSV_HEADER =
       "WorkloadID,WorkloadDescription,SchedulerName,"
       "SchedulerType,StaticVariant,NumThreads,"
@@ -301,7 +289,6 @@ public:
     csv_file = TestUtils::open_csv_file(csv_filename, CSV_HEADER);
   }
 
-  // run_suite logic remains the same
   bool run_suite(const Schedulable &baseline_schedulable,
                  const std::vector<Schedulable> &schedulables_to_test,
                  const std::vector<std::vector<Range>> &workloads,
@@ -404,7 +391,6 @@ public:
     return overall_success;
   }
 
-  // write_result logic remains the same
   void write_result(size_t workload_idx, const std::string &description,
                     const Schedulable &sched, int threads, ull chunk_size,
                     double exec_time_ms, double baseline_time_ms) {
@@ -453,10 +439,8 @@ public:
   ~ExperimentRunner() { finalize(); }
 };
 
-// === Schedulable Definitions (Internal Implementation Detail) ===
 namespace Schedulers {
 
-// Wrapper for sequential (remains the same)
 bool run_sequential_wrapper(const Config &cfg, std::vector<RangeResult> &res) {
   try {
     std::vector<ull> seq_results = run_sequential(cfg.ranges);
@@ -476,12 +460,9 @@ bool run_sequential_wrapper(const Config &cfg, std::vector<RangeResult> &res) {
   }
 }
 
-// Wrapper for static (remains the same)
 bool run_static_wrapper(const Config &cfg, std::vector<RangeResult> &res) {
   return run_static_scheduling(cfg, res);
 }
-
-// --- MODIFY Dynamic Wrappers ---
 
 // Wrapper for the dynamic WORK STEALING implementation
 bool run_dynamic_work_stealing_wrapper(const Config &cfg,
@@ -490,7 +471,6 @@ bool run_dynamic_work_stealing_wrapper(const Config &cfg,
   return run_dynamic_work_stealing(cfg, res);
 }
 
-// --- ADD NEW WRAPPER for TaskQueue ---
 // Wrapper for the dynamic TASK QUEUE implementation
 bool run_dynamic_task_queue_wrapper(const Config &cfg,
                                     std::vector<RangeResult> &res) {
@@ -510,7 +490,6 @@ const Schedulable StaticBlockCyclic("Static Block-Cyclic", "Static",
                                     "BlockCyclic", run_static_wrapper, true,
                                     true);
 
-// RENAME the existing Dynamic to be more specific
 const Schedulable DynamicWorkStealing(
     "Dynamic WorkStealing",            // More descriptive name
     "Dynamic",                         // Type is still Dynamic
@@ -518,7 +497,6 @@ const Schedulable DynamicWorkStealing(
     run_dynamic_work_stealing_wrapper, // Points to the correct wrapper
     true, true);
 
-// ADD the new Schedulable for TaskQueue
 const Schedulable DynamicTaskQueue(
     "Dynamic TaskQueue",            // Descriptive name
     "Dynamic",                      // Type is also Dynamic
@@ -526,21 +504,14 @@ const Schedulable DynamicTaskQueue(
     run_dynamic_task_queue_wrapper, // Points to the TaskQueue wrapper
     true, true);
 
-// --- UPDATE Scheduler Lists ---
-
-// Include BOTH dynamic implementations in the list for comprehensive benchmarks
 const std::vector<Schedulable> AllSchedulers = {
-    Sequential,         StaticBlock,      StaticCyclic,
-    StaticBlockCyclic,  DynamicTaskQueue, // Added TaskQueue version
-    DynamicWorkStealing                   // Kept WorkStealing version
-};
+    Sequential,        StaticBlock,      StaticCyclic,
+    StaticBlockCyclic, DynamicTaskQueue, DynamicWorkStealing};
 
 // Also include both in the parallel list for correctness tests
 const std::vector<Schedulable> AllParallelSchedulers = {
-    StaticBlock, StaticCyclic, StaticBlockCyclic,
-    DynamicTaskQueue,   // Added TaskQueue version
-    DynamicWorkStealing // Kept WorkStealing version
-};
+    StaticBlock, StaticCyclic, StaticBlockCyclic, DynamicTaskQueue,
+    DynamicWorkStealing};
 
 } // namespace Schedulers
 
@@ -554,8 +525,6 @@ struct CorrectnessTestCase {
   std::vector<ull> chunk_sizes;
 };
 
-// run_correctness_suite logic remains the same, it will now iterate over the
-// updated AllParallelSchedulers list automatically.
 bool run_correctness_suite() {
   std::cout << "\n=== Running Correctness Suite ===" << std::endl;
   int total_cases = 0;
@@ -613,21 +582,17 @@ bool run_correctness_suite() {
     if (!seq_success)
       continue;
 
-    // 2. Test Parallel Schedulers (will now include both dynamic versions)
+    // 2. Test Parallel Schedulers
     int sub_test_count = 0;
     int sub_test_passed = 0;
 
-    for (const auto &sched :
-         Schedulers::AllParallelSchedulers) { // Uses updated list
-
+    for (const auto &sched : Schedulers::AllParallelSchedulers) {
       // Determine parameters based on test case and scheduler requirements
       const std::vector<int> &threads_to_use = tc.thread_counts;
 
       std::vector<ull> chunks_to_use;
       if (sched.requires_chunk_size) {
         chunks_to_use = tc.chunk_sizes;
-        // Ensure chunk size > 0 for schedulers that need it (both dynamic
-        // types)
         chunks_to_use.erase(std::remove_if(chunks_to_use.begin(),
                                            chunks_to_use.end(),
                                            [](ull c) { return c == 0; }),
@@ -710,8 +675,6 @@ bool run_correctness_suite() {
 
 // === Performance Benchmark Suite Implementation ===
 
-// run_benchmark_suite logic remains the same, it will use the updated
-// AllSchedulers list automatically.
 bool run_benchmark_suite(const std::vector<int> &thread_counts,
                          const std::vector<ull> &chunk_sizes,
                          const std::vector<std::vector<Range>> &workloads,
@@ -735,7 +698,6 @@ bool run_benchmark_suite(const std::vector<int> &thread_counts,
     ExperimentRunner runner(BenchmarkConfig::BENCHMARK_CSV_FILE, samples,
                             iterations_per_sample, workload_descriptions);
 
-    // Pass the updated list of all schedulers
     bool success =
         runner.run_suite(Schedulers::Sequential, Schedulers::AllSchedulers,
                          workloads, thread_counts, chunk_sizes);
