@@ -1,5 +1,5 @@
 #include "common_types.h"         // Core data types (Range, Config, etc.)
-#include "dynamic_scheduler.h"    // Declaration for run_dynamic_task_queue
+#include "dynamic_scheduler.h"    // Declaration for run_dynamic_work_stealing
 #include "sequential.h"           // Declaration for run_sequential
 #include "static_scheduler.h"     // Declaration for run_static_scheduling
 #include "testing.h"              // Benchmark and correctness test suites
@@ -103,7 +103,7 @@ bool execute_collatz_calculation(const Config &config,
       success = run_static_scheduling(config, results);
     } else if (config.scheduling == SchedulingType::DYNAMIC) {
       // Delegate to the dynamic scheduling function.
-      success = run_dynamic_task_queue(config, results);
+      success = run_dynamic_work_stealing(config, results);
     } else {
       // This case should ideally be prevented by argument parsing validation.
       std::cerr << "Error: Unknown scheduling type configured." << std::endl;

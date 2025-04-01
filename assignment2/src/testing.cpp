@@ -29,7 +29,7 @@ const std::string RESULTS_DIR = "results/";
 /** @brief The single CSV file consolidating all performance benchmark results.
  */
 const std::string BENCHMARK_CSV_FILE =
-    RESULTS_DIR + "performance_results_spmnuma.csv";
+    RESULTS_DIR + "performance_results_sencha_new_dynamic.csv";
 // Note: Default parameters like thread counts or chunk sizes are now expected
 // to be passed via main() rather than being hardcoded here.
 } // namespace BenchmarkConfig
@@ -694,12 +694,12 @@ bool run_static_wrapper(const Config &cfg, std::vector<RangeResult> &res) {
  * @brief Wrapper for the dynamic task queue scheduling implementation.
  * @param cfg Configuration containing ranges, thread count, and chunk size.
  * @param res Output vector for results.
- * @return Result of `run_dynamic_task_queue`.
+ * @return Result of `run_dynamic_work_stealing`.
  */
 bool run_dynamic_wrapper(const Config &cfg, std::vector<RangeResult> &res) {
-  // Directly forward the call; run_dynamic_task_queue matches the required
+  // Directly forward the call; run_dynamic_work_stealing matches the required
   // signature.
-  return run_dynamic_task_queue(cfg, res);
+  return run_dynamic_work_stealing(cfg, res);
 }
 
 // Define the standard set of Schedulable objects to be used in tests.

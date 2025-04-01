@@ -2,13 +2,18 @@
 #define DYNAMIC_SCHEDULER_H
 
 #include "common_types.h" // Includes Task, RangeResult, Config, ull
-#include <atomic> // Potentially used by implementation or for global state
+#include <atomic>         // For std::atomic used in work-stealing termination
 #include <condition_variable> // For TaskQueue synchronization
 #include <deque> // Use std::deque for efficient push/pop at both ends (WorkStealingQueue)
+#include <iostream> // For potential debug/error output (used in .cpp)
 #include <mutex> // For thread synchronization (std::mutex, std::lock_guard, std::unique_lock)
 #include <optional> // For returning tasks that might not exist (std::optional<Task>)
 #include <queue>  // For std::queue (used in the simple TaskQueue)
+#include <thread> // For std::thread (used in .cpp)
 #include <vector> // For std::vector<RangeResult>, std::vector<WorkStealingQueue>
+
+// Forward declaration of Config if not fully defined in common_types.h
+// struct Config;
 
 /**
  * @brief A simple thread-safe queue for distributing tasks among worker
@@ -21,6 +26,8 @@ public:
   /**
    * @brief Pushes a task onto the queue. Thread-safe.
    * @param task The task to add.
+   * @note If the queue is closed, the task is discarded. Notifies one waiting
+   *       thread upon successful push.
    */
   void push(Task task);
 
@@ -28,31 +35,32 @@ public:
    * @brief Pops a task from the queue. Blocks if the queue is empty until a
    * task is available or the queue is closed. Thread-safe.
    * @return An optional containing the task, or std::nullopt if the queue is
-   * closed and empty.
+   * closed and empty, signaling the worker to terminate.
    */
   std::optional<Task> pop();
 
   /**
-   * @brief Closes the queue, preventing further pushes and notifying waiting
-   * threads. Thread-safe.
+   * @brief Closes the queue, preventing further pushes and notifying all
+   * waiting threads to wake up and check the termination condition.
+   * Thread-safe.
    */
   void close();
 
 private:
   std::queue<Task> queue_; /**< Underlying standard queue to hold tasks. */
   std::mutex
-      mutex_; /**< Mutex to protect access to the queue and closed flag. */
-  std::condition_variable cond_var_; /**< Condition variable for threads to wait
-                                        for tasks or closure. */
+      mutex_; /**< Mutex to protect access to the queue and closed_ flag. */
+  std::condition_variable cond_var_; /**< Condition variable for threads waiting
+                                        for tasks or closure signal. */
   bool closed_ = false; /**< Flag indicating if the queue accepts new tasks. */
 };
 
 /**
  * @brief A thread-safe double-ended queue optimized for work-stealing
  * schedulers. Uses std::deque internally, allowing efficient push/pop from the
- * back (owner thread) and stealing from the front (thief threads). This
- * separation reduces contention compared to a single-ended queue under a
- * work-stealing pattern.
+ * back (owner thread, LIFO) and stealing from the front (thief threads, FIFO).
+ * This separation reduces contention compared to a single-ended queue under a
+ * work-stealing pattern. Protection is provided by a std::mutex.
  */
 class WorkStealingQueue {
 public:
@@ -69,37 +77,38 @@ public:
   WorkStealingQueue &operator=(WorkStealingQueue &&) = delete;
 
   /**
-   * @brief Pushes a task onto the back (LIFO end) of the queue. Intended for
-   * the owner thread. Thread-safe.
+   * @brief Pushes a task onto the back (LIFO end) of the queue.
+   *        Intended primarily for the owner thread. Thread-safe.
    * @param task The task to add.
    */
   void push(Task task);
 
   /**
-   * @brief Pops a task from the back (LIFO end) of the queue. Intended for the
-   * owner thread. Thread-safe.
-   * @return An optional containing the task, or std::nullopt if the queue is
-   * empty.
+   * @brief Pops a task from the back (LIFO end) of the queue.
+   *        Intended primarily for the owner thread. Thread-safe.
+   * @return An optional containing the task if the queue is not empty,
+   *         std::nullopt otherwise.
    */
   std::optional<Task> pop();
 
   /**
-   * @brief Steals a task from the front (FIFO end) of the queue. Intended for
-   * thief threads. Thread-safe.
-   * @return An optional containing the stolen task, or std::nullopt if the
-   * queue is empty.
+   * @brief Steals a task from the front (FIFO end) of the queue.
+   *        Intended for thief threads calling on another thread's queue.
+   * Thread-safe.
+   * @return An optional containing the stolen task if the queue is not empty,
+   *         std::nullopt otherwise.
    */
   std::optional<Task> steal();
 
   /**
    * @brief Checks if the queue is empty. Thread-safe.
-   * @return True if the queue is empty, false otherwise.
+   * @return True if the queue contains no tasks, false otherwise.
    */
   bool empty() const;
 
   /**
-   * @brief Returns the number of tasks currently in the queue. Thread-safe.
-   * @return The current size of the queue.
+   * @brief Returns the current number of tasks in the queue. Thread-safe.
+   * @return The number of tasks currently present.
    */
   size_t size() const;
 
@@ -120,7 +129,7 @@ private:
  * single, centralized task queue.
  * @param config Program configuration (thread count, chunk size, ranges).
  * @param[out] results_out Vector where the results for each original range will
- * be stored.
+ * be stored. The vector is cleared and resized internally.
  * @return True if execution completes successfully, false otherwise (e.g.,
  * invalid config).
  */
@@ -129,10 +138,11 @@ bool run_dynamic_task_queue(const Config &config,
 
 /**
  * @brief Executes the Collatz computation using dynamic scheduling with
- * per-thread queues and work-stealing.
+ * per-thread queues and a work-stealing strategy. This approach aims for
+ * better scalability than the centralized queue by reducing contention.
  * @param config Program configuration (thread count, chunk size, ranges).
  * @param[out] results_out Vector where the results for each original range will
- * be stored.
+ * be stored. The vector is cleared and resized internally.
  * @return True if execution completes successfully, false otherwise (e.g.,
  * invalid config).
  */
