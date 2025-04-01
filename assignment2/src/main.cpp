@@ -21,6 +21,10 @@ namespace AppConstants {
 constexpr const char *TEST_CORRECTNESS_FLAG = "--test-correctness";
 /** @brief Command-line flag to trigger the performance benchmark suite. */
 constexpr const char *BENCHMARK_FLAG = "--benchmark";
+/** @brief Command-line flag to trigger the theoretical analysis. */
+constexpr const char *THEORY_FLAG = "--theory"; // Added constant for clarity
+/** @brief Short command-line flag for theoretical analysis. */
+constexpr const char *THEORY_FLAG_SHORT = "-t"; // Added constant for clarity
 } // namespace AppConstants
 
 /**
@@ -53,7 +57,9 @@ std::string get_scheduler_name(const Config &config) {
     }
     return "Static " + variant_name;
   } else if (config.scheduling == SchedulingType::DYNAMIC) {
-    return "Dynamic Task Queue";
+    // --- UPDATED NAME for Clarity ---
+    // The implementation pointed to by DYNAMIC is now the work-stealing one.
+    return "Dynamic Work Stealing";
   } else {
     // Should not happen with proper validation, but handle defensively.
     return "Unknown Scheduler Type";
@@ -102,7 +108,9 @@ bool execute_collatz_calculation(const Config &config,
       // Delegate to the static scheduling function.
       success = run_static_scheduling(config, results);
     } else if (config.scheduling == SchedulingType::DYNAMIC) {
-      // Delegate to the dynamic scheduling function.
+      // --- CORRECT DISPATCH ---
+      // This already points to the function you want
+      // (run_dynamic_work_stealing) as per dynamic_scheduler.h/cpp.
       success = run_dynamic_work_stealing(config, results);
     } else {
       // This case should ideally be prevented by argument parsing validation.
@@ -171,55 +179,49 @@ bool run_theoretical_analysis(
 
 /**
  * @brief Checks if the program was invoked with a flag indicating a special
- * mode (correctness testing or benchmarking).
+ * mode (correctness testing, benchmarking, or theory).
  * @param argc Argument count from main.
  * @param argv Argument vector from main.
- * @return true if the first argument matches a known test/benchmark flag, false
+ * @return true if the first argument matches a known special mode flag, false
  * otherwise.
  * @note Using std::string_view avoids unnecessary string allocation for
  * comparison.
  */
-[[nodiscard]] bool is_test_or_benchmark_mode(int argc, char *argv[]) {
+[[nodiscard]] bool is_special_mode(int argc, char *argv[]) {
   if (argc < 2) {
     return false; // Not enough arguments for a flag.
   }
   // Efficiently compare the first argument without creating a std::string.
   const std::string_view first_arg(argv[1]);
   return first_arg == AppConstants::TEST_CORRECTNESS_FLAG ||
-         first_arg == AppConstants::BENCHMARK_FLAG || first_arg == "--theory" ||
-         first_arg == "-t";
+         first_arg == AppConstants::BENCHMARK_FLAG ||
+         first_arg == AppConstants::THEORY_FLAG ||
+         first_arg == AppConstants::THEORY_FLAG_SHORT;
 }
 
 /**
- * @brief Handles the execution flow when a test or benchmark flag is detected.
- * Parses the specific flag and runs the corresponding suite.
+ * @brief Handles the execution flow when a special mode flag is detected.
+ * Parses the specific flag and runs the corresponding suite or analysis.
  * @param argc Argument count from main.
  * @param argv Argument vector from main.
- * @return true if the specified suite ran successfully, false on failure or
+ * @return true if the specified operation ran successfully, false on failure or
  * unknown flag.
- * @note Benchmark parameters (threads, chunks, workloads) are currently
- * hardcoded within this function but could be made configurable via additional
- * command-line args.
+ * @note Benchmark parameters (threads, chunks, workloads) are defined here.
  */
-[[nodiscard]] bool handle_test_or_benchmark_mode([[maybe_unused]] int argc,
-                                                 char *argv[]) {
-  // This function assumes argc >= 2 based on the caller
-  // (is_test_or_benchmark_mode).
+[[nodiscard]] bool handle_special_mode(int argc, char *argv[]) {
+  // This function assumes argc >= 2 based on the caller (is_special_mode).
   const std::string_view first_arg(argv[1]);
 
-  // Define workload pairs (workload and its description)
-  // Define the struct first
+  // --- Define Workloads (Keep these definitions accessible) ---
   struct WorkloadPair {
     std::vector<Range> ranges;
     std::string description;
   };
 
-  // Helper functions to create more complex workloads
   auto create_small_uniform_ranges = []() {
     std::vector<Range> ranges;
     const ull num_ranges = 500;
     const ull range_size = 1000;
-
     for (ull i = 0; i < num_ranges; ++i) {
       ull start = 1 + (i * range_size);
       ranges.push_back({start, start + range_size - 1});
@@ -227,11 +229,9 @@ bool run_theoretical_analysis(
     return ranges;
   };
 
-  // Helper function to create ranges around powers of 2
   auto create_power_of_two_ranges = []() {
     std::vector<Range> ranges;
     const ull range_width = 1000;
-
     for (int power = 8; power <= 20; ++power) {
       ull center = 1ULL << power;
       ull start = (center > range_width / 2) ? (center - range_width / 2) : 1;
@@ -240,137 +240,122 @@ bool run_theoretical_analysis(
     return ranges;
   };
 
-  // Helper function to create extreme imbalance with isolated expensive
-  // This should be where the dynamic scheduler shines
   auto create_extreme_imbalance = []() {
     std::vector<Range> ranges;
-
-    // Basic range mix
-    ranges.push_back({1, 10000});         // Mostly cheap calculations
-    ranges.push_back({2000000, 2001000}); // Medium cost
-
-    // Very expensive isolated calculations
-    for (ull i = 0; i < 100; i++) {
+    ranges.push_back({1, 10000});         // Mostly cheap
+    ranges.push_back({2000000, 2001000}); // Medium
+    for (ull i = 0; i < 100; i++) {       // Many tiny expensive tasks
       ull expensive_start = 100000000 + (i * 5000000);
       ranges.push_back({expensive_start, expensive_start + 5});
     }
-
-    // Known difficult numbers in isolated ranges
     const std::vector<ull> difficult_numbers = {27,    73,     9663,
                                                 77671, 837799, 8400511};
-
     for (ull num : difficult_numbers) {
       ranges.push_back({num, num});
     }
-
     return ranges;
   };
 
-  // Define the actual workload pairs using the helpers and struct
   const std::vector<WorkloadPair> workload_pairs = {
       {{{1, 100000}}, "Medium Balanced (1-100k)"},
-
       {{{1, 1000000}}, "Large Balanced (1-1M)"},
-
-      {{{1, 100}, {10000, 501000}, {5000, 50000}},
-       "Unbalanced Mix (Small, Large, Medium)"},
-
-      {create_small_uniform_ranges(), "Many Small Uniform Ranges (500x1k)"},
-
-      // {{{9663, 9663}, {77671, 77671}, {626331, 626331}, {837799, 837799}},
-      //  "Known High-Step Points"},
-
-      {create_power_of_two_ranges(), "Ranges Around Powers of 2 (2^8 to 2^20)"},
-
-      {create_extreme_imbalance(),
-       "Extreme Imbalance with Isolated Expensive Calculations"}};
-  // --- End Moved Definitions ---
+      {{{1, 100}, {10000, 501000}, {5000, 50000}}, "Unbalanced Mix"},
+      {create_small_uniform_ranges(), "Many Small Uniform (500x1k)"},
+      {create_power_of_two_ranges(), "Ranges Around Powers of 2"},
+      {create_extreme_imbalance(), "Extreme Imbalance"}};
+  // --- End Workload Definitions ---
 
   if (first_arg == AppConstants::TEST_CORRECTNESS_FLAG) {
     std::cout << "Running Correctness Test Suite..." << std::endl;
-    // Delegate execution to the correctness suite function from testing.h.
     return run_correctness_suite();
   }
 
   if (first_arg == AppConstants::BENCHMARK_FLAG) {
     std::cout << "Running Performance Benchmark Suite..." << std::endl;
 
-    // --- Benchmark Configuration ---
-    // Determine thread counts to test, scaling up to available hardware cores.
-    const int max_threads = std::thread::hardware_concurrency();
+    const int max_threads_detected = std::thread::hardware_concurrency();
+    int max_threads_to_run =
+        std::max(2, max_threads_detected); // Ensure at least 2 threads are
+                                           // tested if possible
+
     std::vector<int> threads_to_test;
-    for (int i = 2; i <= max_threads; ++i) {
+    // Start from 2 threads for parallel benchmarks
+    for (int i = 2; i <= max_threads_to_run; i += 1) {
       threads_to_test.push_back(i);
     }
-    if (max_threads > 1 &&
-        (threads_to_test.empty() || threads_to_test.back() != max_threads)) {
-      threads_to_test.push_back(max_threads);
+    // Ensure the maximum detected hardware concurrency is included
+    if (threads_to_test.empty() ||
+        threads_to_test.back() < max_threads_to_run) {
+      threads_to_test.push_back(max_threads_to_run);
     }
-    if (max_threads <= 1) {
-      std::cout << "Warning: Only " << max_threads
+    // Remove duplicates just in case
+    std::sort(threads_to_test.begin(), threads_to_test.end());
+    threads_to_test.erase(
+        std::unique(threads_to_test.begin(), threads_to_test.end()),
+        threads_to_test.end());
+
+    if (max_threads_detected <= 1) {
+      std::cout << "Warning: Only " << max_threads_detected
                 << " hardware thread(s) detected. "
                 << "Parallel benchmarks might not show significant speedup."
                 << std::endl;
+      // If only 1 core, maybe just test with 1 or 2 threads?
+      // Let's stick to testing with 2 for consistency of parallel logic,
+      // but the warning is important.
+      if (threads_to_test.empty())
+        threads_to_test.push_back(2);
     }
 
-    const std::vector<ull> chunks_to_test = {16, 32, 64, 128, 256, 512, 1024};
+    // Refined chunk sizes, focusing on powers of 2 which are common.
+    const std::vector<ull> chunks_to_test = {32, 64, 128, 256, 512, 1024, 2048};
 
-    // Extract workloads and descriptions for the benchmark suite from the
-    // shared config
     std::vector<std::vector<Range>> workloads;
     std::vector<std::string> workload_descriptions;
-    workloads.reserve(workload_pairs.size()); // Optional: pre-allocate memory
+    workloads.reserve(workload_pairs.size());
     workload_descriptions.reserve(workload_pairs.size());
-
     for (const auto &pair : workload_pairs) {
       workloads.push_back(pair.ranges);
       workload_descriptions.push_back(pair.description);
     }
 
-    const int samples = 3;
-    const int iterations_per_sample = 3;
+    const int samples = 5;
+    const int iterations_per_sample = 10;
 
-    // Delegate execution to the benchmark suite function from testing.h.
     return run_benchmark_suite(threads_to_test, chunks_to_test, workloads,
                                workload_descriptions, samples,
                                iterations_per_sample);
   }
 
-  if (first_arg == "--theory" || first_arg == "-t") {
-    // Run theoretical analysis - Reuse the workload definitions from the shared
-    // config
+  if (first_arg == AppConstants::THEORY_FLAG ||
+      first_arg == AppConstants::THEORY_FLAG_SHORT) {
     std::vector<std::vector<Range>> workloads;
     std::vector<std::string> workload_descriptions;
-    workloads.reserve(workload_pairs.size()); // Optional: pre-allocate memory
+    workloads.reserve(workload_pairs.size());
     workload_descriptions.reserve(workload_pairs.size());
-
-    // Use the same workload pairs defined earlier
-    for (const auto &pair : workload_pairs) { // Now workload_pairs is in scope
+    for (const auto &pair : workload_pairs) {
       workloads.push_back(pair.ranges);
       workload_descriptions.push_back(pair.description);
     }
 
     std::string output_file = "results/theoretical_speedup.csv";
-    // Call the theoretical analysis function (assuming it's defined elsewhere
-    // or below)
     if (run_theoretical_analysis(workloads, workload_descriptions,
                                  output_file)) {
       std::cout << "Theoretical analysis complete. Results saved to: "
                 << output_file << std::endl;
+      return true;
     } else {
       std::cerr << "Error running theoretical analysis." << std::endl;
       return false;
     }
-    return true;
   }
 
-  // If the flag is not recognized (should not happen if called after
-  // is_test_or_benchmark_mode).
   std::cerr << "Error: Unrecognized flag '" << first_arg << "'." << std::endl;
   return false;
 }
+
 /**
  * @brief Generates theoretical speedup data and writes it to a CSV file.
+ *        (This just calls the function from theoretical_analysis.h)
  * @param workloads The workloads to analyze.
  * @param workload_descriptions Descriptions of the workloads.
  * @param output_filename The name of the output CSV file.
@@ -380,58 +365,48 @@ bool run_theoretical_analysis(
     const std::vector<std::vector<Range>> &workloads,
     const std::vector<std::string> &workload_descriptions,
     const std::string &output_filename) {
-
   std::cout << "\n=== Running Theoretical Analysis ===" << std::endl;
-
+  // Assumes generate_theoretical_speedup_csv is declared in
+  // theoretical_analysis.h
   return generate_theoretical_speedup_csv(workloads, workload_descriptions,
                                           output_filename);
 }
 
 /**
  * @brief Main application entry point.
- *        Determines the execution mode (normal, test, benchmark) based on
- * arguments, parses configuration, executes the appropriate logic, and reports
- * results.
+ *        Determines the execution mode (normal, test, benchmark, theory) based
+ * on arguments, parses configuration, executes the appropriate logic, and
+ * reports results.
  * @param argc Argument count.
  * @param argv Argument vector.
  * @return EXIT_SUCCESS on successful completion, EXIT_FAILURE otherwise.
  */
 int main(int argc, char *argv[]) {
-  // First, check if a special mode (test or benchmark) is requested.
-  if (is_test_or_benchmark_mode(argc, argv)) {
-    bool success = handle_test_or_benchmark_mode(argc, argv);
-    // Exit based on the success status of the test/benchmark suite.
+  // Check for special execution modes first.
+  if (is_special_mode(argc, argv)) {
+    bool success = handle_special_mode(argc, argv);
     return success ? EXIT_SUCCESS : EXIT_FAILURE;
   }
 
   // --- Normal Execution Mode ---
-  // If no special flag is given, proceed with standard calculation.
-
-  // Parse command-line arguments into a Config struct.
-  // parse_arguments handles usage instructions and error reporting.
   auto config_opt = parse_arguments(argc, argv);
   if (!config_opt) {
-    // Argument parsing failed, error message already printed by
-    // parse_arguments.
-    return EXIT_FAILURE;
+    // Argument parsing failed or help requested.
+    // parse_arguments handles printing usage/errors.
+    return EXIT_FAILURE; // Use failure code if config parsing fails.
   }
-  Config config =
-      *config_opt; // Dereference the optional to get the Config object.
+  Config config = *config_opt;
 
-  std::vector<RangeResult> results; // Vector to store calculation results.
-  Timer timer;                      // Timer to measure execution duration.
+  std::vector<RangeResult> results;
+  Timer timer;
 
-  // Execute the Collatz calculation based on the parsed configuration.
   bool success = execute_collatz_calculation(config, results);
-  double elapsed_time_s =
-      timer.elapsed_s(); // Get elapsed time after execution.
+  double elapsed_time_s = timer.elapsed_s();
 
   if (success) {
-    // Print results and statistics if calculation was successful.
     print_results(results, config, elapsed_time_s);
     return EXIT_SUCCESS;
   } else {
-    // Error message should have been printed by execute_collatz_calculation.
     std::cerr << "Computation failed. See previous errors for details."
               << std::endl;
     return EXIT_FAILURE;
