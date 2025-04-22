@@ -1,0 +1,43 @@
+#ifndef MINIZP_CONFIG_HPP
+#define MINIZP_CONFIG_HPP
+
+#include <cstddef>
+#include <cstdint>
+#include <omp.h> // For omp_get_max_threads
+#include <string>
+
+// --- Constants ---
+const std::string SUFFIX = ".zip";
+constexpr size_t LARGE_FILE_THRESHOLD_DEFAULT = 16 * 1024 * 1024; // 16 MiB
+constexpr size_t BLOCK_SIZE_DEFAULT = 4 * 1024 * 1024;            // 4 MiB
+constexpr uint32_t MAGIC_NUMBER_LARGE_FILE =
+    0x4D50424C; // ASCII for "MPBL" (Miniz Parallel Block)
+constexpr uint16_t FORMAT_VERSION = 1;
+
+// --- Configuration Structure ---
+struct ConfigData {
+  /** @brief Operation mode: true for compression, false for decompression. */
+  bool compress_mode = true;
+
+  /** @brief Whether to remove the original file after processing. */
+  bool remove_origin = false;
+
+  /** @brief Verbosity level: 0=silent, 1=errors only, 2=verbose info. */
+  int verbosity = 1;
+
+  /** @brief Whether to recurse into subdirectories. */
+  bool recurse = false;
+
+  /** @brief Number of OpenMP threads to use. Defaults to max available. */
+  int num_threads = omp_get_max_threads();
+
+  /** @brief File size threshold to trigger large file processing logic. */
+  size_t large_file_threshold = LARGE_FILE_THRESHOLD_DEFAULT;
+
+  /** @brief Size of blocks for large file processing. */
+  size_t block_size = BLOCK_SIZE_DEFAULT;
+
+  // Add other configuration options if needed
+};
+
+#endif // MINIZP_CONFIG_HPP
