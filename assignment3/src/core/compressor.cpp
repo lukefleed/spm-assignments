@@ -396,54 +396,63 @@ bool compress_large_file(const std::string &input_path, size_t input_size,
     num_blocks = 1; // Ensure at least one block if file not empty
 
   // --- Phase 1: Parallel Compression into Memory ---
+  // Pre-allocate per-thread temporary buffers to avoid repeated vector
+  // allocations
+  int thread_count = cfg.num_threads;
+  std::vector<std::vector<unsigned char>> thread_temp_buffers(thread_count);
+  for (int t = 0; t < thread_count; ++t) {
+    // reserve max possible compressed size once per thread
+    thread_temp_buffers[t].reserve(compressBound(cfg.block_size));
+  }
+  // Pre-allocate per-thread tdefl_compressor state for reuse and reduced init
+  // overhead
+  std::vector<tdefl_compressor *> thread_deflators(thread_count);
+  for (int t = 0; t < thread_count; ++t) {
+    thread_deflators[t] = tdefl_compressor_alloc();
+    // Initialize compressor state once per thread
+    tdefl_init(thread_deflators[t], nullptr,
+               nullptr, /* flags: default probes + zlib header */
+               TDEFL_WRITE_ZLIB_HEADER | TDEFL_DEFAULT_MAX_PROBES);
+  }
+
   std::vector<std::vector<unsigned char>> compressed_blocks_data(num_blocks);
   std::vector<uint64_t> compressed_block_sizes(num_blocks);
   std::vector<int> block_mz_results(num_blocks, Z_OK);
   std::atomic<bool> compression_error_occurred = false;
 
+// Phase 1: Parallel block read & compression using memory-mapped input
 #pragma omp parallel for num_threads(cfg.num_threads) schedule(dynamic)
   for (uint64_t i = 0; i < num_blocks; ++i) {
-    // Check if another thread already encountered an error
-    if (compression_error_occurred.load()) {
-      continue; // Skip processing if an error has occurred
-    }
+    if (compression_error_occurred.load())
+      continue;
+    // Determine block range
+    size_t offset = i * cfg.block_size;
+    size_t blk_size =
+        (i == num_blocks - 1) ? (input_size - offset) : cfg.block_size;
+    const unsigned char *block_ptr = in_ptr + offset;
 
-    size_t block_offset = i * cfg.block_size;
-    size_t block_size =
-        (i == num_blocks - 1) ? (input_size - block_offset) : cfg.block_size;
-    const unsigned char *block_start_ptr = in_ptr + block_offset;
-
-    // Per-thread temporary buffer for compressed data
-    std::vector<unsigned char> temp_compressed_block(
-        compressBound(cfg.block_size));
-    mz_ulong actual_comp_len = temp_compressed_block.size();
-    int mz_result = Z_OK;
-
-    if (block_size > 0) {
-      // Ensure buffer is large enough (defensive check)
-      if (compressBound(block_size) > temp_compressed_block.size()) {
-        temp_compressed_block.resize(compressBound(block_size));
-        actual_comp_len = temp_compressed_block.size();
-      }
-      mz_result = compress(temp_compressed_block.data(), &actual_comp_len,
-                           block_start_ptr, block_size);
+    int tid = omp_get_thread_num();
+    tdefl_compressor *def = thread_deflators[tid];
+    // Reset compressor state per block
+    tdefl_init(def, nullptr, nullptr,
+               TDEFL_WRITE_ZLIB_HEADER | TDEFL_DEFAULT_MAX_PROBES);
+    auto &temp_buf = thread_temp_buffers[tid];
+    size_t need = compressBound(blk_size);
+    temp_buf.reserve(need);
+    temp_buf.resize(need);
+    mz_ulong out_len = need;
+    int res = compress(temp_buf.data(), &out_len, block_ptr, blk_size);
+    block_mz_results[i] = res;
+    if (res == Z_OK) {
+      compressed_block_sizes[i] = out_len;
+      temp_buf.resize(out_len);
+      compressed_blocks_data[i] = temp_buf;
     } else {
-      actual_comp_len = 0; // Zero-byte block compresses to zero bytes
-    }
-
-    // Store results for this block
-    block_mz_results[i] = mz_result;
-    if (mz_result == Z_OK) {
-      compressed_block_sizes[i] = actual_comp_len;
-      temp_compressed_block.resize(actual_comp_len); // Shrink to actual size
-      compressed_blocks_data[i] = std::move(temp_compressed_block); // Move data
-    } else {
-      // Signal error to other threads
       compression_error_occurred = true;
     }
-  } // --- End of parallel for ---
+  }
 
-  // Input file can be unmapped now as all blocks are read (or attempted)
+  // Input file can be unmapped now as all data processed
   mapped_in.unmap();
 
   // --- Phase 2: Check for Errors and Write Output File Sequentially ---
@@ -475,54 +484,46 @@ bool compress_large_file(const std::string &input_path, size_t input_size,
 
   std::string output_path = input_path + SUFFIX;
   if (success) {
-    std::ofstream out_file(output_path, std::ios::binary | std::ios::trunc);
-    if (!out_file) {
-      if (cfg.verbosity >= 1)
-        std::cerr << "Error opening output file: " << output_path << " ("
-                  << strerror(errno) << ")" << std::endl;
-      success = false;
-    } else {
-      // Write Header
-      LargeFileHeader header;
-      header.original_size = input_size;
-      header.num_blocks = num_blocks;
-      if (!write_large_file_header(out_file, header)) {
+    // --- Phase 2: Memory-map output and memcpy blocks to reduce syscall
+    // overhead ---
+    {
+      LargeFileHeader header{static_cast<uint64_t>(input_size), num_blocks};
+      size_t header_size = sizeof(header);
+      size_t meta_size = num_blocks * sizeof(uint64_t);
+      // Calculate total file size
+      size_t total_size = header_size + meta_size;
+      for (auto s : compressed_block_sizes)
+        total_size += s;
+      // Memory-map output file
+      MappedFile mapped_out;
+      if (!mapped_out.allocate_and_map(output_path.c_str(), total_size)) {
         if (cfg.verbosity >= 1)
-          std::cerr << "Error writing header to: " << output_path << std::endl;
-        success = false;
-      }
-
-      // Write Metadata (compressed block sizes)
-      if (success && !write_block_metadata(out_file, compressed_block_sizes)) {
-        if (cfg.verbosity >= 1)
-          std::cerr << "Error writing block metadata to: " << output_path
+          std::cerr << "Error allocating output mmap: " << output_path
                     << std::endl;
         success = false;
-      }
-
-      // Write Compressed Block Data
-      if (success) {
-        for (uint64_t i = 0; i < num_blocks; ++i) {
-          if (compressed_block_sizes[i] > 0) {
-            out_file.write(reinterpret_cast<const char *>(
-                               compressed_blocks_data[i].data()),
-                           compressed_block_sizes[i]);
-            if (!out_file) {
-              if (cfg.verbosity >= 1)
-                std::cerr << "Error writing compressed block " << i << " to "
-                          << output_path << std::endl;
-              success = false;
-              break;
-            }
+      } else {
+        unsigned char *out_ptr = mapped_out.get();
+        // Copy header and metadata
+        memcpy(out_ptr, &header, header_size);
+        memcpy(out_ptr + header_size, compressed_block_sizes.data(), meta_size);
+        // Precompute output offsets for each block
+        std::vector<size_t> data_offsets(num_blocks);
+        size_t cur_offset = header_size + meta_size;
+        for (size_t i = 0; i < num_blocks; ++i) {
+          data_offsets[i] = cur_offset;
+          cur_offset += compressed_block_sizes[i];
+        }
+// Parallel copy compressed blocks into mapped region using precomputed offsets
+#pragma omp parallel for num_threads(cfg.num_threads) schedule(dynamic)
+        for (size_t i = 0; i < num_blocks; ++i) {
+          size_t sz = compressed_block_sizes[i];
+          if (sz > 0) {
+            memcpy(out_ptr + data_offsets[i], compressed_blocks_data[i].data(),
+                   sz);
           }
         }
-      }
-      out_file.close();
-      if (success && !out_file.good()) { // Check stream state after closing
-        if (cfg.verbosity >= 1)
-          std::cerr << "Error during final write/close for: " << output_path
-                    << std::endl;
-        success = false;
+        // Unmap to flush
+        mapped_out.unmap();
       }
     }
   }

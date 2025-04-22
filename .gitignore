@@ -28,3 +28,6 @@ assignment1/softmax_plain.o
 
 # plots
 assignment2/results/plots/
+
+assignment3/obj/
+assignment3/minizp_bench
