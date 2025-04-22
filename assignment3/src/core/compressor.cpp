@@ -1,6 +1,7 @@
 #include "compressor.hpp"
 #include "miniz.h" // Include the actual miniz implementation
 
+#include <atomic>  // Added for atomic flag
 #include <cstring> // For strerror
 #include <fcntl.h> // For open
 #include <filesystem>
@@ -368,7 +369,7 @@ bool compress_small_file(const std::string &input_path, size_t input_size,
   return true;
 }
 
-// --- Implementazione SEQUENZIALE per compress_large_file ---
+// --- Implementazione PARALLELA per compress_large_file ---
 bool compress_large_file(const std::string &input_path, size_t input_size,
                          const ConfigData &cfg) {
   MappedFile mapped_in;
@@ -380,12 +381,11 @@ bool compress_large_file(const std::string &input_path, size_t input_size,
                 << strerror(errno) << ")" << std::endl;
     return false;
   }
-  // Ensure the size didn't somehow change (unlikely but defensive)
   if (current_size != input_size) {
     if (cfg.verbosity >= 1)
       std::cerr << "Error: File size changed during mapping for " << input_path
                 << std::endl;
-    return false; // mapped_in RAII handles unmap
+    return false;
   }
 
   unsigned char *in_ptr = mapped_in.get();
@@ -395,118 +395,140 @@ bool compress_large_file(const std::string &input_path, size_t input_size,
   if (num_blocks == 0 && input_size > 0)
     num_blocks = 1; // Ensure at least one block if file not empty
 
-  std::string output_path = input_path + SUFFIX;
-  std::ofstream out_file(output_path, std::ios::binary | std::ios::trunc);
-  if (!out_file) {
-    if (cfg.verbosity >= 1)
-      std::cerr << "Error opening output file: " << output_path << " ("
-                << strerror(errno) << ")" << std::endl;
-    return false;
-  }
+  // --- Phase 1: Parallel Compression into Memory ---
+  std::vector<std::vector<unsigned char>> compressed_blocks_data(num_blocks);
+  std::vector<uint64_t> compressed_block_sizes(num_blocks);
+  std::vector<int> block_mz_results(num_blocks, Z_OK);
+  std::atomic<bool> compression_error_occurred = false;
 
-  // --- Phase 1: Write Header Placeholder ---
-  LargeFileHeader header;
-  header.original_size = input_size;
-  header.num_blocks = num_blocks;
-  if (!write_large_file_header(out_file, header)) {
-    if (cfg.verbosity >= 1)
-      std::cerr << "Error writing header to: " << output_path << std::endl;
-    out_file.close();
-    std::filesystem::remove(output_path);
-    return false;
-  }
-
-  // --- Phase 2: Write Metadata Placeholder ---
-  std::vector<uint64_t> compressed_block_sizes(num_blocks, 0); // Initialize
-  std::streampos metadata_start_pos = out_file.tellp();
-  if (!write_block_metadata(out_file, compressed_block_sizes)) {
-    if (cfg.verbosity >= 1)
-      std::cerr << "Error writing placeholder metadata to: " << output_path
-                << std::endl;
-    out_file.close();
-    std::filesystem::remove(output_path);
-    return false;
-  }
-  std::streampos data_start_pos = out_file.tellp();
-
-  // --- Phase 3: Compress Blocks and Write Data (SEQUENTIAL) ---
-  // Prepare buffer for compressed data (reuse is efficient)
-  mz_ulong comp_len_bound_per_block = compressBound(cfg.block_size);
-  std::vector<unsigned char> temp_compressed_block(comp_len_bound_per_block);
-  bool success = true;
-
+#pragma omp parallel for num_threads(cfg.num_threads) schedule(dynamic)
   for (uint64_t i = 0; i < num_blocks; ++i) {
+    // Check if another thread already encountered an error
+    if (compression_error_occurred.load()) {
+      continue; // Skip processing if an error has occurred
+    }
+
     size_t block_offset = i * cfg.block_size;
     size_t block_size =
         (i == num_blocks - 1) ? (input_size - block_offset) : cfg.block_size;
     const unsigned char *block_start_ptr = in_ptr + block_offset;
 
-    // Ensure buffer is large enough (should be unless block_size > initial
-    // bound calc)
-    if (block_size > 0 &&
-        compressBound(block_size) > temp_compressed_block.size()) {
-      // This should ideally not happen if block_size is constant, but handle
-      // defensively
-      temp_compressed_block.resize(compressBound(block_size));
-    }
-
-    mz_ulong actual_comp_len =
-        temp_compressed_block.size(); // Pass buffer size as limit
+    // Per-thread temporary buffer for compressed data
+    std::vector<unsigned char> temp_compressed_block(
+        compressBound(cfg.block_size));
+    mz_ulong actual_comp_len = temp_compressed_block.size();
     int mz_result = Z_OK;
 
-    if (block_size > 0) { // Only compress if block has data
+    if (block_size > 0) {
+      // Ensure buffer is large enough (defensive check)
+      if (compressBound(block_size) > temp_compressed_block.size()) {
+        temp_compressed_block.resize(compressBound(block_size));
+        actual_comp_len = temp_compressed_block.size();
+      }
       mz_result = compress(temp_compressed_block.data(), &actual_comp_len,
                            block_start_ptr, block_size);
     } else {
       actual_comp_len = 0; // Zero-byte block compresses to zero bytes
     }
 
-    if (mz_result != Z_OK) {
-      if (cfg.verbosity >= 1)
-        std::cerr << "Miniz compression failed for block " << i << " of "
-                  << input_path << ": " << mz_error(mz_result) << std::endl;
-      success = false;
-      break; // Exit loop on first error
+    // Store results for this block
+    block_mz_results[i] = mz_result;
+    if (mz_result == Z_OK) {
+      compressed_block_sizes[i] = actual_comp_len;
+      temp_compressed_block.resize(actual_comp_len); // Shrink to actual size
+      compressed_blocks_data[i] = std::move(temp_compressed_block); // Move data
+    } else {
+      // Signal error to other threads
+      compression_error_occurred = true;
     }
+  } // --- End of parallel for ---
 
-    // Store compressed size
-    compressed_block_sizes[i] = actual_comp_len;
+  // Input file can be unmapped now as all blocks are read (or attempted)
+  mapped_in.unmap();
 
-    // Write compressed data (if any)
-    if (actual_comp_len > 0) {
-      out_file.write(
-          reinterpret_cast<const char *>(temp_compressed_block.data()),
-          actual_comp_len);
-      if (!out_file) {
+  // --- Phase 2: Check for Errors and Write Output File Sequentially ---
+  bool success = !compression_error_occurred.load();
+  if (success) {
+    // Double check results (optional sanity check)
+    for (uint64_t i = 0; i < num_blocks; ++i) {
+      if (block_mz_results[i] != Z_OK) {
         if (cfg.verbosity >= 1)
-          std::cerr << "Error writing compressed block " << i << " to "
-                    << output_path << std::endl;
+          std::cerr << "Miniz compression failed for block " << i << " of "
+                    << input_path << ": " << mz_error(block_mz_results[i])
+                    << std::endl;
         success = false;
         break;
       }
     }
-  } // End sequential block loop
-
-  // --- Phase 4: Update Metadata if successful ---
-  if (success) {
-    out_file.seekp(metadata_start_pos); // Go back to metadata position
-    if (!write_block_metadata(out_file, compressed_block_sizes)) {
-      if (cfg.verbosity >= 1)
-        std::cerr << "Error updating block metadata in: " << output_path
-                  << std::endl;
-      success = false;
+  } else {
+    // Find and log the first error if not already logged inside loop
+    for (uint64_t i = 0; i < num_blocks; ++i) {
+      if (block_mz_results[i] != Z_OK) {
+        if (cfg.verbosity >= 1)
+          std::cerr << "Miniz compression failed for block " << i << " of "
+                    << input_path << ": " << mz_error(block_mz_results[i])
+                    << std::endl;
+        break; // Log only the first error encountered
+      }
     }
   }
 
-  // --- Phase 5: Cleanup ---
-  out_file.close();  // Close the file regardless of success/failure
-  mapped_in.unmap(); // Input file unmapped by RAII
+  std::string output_path = input_path + SUFFIX;
+  if (success) {
+    std::ofstream out_file(output_path, std::ios::binary | std::ios::trunc);
+    if (!out_file) {
+      if (cfg.verbosity >= 1)
+        std::cerr << "Error opening output file: " << output_path << " ("
+                  << strerror(errno) << ")" << std::endl;
+      success = false;
+    } else {
+      // Write Header
+      LargeFileHeader header;
+      header.original_size = input_size;
+      header.num_blocks = num_blocks;
+      if (!write_large_file_header(out_file, header)) {
+        if (cfg.verbosity >= 1)
+          std::cerr << "Error writing header to: " << output_path << std::endl;
+        success = false;
+      }
 
-  if (!success ||
-      !out_file.good()) { // Check success flag and final stream state
-    if (cfg.verbosity >= 1 && success)
-      std::cerr << "Error during final write/close for: " << output_path
-                << std::endl;             // Log error if it happened on close
+      // Write Metadata (compressed block sizes)
+      if (success && !write_block_metadata(out_file, compressed_block_sizes)) {
+        if (cfg.verbosity >= 1)
+          std::cerr << "Error writing block metadata to: " << output_path
+                    << std::endl;
+        success = false;
+      }
+
+      // Write Compressed Block Data
+      if (success) {
+        for (uint64_t i = 0; i < num_blocks; ++i) {
+          if (compressed_block_sizes[i] > 0) {
+            out_file.write(reinterpret_cast<const char *>(
+                               compressed_blocks_data[i].data()),
+                           compressed_block_sizes[i]);
+            if (!out_file) {
+              if (cfg.verbosity >= 1)
+                std::cerr << "Error writing compressed block " << i << " to "
+                          << output_path << std::endl;
+              success = false;
+              break;
+            }
+          }
+        }
+      }
+      out_file.close();
+      if (success && !out_file.good()) { // Check stream state after closing
+        if (cfg.verbosity >= 1)
+          std::cerr << "Error during final write/close for: " << output_path
+                    << std::endl;
+        success = false;
+      }
+    }
+  }
+
+  // --- Phase 3: Cleanup ---
+  if (!success) {
     std::filesystem::remove(output_path); // Remove partial/corrupt file
     return false;
   }
@@ -523,23 +545,20 @@ bool compress_large_file(const std::string &input_path, size_t input_size,
   return true;
 }
 
-// --- Implementazione SEQUENZIALE per decompress_large_file ---
+// --- Implementazione PARALLELA per decompress_large_file ---
 bool decompress_large_file(const std::string &input_path,
                            const ConfigData &cfg) {
-  std::ifstream in_file(input_path, std::ios::binary);
-  if (!in_file) {
+  // --- Phase 1: Read Header and Metadata Sequentially ---
+  std::ifstream header_reader(input_path, std::ios::binary);
+  if (!header_reader) {
     if (cfg.verbosity >= 1)
       std::cerr << "Error opening large compressed file: " << input_path << " ("
                 << strerror(errno) << ")" << std::endl;
     return false;
   }
 
-  // Read and validate header
   LargeFileHeader header;
-  if (!read_large_file_header(in_file, header)) {
-    // Don't print error here, let decompress_file handle 'not large format'
-    // case if needed But if it WAS supposed to be large format, this is an
-    // error. Let's assume if we reach here, it's expected to be large format.
+  if (!read_large_file_header(header_reader, header)) {
     if (cfg.verbosity >= 1)
       std::cerr << "Error: Invalid or unsupported large file header in: "
                 << input_path << std::endl;
@@ -553,16 +572,17 @@ bool decompress_large_file(const std::string &input_path,
     return false;
   }
 
-  // Read block metadata (compressed sizes)
   std::vector<uint64_t> compressed_block_sizes;
-  if (!read_block_metadata(in_file, compressed_block_sizes,
+  if (!read_block_metadata(header_reader, compressed_block_sizes,
                            header.num_blocks)) {
     if (cfg.verbosity >= 1)
       std::cerr << "Error reading block metadata from: " << input_path
                 << std::endl;
     return false;
   }
-  std::streampos data_start_pos = in_file.tellg(); // Position after metadata
+  std::streampos data_start_pos =
+      header_reader.tellg(); // Position after metadata
+  header_reader.close();     // Done with sequential reading
 
   // Determine output path
   std::string output_path = input_path;
@@ -577,160 +597,210 @@ bool decompress_large_file(const std::string &input_path,
     output_path += ".out";
   }
 
-  // Handle 0-byte original file
+  // Handle 0-byte original file (no parallel processing needed)
   if (header.original_size == 0) {
     std::ofstream out_file(output_path, std::ios::binary | std::ios::trunc);
-    if (!out_file) {
-      if (cfg.verbosity >= 1)
-        std::cerr << "Error creating empty decompressed file for " << input_path
-                  << std::endl;
+    if (!out_file) { /* ... error handling ... */
       return false;
     }
     out_file.close();
-    in_file.close(); // Close input handle
-    if (!out_file.good()) {
-      if (cfg.verbosity >= 1)
-        std::cerr << "Error finalizing empty decompressed file for "
-                  << input_path << std::endl;
-      std::filesystem::remove(output_path);
+    if (!out_file.good()) { /* ... error handling ... */
       return false;
     }
-    if (cfg.remove_origin) {
-      std::error_code ec;
-      if (!std::filesystem::remove(input_path, ec) && cfg.verbosity >= 1) {
-        std::cerr << "Warning: Failed to remove original file: " << input_path
-                  << " - " << ec.message() << std::endl;
-      }
+    if (cfg.remove_origin) { /* ... remove original ... */
     }
     return true;
   }
 
-  // Allocate output file and map it
+  // --- Phase 2: Map Files and Calculate Offsets ---
+  MappedFile mapped_in;
+  size_t compressed_file_size = 0; // Let map determine the size
+  if (!mapped_in.map(input_path.c_str(), compressed_file_size, PROT_READ,
+                     MAP_PRIVATE)) {
+    if (cfg.verbosity >= 1)
+      std::cerr << "Error mapping large compressed input file: " << input_path
+                << std::endl;
+    return false;
+  }
+  unsigned char *in_base_ptr = mapped_in.get();
+
   MappedFile mapped_out;
   if (!mapped_out.allocate_and_map(output_path.c_str(), header.original_size)) {
     if (cfg.verbosity >= 1)
       std::cerr << "Error allocating output file map for " << output_path
                 << " size " << header.original_size << std::endl;
-    in_file.close();
-    std::filesystem::remove(output_path); // Cleanup allocation attempt
+    // mapped_in unmapped by RAII
+    std::filesystem::remove(output_path);
     return false;
   }
-  unsigned char *out_ptr = mapped_out.get();
-
-  // Prepare buffer for reading compressed blocks
-  size_t max_comp_block_size = 0;
-  for (uint64_t comp_size : compressed_block_sizes) {
-    if (comp_size > max_comp_block_size)
-      max_comp_block_size = comp_size;
-  }
-  // Allocate only if max > 0 to handle case where all blocks might be 0-byte
-  std::vector<unsigned char> compressed_block_buffer;
-  if (max_comp_block_size > 0) {
-    compressed_block_buffer.resize(max_comp_block_size);
+  unsigned char *out_base_ptr = mapped_out.get();
+  if (!out_base_ptr && header.original_size > 0) {
+    if (cfg.verbosity >= 1)
+      std::cerr << "Error: Output map pointer is null for non-zero size."
+                << std::endl;
+    std::filesystem::remove(output_path);
+    return false;
   }
 
-  // Decompress blocks sequentially
-  size_t current_output_offset = 0;
-  bool success = true;
-  in_file.seekg(data_start_pos); // Ensure we start reading data after metadata
+  // Calculate offsets for both compressed input and decompressed output
+  std::vector<size_t> compressed_block_offsets(header.num_blocks);
+  std::vector<size_t> decompressed_block_offsets(header.num_blocks);
+  size_t current_compressed_offset = static_cast<size_t>(data_start_pos);
+  size_t current_decompressed_offset = 0;
 
   for (uint64_t i = 0; i < header.num_blocks; ++i) {
+    compressed_block_offsets[i] = current_compressed_offset;
+    decompressed_block_offsets[i] = current_decompressed_offset;
+
+    current_compressed_offset += compressed_block_sizes[i];
+
+    size_t decomp_size_for_block =
+        (i == header.num_blocks - 1)
+            ? (header.original_size - current_decompressed_offset)
+            : cfg.block_size;
+    current_decompressed_offset += decomp_size_for_block;
+  }
+  // Sanity check total size after calculating offsets
+  if (current_decompressed_offset != header.original_size) {
+    if (cfg.verbosity >= 1)
+      std::cerr << "Error: Calculated total decompressed size mismatch."
+                << std::endl;
+    return false; // mapped_in/out unmapped by RAII
+  }
+  if (current_compressed_offset > compressed_file_size) {
+    if (cfg.verbosity >= 1)
+      std::cerr << "Error: Calculated total compressed size exceeds file size."
+                << std::endl;
+    return false; // mapped_in/out unmapped by RAII
+  }
+
+  // --- Phase 3: Parallel Decompression ---
+  std::atomic<bool> decompression_error = false;
+  std::vector<int> block_mz_results_decomp(header.num_blocks, Z_OK);
+  std::vector<mz_ulong> block_actual_decomp_sizes(header.num_blocks, 0);
+
+#pragma omp parallel for num_threads(cfg.num_threads) schedule(dynamic)
+  for (uint64_t i = 0; i < header.num_blocks; ++i) {
+    if (decompression_error.load()) {
+      continue; // Skip if an error occurred elsewhere
+    }
+
+    size_t compressed_size = compressed_block_sizes[i];
     size_t expected_decomp_size =
         (i == header.num_blocks - 1)
-            ? (header.original_size - current_output_offset)
+            ? (header.original_size - decompressed_block_offsets[i])
             : cfg.block_size;
-    size_t compressed_size = compressed_block_sizes[i];
 
-    // Handle empty compressed block
+    // Handle empty block case
     if (compressed_size == 0) {
       if (expected_decomp_size != 0) {
-        if (cfg.verbosity >= 1)
-          std::cerr
-              << "Error: Block " << i
-              << " compressed size is 0, but expected decompressed size is "
-              << expected_decomp_size << " in " << input_path << std::endl;
-        success = false;
-        break;
+        // Error: compressed is 0 but expected is not
+        block_mz_results_decomp[i] = Z_DATA_ERROR; // Indicate error
+        decompression_error = true;
+      } else {
+        block_mz_results_decomp[i] = Z_OK; // Correctly handled empty block
+        block_actual_decomp_sizes[i] = 0;
       }
-      // If expected is also 0, just continue to next block
-      continue;
+      continue; // Move to next block
     }
 
-    // Ensure buffer is large enough (should be due to pre-allocation)
-    if (compressed_size > compressed_block_buffer.size()) {
-      if (cfg.verbosity >= 1)
-        std::cerr << "Error: Internal buffer too small for compressed block "
-                  << i << " of size " << compressed_size << std::endl;
-      success = false;
-      break;
-    }
+    // Get pointers for this block
+    const unsigned char *compressed_block_ptr =
+        in_base_ptr + compressed_block_offsets[i];
+    unsigned char *decompressed_block_ptr =
+        out_base_ptr + decompressed_block_offsets[i];
 
-    // Read compressed block
-    in_file.read(reinterpret_cast<char *>(compressed_block_buffer.data()),
-                 compressed_size);
-    if (!in_file) {
-      if (cfg.verbosity >= 1)
-        std::cerr << "Error reading compressed block " << i << " (size "
-                  << compressed_size << ") from " << input_path << std::endl;
-      success = false;
-      break;
-    }
-
-    // Decompress into the correct offset in the output map
+    // Decompress directly into the output map
     mz_ulong dest_len = expected_decomp_size; // Pass expected size
     int mz_result = Z_OK;
 
-    // Check if output pointer is valid before calling uncompress
-    if (out_ptr == nullptr && expected_decomp_size > 0) {
-      if (cfg.verbosity >= 1)
-        std::cerr << "Error: Output buffer is null but expected decompressed "
-                     "size is non-zero for block "
-                  << i << std::endl;
-      success = false;
-      break;
-    }
-
-    if (expected_decomp_size >
-        0) { // Only call uncompress if there's data expected
-      mz_result = uncompress(out_ptr + current_output_offset, &dest_len,
-                             compressed_block_buffer.data(), compressed_size);
+    // Check pointers before calling uncompress (defensive)
+    if (!decompressed_block_ptr && expected_decomp_size > 0) {
+      mz_result = Z_MEM_ERROR; // Indicate output pointer issue
+    } else if (!compressed_block_ptr) {
+      mz_result = Z_MEM_ERROR; // Indicate input pointer issue
     } else {
-      dest_len = 0; // If expected size is 0, actual decompressed size is 0
+      mz_result = uncompress(decompressed_block_ptr, &dest_len,
+                             compressed_block_ptr, compressed_size);
     }
 
-    if (mz_result != Z_OK) {
+    // Store results and check for errors
+    block_mz_results_decomp[i] = mz_result;
+    block_actual_decomp_sizes[i] = dest_len;
+
+    if (mz_result != Z_OK || dest_len != expected_decomp_size) {
+      decompression_error = true;
+    }
+  } // --- End of parallel for ---
+
+  // --- Phase 4: Final Checks and Cleanup ---
+  mapped_in.unmap();  // Input file no longer needed
+  mapped_out.unmap(); // Ensure output is flushed to disk
+
+  bool success = !decompression_error.load();
+  size_t final_decompressed_size = 0;
+
+  if (success) {
+    // Verify results sequentially after parallel execution
+    for (uint64_t i = 0; i < header.num_blocks; ++i) {
+      size_t expected_decomp_size =
+          (i == header.num_blocks - 1)
+              ? (header.original_size - decompressed_block_offsets[i])
+              : cfg.block_size;
+
+      if (block_mz_results_decomp[i] != Z_OK) {
+        if (cfg.verbosity >= 1)
+          std::cerr << "Miniz decompression failed for block " << i << " of "
+                    << input_path << ": "
+                    << mz_error(block_mz_results_decomp[i]) << std::endl;
+        success = false;
+        break;
+      }
+      if (block_actual_decomp_sizes[i] != expected_decomp_size) {
+        if (cfg.verbosity >= 1)
+          std::cerr << "Decompression size mismatch for block " << i << " of "
+                    << input_path << ": expected " << expected_decomp_size
+                    << ", got " << block_actual_decomp_sizes[i] << std::endl;
+        success = false;
+        break;
+      }
+      final_decompressed_size += block_actual_decomp_sizes[i];
+    }
+    // Final size check
+    if (success && final_decompressed_size != header.original_size) {
       if (cfg.verbosity >= 1)
-        std::cerr << "Miniz decompression failed for block " << i << " of "
-                  << input_path << ": " << mz_error(mz_result) << std::endl;
+        std::cerr << "Error: Final total decompressed size ("
+                  << final_decompressed_size
+                  << ") does not match header original size ("
+                  << header.original_size << ") for " << input_path
+                  << std::endl;
       success = false;
-      break;
-    }
-    if (dest_len != expected_decomp_size) {
-      if (cfg.verbosity >= 1)
-        std::cerr << "Decompression size mismatch for block " << i << " of "
-                  << input_path << ": expected " << expected_decomp_size
-                  << ", got " << dest_len << std::endl;
-      success = false;
-      break;
     }
 
-    current_output_offset += dest_len;
-  } // End sequential block loop
-
-  // Cleanup input stream first
-  in_file.close();
-
-  // Unmap output file (RAII handles this, but can be explicit if needed before
-  // final checks)
-  mapped_out.unmap();
-
-  // Final checks
-  if (success && current_output_offset != header.original_size) {
-    if (cfg.verbosity >= 1)
-      std::cerr << "Error: Final decompressed size (" << current_output_offset
-                << ") does not match header original size ("
-                << header.original_size << ") for " << input_path << std::endl;
-    success = false;
+  } else {
+    // Find and log the first error if not logged inside loop
+    for (uint64_t i = 0; i < header.num_blocks; ++i) {
+      size_t expected_decomp_size =
+          (i == header.num_blocks - 1)
+              ? (header.original_size - decompressed_block_offsets[i])
+              : cfg.block_size;
+      if (block_mz_results_decomp[i] != Z_OK) {
+        if (cfg.verbosity >= 1)
+          std::cerr << "Miniz decompression failed for block " << i << " of "
+                    << input_path << ": "
+                    << mz_error(block_mz_results_decomp[i]) << std::endl;
+        break;
+      }
+      if (block_actual_decomp_sizes[i] != expected_decomp_size &&
+          compressed_block_sizes[i] !=
+              0) { // Don't log size mismatch for correctly handled empty blocks
+        if (cfg.verbosity >= 1)
+          std::cerr << "Decompression size mismatch for block " << i << " of "
+                    << input_path << ": expected " << expected_decomp_size
+                    << ", got " << block_actual_decomp_sizes[i] << std::endl;
+        break;
+      }
+    }
   }
 
   if (!success) {

@@ -166,6 +166,7 @@ int main(int argc, char *argv[]) {
     ConfigData cfg_seq = params.config; // Copy config
     cfg_seq.num_threads = 1;
     omp_set_num_threads(1);
+    omp_set_nested(0); // Explicitly disable nested for sequential run
     auto seq_work = [&]() -> bool {
       TestUtils::clean_files_with_suffix(BENCH_DIR, SUFFIX, true, 0);
       return perform_compression_work(work_items, cfg_seq);
@@ -183,6 +184,7 @@ int main(int argc, char *argv[]) {
     ConfigData cfg_par = params.config; // Copy config
     cfg_par.num_threads = params.threads;
     omp_set_num_threads(params.threads);
+    omp_set_nested(1); // <--- ENABLE NESTED PARALLELISM HERE
     auto par_work = [&]() -> bool {
       TestUtils::clean_files_with_suffix(BENCH_DIR, SUFFIX, true, 0);
       return perform_compression_work(work_items, cfg_par);
