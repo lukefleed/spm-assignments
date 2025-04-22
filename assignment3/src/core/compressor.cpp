@@ -179,12 +179,6 @@ public:
 
 // --- Large File Header I/O ---
 
-bool write_large_file_header(std::ofstream &out_file,
-                             const LargeFileHeader &header) {
-  out_file.write(reinterpret_cast<const char *>(&header), sizeof(header));
-  return out_file.good();
-}
-
 bool read_large_file_header(std::ifstream &in_file, LargeFileHeader &header) {
   in_file.read(reinterpret_cast<char *>(&header), sizeof(header));
   // Check magic number and version after reading
@@ -194,13 +188,6 @@ bool read_large_file_header(std::ifstream &in_file, LargeFileHeader &header) {
     return false;
   }
   return true;
-}
-
-bool write_block_metadata(std::ofstream &out_file,
-                          const std::vector<uint64_t> &block_sizes) {
-  out_file.write(reinterpret_cast<const char *>(block_sizes.data()),
-                 block_sizes.size() * sizeof(uint64_t));
-  return out_file.good();
 }
 
 bool read_block_metadata(std::ifstream &in_file,
@@ -487,7 +474,11 @@ bool compress_large_file(const std::string &input_path, size_t input_size,
     // --- Phase 2: Memory-map output and memcpy blocks to reduce syscall
     // overhead ---
     {
-      LargeFileHeader header{static_cast<uint64_t>(input_size), num_blocks};
+      // Initialize header correctly
+      LargeFileHeader header; // Default initialize (magic, version)
+      header.original_size = static_cast<uint64_t>(input_size);
+      header.num_blocks = num_blocks;
+
       size_t header_size = sizeof(header);
       size_t meta_size = num_blocks * sizeof(uint64_t);
       // Calculate total file size

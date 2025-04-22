@@ -1,7 +1,7 @@
 #include "cmdline.hpp"
+#include "compressor.hpp"
 #include "config.hpp"
-#include "core/compressor.hpp"
-#include "core/file_handler.hpp"
+#include "file_handler.hpp"
 
 #include <atomic>
 #include <iostream>
@@ -58,7 +58,7 @@ int main(int argc, char *argv[]) {
 
 #pragma omp parallel for default(none)                                         \
     shared(work_items, config, processing_error, std::cerr, std::cout)         \
-        schedule(dynamic)
+    schedule(dynamic)
   for (size_t i = 0; i < work_items.size(); ++i) {
     // Check if an error occurred in another thread to potentially stop early
     // (optional)

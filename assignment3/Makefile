@@ -91,20 +91,19 @@ bench_exec: $(TARGET_BENCH) # Target to only build the benchmark executable
 # --- Execution Targets ---
 test: test_exec
 	@echo "Running Correctness Tests (Sequential Mode)..."
-	./$(TARGET_TEST) --mode=seq
+	@./$(TARGET_TEST) --mode=seq
+	@echo ""
 	@echo "Running Correctness Tests (Parallel Mode)..."
-	./$(TARGET_TEST) --mode=par
+	@./$(TARGET_TEST) --mode=par
+	@echo ""
 	@echo "Correctness Tests Finished."
 
 bench: bench_exec
 	@echo "Running Benchmarks..."
-	# Example: make bench TYPE=one_large THREADS=8 ITERS=5 WARMUP=1
-	# Pass arguments via environment variables or handle defaults in C++
 	./$(TARGET_BENCH) --type=$(or $(TYPE),one_large) \
 	                  --threads=$(or $(THREADS),$(shell nproc)) \
-	                  --iterations=$(or $(ITERS),5) \
+	                  --iterations=$(or $(ITERS),2) \
 	                  --warmup=$(or $(WARMUP),1) \
-	                  # Add other args like --large_size etc. if needed
 
 # --- Clean Targets ---
 clean:
