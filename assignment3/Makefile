@@ -78,18 +78,15 @@ $(TARGET_BENCH): $(BENCH_MAIN_OBJ_PAR_RELEASE) $(CORE_OBJS_PAR_RELEASE)
 # Add similar linking rules for Sequential and Debug targets...
 
 # --- Build Targets ---
-.PHONY: all app test_exec bench_exec test bench clean cleanall
+.PHONY: all app test bench clean cleanall
 
-all: app # Default target builds the main app
+all: $(TARGET_APP_PAR) $(TARGET_TEST) $(TARGET_BENCH) # Build app, test, and bench executables
 
 app: $(TARGET_APP_PAR) # Build parallel release by default
 app_seq: $(TARGET_APP_SEQ) # Specific target for sequential app
 
-test_exec: $(TARGET_TEST) # Target to only build the test executable
-bench_exec: $(TARGET_BENCH) # Target to only build the benchmark executable
-
 # --- Execution Targets ---
-test: test_exec
+test: $(TARGET_TEST) # Depends directly on the test executable
 	@echo "Running Correctness Tests (Sequential Mode)..."
 	@./$(TARGET_TEST) --mode=seq
 	@echo ""
@@ -98,12 +95,20 @@ test: test_exec
 	@echo ""
 	@echo "Correctness Tests Finished."
 
-bench: bench_exec
-	@echo "Running Benchmarks..."
-	./$(TARGET_BENCH) --type=$(or $(TYPE),one_large) \
+bench: $(TARGET_BENCH) # Depends directly on the bench executable
+	@echo "Running Benchmarks (Many Small Files)..."
+	./$(TARGET_BENCH) --type=many_small \
 	                  --threads=$(or $(THREADS),$(shell nproc)) \
-	                  --iterations=$(or $(ITERS),2) \
-	                  --warmup=$(or $(WARMUP),1) \
+	                  --iterations=10 \
+	                  --warmup=1
+	@echo ""
+	@echo "Running Benchmarks (One Large File)..."
+	./$(TARGET_BENCH) --type=one_large \
+	                  --threads=$(or $(THREADS),$(shell nproc)) \
+	                  --iterations=10 \
+	                  --warmup=1
+	@echo ""
+	@echo "Benchmarks Finished."
 
 # --- Clean Targets ---
 clean:
