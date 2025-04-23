@@ -1,3 +1,9 @@
+/**
+ * @file compressor.cpp
+ * @brief Implements the core compression and decompression logic using Miniz
+ * and OpenMP for block-based large files.
+ */
+
 #include "compressor.hpp"
 #include "config.hpp"
 #include "miniz.h"
@@ -247,6 +253,13 @@ bool read_block_metadata(std::ifstream &in_file,
 // Public Interface Implementation
 //-----------------------------------------------------------------------------
 
+/**
+ * @brief Chooses and runs the appropriate compression routine for a file.
+ * @param[in] input_path Path to the input file to compress.
+ * @param[in] cfg Configuration parameters including thresholds and threading
+ * options.
+ * @return true if compression succeeded, false otherwise.
+ */
 bool process_file(const std::string &input_path, const ConfigData &cfg) {
   std::error_code ec;
   // Use std::filesystem::file_size for large file support
@@ -267,6 +280,13 @@ bool process_file(const std::string &input_path, const ConfigData &cfg) {
   }
 }
 
+/**
+ * @brief Chooses and runs the appropriate decompression routine for a file.
+ * @param[in] input_path Path to the compressed input file.
+ * @param[in] cfg Configuration parameters including verbosity and removal
+ * flags.
+ * @return true if decompression succeeded, false otherwise.
+ */
 bool decompress_file(const std::string &input_path, const ConfigData &cfg) {
   std::ifstream test_file(input_path, std::ios::binary);
   if (!test_file) {
@@ -302,7 +322,14 @@ bool decompress_file(const std::string &input_path, const ConfigData &cfg) {
 // Internal Compression/Decompression Logic
 //-----------------------------------------------------------------------------
 
-// compress_small_file(...) implementation (come nella risposta precedente)
+/**
+ * @brief Compresses small files using a single-threaded zlib stream.
+ *        Writes a 64-bit original size header followed by compressed data.
+ * @param[in] input_path Path to the input file.
+ * @param[in] input_size Size of the input file in bytes.
+ * @param[in] cfg Configuration parameters including removal option.
+ * @return true if compression succeeded, false otherwise.
+ */
 bool compress_small_file(const std::string &input_path, size_t input_size,
                          const ConfigData &cfg) {
   MappedFile mapped_in;
@@ -398,7 +425,16 @@ bool compress_small_file(const std::string &input_path, size_t input_size,
   return true;
 }
 
-// --- Implementazione PARALLELA per compress_large_file ---
+/**
+ * @brief Compresses large files by splitting into blocks and compressing in
+ * parallel. Builds a custom header with block metadata and writes all blocks to
+ * a single output file.
+ * @param[in] input_path Path to the input file.
+ * @param[in] input_size Size of the input file in bytes.
+ * @param[in] cfg Configuration parameters including block size and thread
+ * count.
+ * @return true if compression succeeded, false otherwise.
+ */
 bool compress_large_file(const std::string &input_path, size_t input_size,
                          const ConfigData &cfg) {
   MappedFile mapped_in;
@@ -579,7 +615,15 @@ bool compress_large_file(const std::string &input_path, size_t input_size,
   return true;
 }
 
-// --- Implementazione PARALLELA per decompress_large_file ---
+/**
+ * @brief Decompresses large files created with the custom block format in
+ * parallel. Reads header and metadata, maps files, then decompresses each block
+ * concurrently.
+ * @param[in] input_path Path to the compressed input file.
+ * @param[in] cfg Configuration parameters including block size and thread
+ * count.
+ * @return true if decompression succeeded, false otherwise.
+ */
 bool decompress_large_file(const std::string &input_path,
                            const ConfigData &cfg) {
   // --- Phase 1: Read Header and Metadata Sequentially ---
@@ -854,7 +898,13 @@ bool decompress_large_file(const std::string &input_path,
   return true;
 }
 
-// decompress_small_file(...) implementation (come nella risposta precedente)
+/**
+ * @brief Decompresses small files by reading the original size header and
+ * running a single uncompress call.
+ * @param[in] input_path Path to the compressed input file.
+ * @param[in] cfg Configuration parameters including removal option.
+ * @return true if decompression succeeded, false otherwise.
+ */
 bool decompress_small_file(const std::string &input_path,
                            const ConfigData &cfg) {
   MappedFile mapped_in;

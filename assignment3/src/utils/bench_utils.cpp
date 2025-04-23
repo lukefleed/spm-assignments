@@ -1,11 +1,28 @@
-#include "bench_utils.hpp"
-#include <algorithm> // For sort, nth_element
-#include <iostream>  // For potential error messages
-#include <numeric>   // For accumulate
-#include <vector>
+/**
+ * @file bench_utils.cpp
+ * @brief Implementation of benchmarking utilities: warmup, measurement, and
+ * median calculation.
+ */
+
+#include "bench_utils.hpp" // Declarations of benchmarking utilities
+#include <algorithm>       // For nth_element, max_element
+#include <iostream>        // For error messages
+#include <vector>          // For timing data container
 
 namespace BenchUtils {
 
+/**
+ * @brief Execute a function multiple times and compute the median execution
+ * time.
+ *
+ * Performs a specified number of warmup runs, then measures execution time
+ * over a number of iterations, and returns the median duration.
+ *
+ * @param func_to_run Callable returning true on success for each iteration.
+ * @param iterations Number of measurement iterations (must be >= 1).
+ * @param warmup_iterations Number of warmup iterations (must be >= 0).
+ * @return BenchmarkResult containing median time and error code.
+ */
 BenchmarkResult run_benchmark(const std::function<bool()> &func_to_run,
                               int iterations, int warmup_iterations) {
   if (iterations < 1) {
@@ -15,52 +32,63 @@ BenchmarkResult run_benchmark(const std::function<bool()> &func_to_run,
     return {false, 0.0, BenchmarkError::InvalidWarmup};
   }
 
-  // --- Warmup Phase ---
+  // --- Warmup Phase: discard timing, check for early failures ---
   for (int i = 0; i < warmup_iterations; ++i) {
     if (!func_to_run()) {
       return {false, 0.0, BenchmarkError::WarmupFailed};
     }
   }
 
-  // --- Measurement Phase ---
+  // --- Measurement Phase: record execution times ---
   std::vector<double> timings_s;
   timings_s.reserve(iterations);
-  BenchmarkTimer timer; // Reuse timer object
+  BenchmarkTimer timer; // Timer for each iteration
 
   for (int i = 0; i < iterations; ++i) {
-    timer.reset(); // Start timer for this iteration
+    timer.reset(); // Start timing
 
     if (!func_to_run()) {
       return {false, 0.0, BenchmarkError::MeasurementFailed};
     }
 
-    timings_s.push_back(timer.elapsed_s()); // Record elapsed time
+    timings_s.push_back(timer.elapsed_s()); // Store elapsed time
   }
 
-  // --- Calculate Median ---
+  // --- Median Calculation: select middle value efficiently ---
   if (timings_s.empty()) {
-    // Should not happen if iterations >= 1, but defensive
+    // Defensive check: should not occur when iterations >= 1
     return {false, 0.0, BenchmarkError::MeasurementFailed};
   }
 
-  // Use nth_element for efficiency in finding the median
   size_t mid_index = timings_s.size() / 2;
   std::nth_element(timings_s.begin(), timings_s.begin() + mid_index,
                    timings_s.end());
 
   if (timings_s.size() % 2 != 0) {
-    // Odd number of elements, median is the middle one
+    // Odd count: exact middle is the median
     return {true, timings_s[mid_index], BenchmarkError::None};
   } else {
-    // Even number of elements, median is average of the two middle ones
-    // nth_element puts the median-candidate at mid_index. We need the element
-    // just before it too.
-    double mid_val1 = timings_s[mid_index];
-    // Find the maximum element in the lower half
-    double mid_val0 =
+    // Even count: average two middle values
+    double mid_hi = timings_s[mid_index];
+    double mid_lo =
         *std::max_element(timings_s.begin(), timings_s.begin() + mid_index);
-    return {true, (mid_val0 + mid_val1) / 2.0, BenchmarkError::None};
+    return {true, (mid_lo + mid_hi) / 2.0, BenchmarkError::None};
   }
 }
+
+// Implementation of BenchmarkTimer methods
+BenchmarkTimer::BenchmarkTimer()
+    : start_time_(std::chrono::high_resolution_clock::now()) {}
+
+void BenchmarkTimer::reset() {
+  start_time_ = std::chrono::high_resolution_clock::now();
+}
+
+double BenchmarkTimer::elapsed_s() const {
+  auto diff = std::chrono::high_resolution_clock::now() - start_time_;
+  return std::chrono::duration<double>(diff).count();
+}
+
+double BenchmarkTimer::elapsed_ms() const { return elapsed_s() * 1000.0; }
 
 } // namespace BenchUtils

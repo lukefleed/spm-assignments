@@ -9,6 +9,12 @@
 
 namespace FileHandler {
 
+/**
+ * @brief Checks if a path corresponds to a directory.
+ * @param[in] p Path to check.
+ * @param[in] verbosity Verbosity level for logging warnings.
+ * @return true if p is a directory, false otherwise.
+ */
 bool is_directory(const std::filesystem::path &p, int verbosity) {
   std::error_code ec;
   bool is_dir = std::filesystem::is_directory(p, ec);
@@ -20,6 +26,12 @@ bool is_directory(const std::filesystem::path &p, int verbosity) {
   return is_dir;
 }
 
+/**
+ * @brief Retrieves the size of a regular file.
+ * @param[in] p Path to the file.
+ * @param[in] verbosity Verbosity level for logging warnings.
+ * @return Optional containing file size if successful, nullopt otherwise.
+ */
 std::optional<size_t> get_regular_file_size(const std::filesystem::path &p,
                                             int verbosity) {
   std::error_code ec;
@@ -42,6 +54,14 @@ std::optional<size_t> get_regular_file_size(const std::filesystem::path &p,
   return static_cast<size_t>(size);
 }
 
+/**
+ * @brief Determines if a file should be processed based on mode and suffix.
+ * @param[in] filename Name of the file (not full path).
+ * @param[in] is_compress_mode True to include files without suffix for
+ * compression, false to include files with suffix for decompression.
+ * @param[in] suffix File suffix to filter on (e.g., ".zip").
+ * @return true if the file meets processing criteria, false otherwise.
+ */
 bool should_process(const std::string &filename, bool is_compress_mode,
                     const std::string &suffix) {
   if (filename == "." || filename == "..") {
@@ -57,6 +77,14 @@ bool should_process(const std::string &filename, bool is_compress_mode,
   }
 }
 
+/**
+ * @brief Discovers files to process from initial paths and configuration.
+ *        Handles directories (with optional recursion) and filters by suffix.
+ * @param[in] initial_paths Paths to scan (files or directories).
+ * @param[in] cfg Application configuration including verbosity, recurse, and
+ * suffix.
+ * @return Vector of WorkItem representing files to be processed.
+ */
 std::vector<WorkItem>
 discover_work_items(const std::vector<std::string> &initial_paths,
                     const ConfigData &cfg) {

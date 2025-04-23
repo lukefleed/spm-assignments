@@ -1,9 +1,18 @@
+/**
+ * @file test_utils.hpp
+ * @brief Declarations of utilities for testing: random file creation, file
+ * comparison, and directory cleaning.
+ */
 #ifndef MINIZP_TEST_UTILS_HPP
 #define MINIZP_TEST_UTILS_HPP
 
 #include <cstddef> // For size_t
 #include <string>
 
+/**
+ * @namespace TestUtils
+ * @brief Utilities for test file operations.
+ */
 namespace TestUtils {
 
 /**

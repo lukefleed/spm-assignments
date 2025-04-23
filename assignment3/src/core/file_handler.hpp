@@ -1,7 +1,8 @@
 /**
  * @file file_handler.hpp
- * @brief Defines functions for discovering and filtering files based on
- * configuration. Handles path checking, recursion, and suffix filtering.
+ * @brief Functions for discovering and filtering files to process;
+ *        handles directory recursion, file size retrieval, and suffix-based
+ * filtering.
  */
 #ifndef MINIZP_FILE_HANDLER_HPP
 #define MINIZP_FILE_HANDLER_HPP

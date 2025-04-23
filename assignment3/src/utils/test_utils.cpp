@@ -1,12 +1,12 @@
 /**
- * \file test_utils.cpp
- * \brief Utility functions for generating random files, comparing files, and
- * cleaning directories used in tests.
+ * @file test_utils.cpp
+ * @brief Implementation of file utilities for testing: random file creation,
+ * file comparison, and directory cleaning.
  */
 
 #include "test_utils.hpp"
 
-#include <cstring>    // For strerror
+#include <cstring>
 #include <filesystem> // For directory cleanup
 #include <fstream>
 #include <iostream> // For error messages
@@ -24,7 +24,11 @@ namespace TestUtils {
 #define USE_DEV_URANDOM 0
 #endif
 
-// Helper to cleanup partial file on error
+/**
+ * @brief Close and remove a partial output file when an error occurs.
+ * @param out_file The output file stream to close.
+ * @param path     The file path to remove.
+ */
 static void cleanup_partial(std::ofstream &out_file, const std::string &path) {
   out_file.close();
   unlink(path.c_str());
@@ -32,7 +36,12 @@ static void cleanup_partial(std::ofstream &out_file, const std::string &path) {
 
 #if USE_DEV_URANDOM
 /**
- * \brief Fills output file using /dev/urandom. Returns true on success.
+ * @brief Fill file with random bytes from /dev/urandom.
+ * @param out_file  The output file stream to write to.
+ * @param size      Number of bytes to write.
+ * @param verbosity Verbosity level for messages.
+ * @param path      Path to the output file (used for error messages).
+ * @return true on success, false on failure.
  */
 static bool fill_with_dev_urandom(std::ofstream &out_file, size_t size,
                                   int verbosity, const std::string &path) {
@@ -74,12 +83,12 @@ static bool fill_with_dev_urandom(std::ofstream &out_file, size_t size,
 #endif
 
 /**
- * \brief Creates a file at the specified path filled with random data.
- * \param path Path to the file to create.
- * \param size Number of bytes to write; if zero, creates an empty file.
- * \param verbosity Verbosity level (0: silent; >=1: warnings; >=2:
+ * @brief Creates a file at the specified path filled with random data.
+ * @param path Path to the file to create.
+ * @param size Number of bytes to write; if zero, creates an empty file.
+ * @param verbosity Verbosity level (0: silent; >=1: warnings; >=2:
  * informational messages).
- * \return True if file creation succeeds, false otherwise.
+ * @return True if file creation succeeds, false otherwise.
  */
 bool create_random_file(const std::string &path, size_t size, int verbosity) {
   std::ofstream out_file(path, std::ios::binary | std::ios::trunc);
@@ -130,11 +139,11 @@ bool create_random_file(const std::string &path, size_t size, int verbosity) {
 }
 
 /**
- * \brief Compares two files byte-by-byte to determine if they are identical.
- * \param path1 Path to the first file to compare.
- * \param path2 Path to the second file to compare.
- * \param verbosity Verbosity level (0: silent; >=1: error messages).
- * \return True if files are identical, false otherwise.
+ * @brief Compares two files byte-by-byte to determine if they are identical.
+ * @param path1 Path to the first file to compare.
+ * @param path2 Path to the second file to compare.
+ * @param verbosity Verbosity level (0: silent; >=1: error messages).
+ * @return True if files are identical, false otherwise.
  */
 bool compare_files(const std::string &path1, const std::string &path2,
                    int verbosity) {
@@ -219,14 +228,14 @@ bool compare_files(const std::string &path1, const std::string &path2,
 }
 
 /**
- * \brief Removes files with a given suffix in a directory.
- * \param directory Path to the directory to clean.
- * \param suffix File suffix (extension) to match and remove (including the
+ * @brief Removes files with a given suffix in a directory.
+ * @param directory Path to the directory to clean.
+ * @param suffix File suffix (extension) to match and remove (including the
  * dot).
- * \param recursive If true, process subdirectories recursively.
- * \param verbosity Verbosity level (0: silent; >=1: warnings; >=2:
+ * @param recursive If true, process subdirectories recursively.
+ * @param verbosity Verbosity level (0: silent; >=1: warnings; >=2:
  * informational messages).
- * \return True if cleaning succeeds or directory does not exist, false on
+ * @return True if cleaning succeeds or directory does not exist, false on
  * error.
  */
 bool clean_files_with_suffix(const std::string &directory,

@@ -1,9 +1,13 @@
+/**
+ * @file compressor.hpp
+ * @brief Declarations for file compression and decompression routines,
+ *        supporting small and block-based large file processing.
+ */
 #ifndef MINIZP_COMPRESSOR_HPP
 #define MINIZP_COMPRESSOR_HPP
 
-#include "config.hpp" // Include shared constants
-#include "config.hpp" // Uses ConfigData
-#include <cstdint>    // For fixed-width integers
+#include "config.hpp" /**< Shared configuration data and constants */
+#include <cstdint>    /**< For fixed-width integer types */
 #include <string>
 #include <vector>
 
