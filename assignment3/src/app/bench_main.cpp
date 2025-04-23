@@ -24,15 +24,15 @@ namespace fs = std::filesystem;
 const std::string BENCH_DIR = "./test_data_bench_cpp";
 
 // Structure to hold benchmark parameters
-struct BenchParams { /* ... identical to test_main.cpp version ... */
+struct BenchParams {
   std::string type = "one_large";
   int threads = omp_get_max_threads();
   int iterations = 2;
   int warmup = 1;
-  size_t large_file_size = 100 * 1024 * 1024;
+  size_t large_file_size = 512 * 1024 * 1024;
   // size_t small_file_size = 100 * 1024; // Removed: sizes now random and
   // distinct
-  int num_small_files = 100;
+  int num_small_files = 4000;
   ConfigData config;
   std::vector<size_t> block_sizes_list; // List of block sizes for sweeping
 };
@@ -110,12 +110,13 @@ void setup_bench_environment(
       throw std::runtime_error("Failed creation: large file");
     }
   } else { // many_small
-    // Generate many small files with random, distinct sizes <
-    // large_file_threshold
+    // Generate many small files with random, distinct sizes between 1KB and
+    // 50KB
     std::random_device rd;
     std::mt19937_64 gen(rd());
-    size_t max_size = params.config.large_file_threshold - 1;
-    std::uniform_int_distribution<size_t> dist(1, max_size);
+    constexpr size_t min_size = 1 * 1024;  // 1 KB
+    constexpr size_t max_size = 50 * 1024; // 50 KB
+    std::uniform_int_distribution<size_t> dist(min_size, max_size);
     std::unordered_set<size_t> used_sizes;
     for (int i = 0; i < params.num_small_files; ++i) {
       size_t size;
