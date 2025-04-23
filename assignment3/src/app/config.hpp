@@ -19,9 +19,9 @@ inline const std::string SUFFIX = ".zip";
 constexpr size_t LARGE_FILE_THRESHOLD_DEFAULT = 16 * 1024 * 1024; // 16 MiB
 
 /**
- * @brief Size of blocks for large file processing. Default is 4 MiB.
+ * @brief Size of blocks for large file processing. Default is 1 MiB.
  */
-constexpr size_t BLOCK_SIZE_DEFAULT = 4 * 1024 * 1024; // 4 MiB
+constexpr size_t BLOCK_SIZE_DEFAULT = 1 * 1024 * 1024; // 1 MiB
 
 /**
  * @brief Magic number for large file format (ASCII for "MPBL").
