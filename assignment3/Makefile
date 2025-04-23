@@ -23,7 +23,7 @@ TARGET_BENCH := minizp_bench
 
 # --- Source Files ---
 # Core sources used by all targets (excluding main files)
-CORE_SRCS := $(wildcard src/core/*.cpp) $(wildcard src/utils/*.cpp) src/app/config.cpp miniz/miniz.c
+CORE_SRCS := $(wildcard src/core/*.cpp) $(wildcard src/utils/*.cpp) miniz/miniz.c
 # Main sources for each executable
 APP_MAIN_SRC := src/app/minizp.cpp
 TEST_MAIN_SRC := src/app/test_main.cpp

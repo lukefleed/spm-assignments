@@ -10,7 +10,7 @@
 /**
  * @brief Suffix for compressed files (e.g., ".zip").
  */
-extern const std::string SUFFIX;
+inline const std::string SUFFIX = ".zip";
 
 /**
  * @brief File size threshold to trigger large file processing logic. Default is
