@@ -1,3 +1,11 @@
+/**
+ * @file minizp.cpp
+ * @brief Entry point for the minizp command-line application.
+ *
+ * Parses command-line arguments, discovers files to process, and performs
+ * compression or decompression using OpenMP for parallel processing.
+ */
+
 #include "cmdline.hpp"
 #include "compressor.hpp"
 #include "config.hpp"
@@ -9,6 +17,16 @@
 #include <string>
 #include <vector>
 
+/**
+ * @brief Application entry point.
+ *
+ * Initializes configuration, parses arguments, discovers work items,
+ * and processes files in parallel or sequentially based on settings.
+ *
+ * @param argc Number of command-line arguments.
+ * @param argv Array of argument strings.
+ * @return Exit code (0 on success, non-zero on failure).
+ */
 int main(int argc, char *argv[]) {
   ConfigData config;
   std::vector<std::string> initial_paths;

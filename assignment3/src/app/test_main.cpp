@@ -1,3 +1,11 @@
+/**
+ * @file test_main.cpp
+ * @brief Unit tests for verifying compressor correctness.
+ *
+ * Sets up test environments, runs compression and decompression tests,
+ * edge cases, and reports pass/fail status for sequential and parallel modes.
+ */
+
 #include "compressor.hpp"
 #include "config.hpp"
 #include "file_handler.hpp"
@@ -487,10 +495,13 @@ bool run_tests(ConfigData cfg) { // Pass config by value to modify locally
   return all_passed;
 }
 
-/// @brief Entry point for test driver
-/// @param argc Argument count
-/// @param argv Argument values
-/// @return exit code
+/// @brief Entry point for the test driver application.
+///
+/// Parses mode argument, configures threading, runs all tests,
+/// and returns exit code indicating success or failure.
+/// @param argc Number of command-line arguments.
+/// @param argv Array of command-line argument strings.
+/// @return 0 if all tests pass, non-zero otherwise.
 int main(int argc, char *argv[]) {
   std::string mode = "seq"; // Default to sequential if no arg
   if (argc > 1) {

@@ -56,8 +56,6 @@ struct ConfigData {
 
   /** @brief Size of blocks for large file processing. */
   size_t block_size = BLOCK_SIZE_DEFAULT;
-
-  // Add other configuration options if needed
 };
 
 #endif // MINIZP_CONFIG_HPP

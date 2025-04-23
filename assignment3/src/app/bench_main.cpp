@@ -1,3 +1,12 @@
+/**
+ * @file bench_main.cpp
+ * @brief Benchmark driver for minizp performance evaluation.
+ *
+ * Sets up test data, sweeps over thread counts and block sizes,
+ * measures sequential and parallel throughput, and outputs results
+ * to CSV and stdout.
+ */
+
 #include "bench_utils.hpp"
 #include "compressor.hpp"
 #include "config.hpp"
@@ -23,7 +32,10 @@ namespace fs = std::filesystem;
 // --- Benchmark Configuration ---
 const std::string BENCH_DIR = "./test_data_bench_cpp";
 
-// Structure to hold benchmark parameters
+/**
+ * @brief Holds parameters for benchmark runs, including thread sweep and file
+ * sizes.
+ */
 struct BenchParams {
   std::string type =
       "one_large"; ///< Type of benchmark: one_large or many_small
@@ -41,7 +53,16 @@ struct BenchParams {
   std::vector<size_t> block_sizes_list; ///< Block sizes for matrix sweep
 };
 
-// --- Helper: Parse Args ---
+/**
+ * @brief Parses command-line arguments for benchmark configuration.
+ *
+ * Expects key=value pairs prefixed with '--'. Validates types and ranges.
+ *
+ * @param argc Argument count from main.
+ * @param argv Argument values from main.
+ * @param[out] params Structure to populate with parsed values.
+ * @return true if parsing succeeded, false on error.
+ */
 bool parseBenchArgs(int argc, char *argv[], BenchParams &params) {
   std::map<std::string, std::string> args;
   for (int i = 1; i < argc; ++i) {
@@ -99,7 +120,16 @@ bool parseBenchArgs(int argc, char *argv[], BenchParams &params) {
   return true;
 }
 
-// --- Helper: Setup ---
+/**
+ * @brief Prepares the benchmark environment by creating or cleaning the data
+ * directory.
+ *
+ * Generates either one large file or many small files of random sizes
+ * based on the 'type' field in params.
+ *
+ * @param params Benchmark parameters controlling data generation.
+ * @throws runtime_error on file system or generation failure.
+ */
 void setup_bench_environment(const BenchParams &params) {
   std::cout << "Setting up benchmark environment in " << BENCH_DIR << "..."
             << std::endl;
@@ -139,14 +169,25 @@ void setup_bench_environment(const BenchParams &params) {
   std::cout << "Setup complete." << std::endl;
 }
 
-// --- Helper: Cleanup ---
+/**
+ * @brief Cleans up the benchmark environment by removing generated files.
+ */
 void cleanup_bench_environment() {
   std::cout << "Cleaning up benchmark environment..." << std::endl;
   std::error_code ec;
   fs::remove_all(BENCH_DIR, ec);
 }
 
-// --- Compression Work Function ---
+/**
+ * @brief Executes the compression workflow over a list of work items.
+ *
+ * Uses OpenMP parallel for to process files and sets an error flag
+ * on the first failure.
+ *
+ * @param items List of file work items discovered for processing.
+ * @param cfg Compression configuration including thread count.
+ * @return true if all files processed successfully, false otherwise.
+ */
 bool perform_compression_work(const std::vector<FileHandler::WorkItem> &items,
                               ConfigData &cfg) {
   std::atomic<bool> error_flag = false;
@@ -161,7 +202,17 @@ bool perform_compression_work(const std::vector<FileHandler::WorkItem> &items,
   return !error_flag.load();
 }
 
-// --- Main ---
+/**
+ * @brief Main entry point for the benchmark application.
+ *
+ * Parses parameters, initializes environment, discovers work items,
+ * sweeps sequential and parallel runs (or block-size matrix), outputs CSV,
+ * and cleans up.
+ *
+ * @param argc Number of command-line arguments.
+ * @param argv Array of argument strings.
+ * @return 0 on successful benchmark, non-zero on error.
+ */
 int main(int argc, char *argv[]) {
   BenchParams params;
   if (!parseBenchArgs(argc, argv, params))
