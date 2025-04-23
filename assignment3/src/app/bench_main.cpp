@@ -25,22 +25,24 @@ const std::string BENCH_DIR = "./test_data_bench_cpp";
 
 // Structure to hold benchmark parameters
 struct BenchParams {
-  std::string type = "one_large";
-  int threads = omp_get_max_threads();
-  int iterations = 2;
-  int warmup = 1;
-  size_t large_file_size = 512 * 1024 * 1024;
-  // size_t small_file_size = 100 * 1024; // Removed: sizes now random and
-  // distinct
-  int num_small_files = 4000;
-  ConfigData config;
-  std::vector<size_t> block_sizes_list; // List of block sizes for sweeping
+  std::string type =
+      "one_large"; ///< Type of benchmark: one_large or many_small
+  int threads = omp_get_max_threads(); ///< Number of threads to test
+  int iterations = 2;                  ///< Number of benchmark iterations
+  int warmup = 1;                      ///< Number of warmup runs
+  size_t large_file_size =
+      512 * 1024 * 1024;      ///< Size for one large file (bytes)
+  int num_small_files = 4000; ///< Number of small files to generate
+  size_t min_small_file_size =
+      1 * 1024; ///< Minimum size for small files (bytes)
+  size_t max_small_file_size =
+      50 * 1024;     ///< Maximum size for small files (bytes)
+  ConfigData config; ///< Compression configuration
+  std::vector<size_t> block_sizes_list; ///< Block sizes for matrix sweep
 };
 
 // --- Helper: Parse Args ---
-bool parseBenchArgs(
-    int argc, char *argv[],
-    BenchParams &params) { /* ... identical to test_main.cpp version ... */
+bool parseBenchArgs(int argc, char *argv[], BenchParams &params) {
   std::map<std::string, std::string> args;
   for (int i = 1; i < argc; ++i) {
     std::string arg = argv[i];
@@ -78,11 +80,17 @@ bool parseBenchArgs(
       if (!list.empty())
         params.block_sizes_list.push_back(std::stoull(list));
     }
+    if (args.count("min_size"))
+      params.min_small_file_size = std::stoull(args["min_size"]);
+    if (args.count("max_size"))
+      params.max_small_file_size = std::stoull(args["max_size"]);
     // Validations
     if (params.type != "one_large" && params.type != "many_small")
       throw std::runtime_error("Invalid type");
     if (params.threads <= 0)
       throw std::runtime_error("Threads must be positive");
+    if (params.min_small_file_size > params.max_small_file_size)
+      throw std::runtime_error("min_size must not exceed max_size");
     // ... other validations
   } catch (const std::exception &e) {
     std::cerr << "Error parsing arguments: " << e.what() << std::endl;
@@ -92,9 +100,7 @@ bool parseBenchArgs(
 }
 
 // --- Helper: Setup ---
-void setup_bench_environment(
-    const BenchParams
-        &params) { /* ... identical to test_main.cpp version ... */
+void setup_bench_environment(const BenchParams &params) {
   std::cout << "Setting up benchmark environment in " << BENCH_DIR << "..."
             << std::endl;
   std::error_code ec;
@@ -110,13 +116,12 @@ void setup_bench_environment(
       throw std::runtime_error("Failed creation: large file");
     }
   } else { // many_small
-    // Generate many small files with random, distinct sizes between 1KB and
-    // 50KB
+    // Generate many small files with random, distinct sizes in user-defined
+    // range
     std::random_device rd;
     std::mt19937_64 gen(rd());
-    constexpr size_t min_size = 1 * 1024;  // 1 KB
-    constexpr size_t max_size = 50 * 1024; // 50 KB
-    std::uniform_int_distribution<size_t> dist(min_size, max_size);
+    std::uniform_int_distribution<size_t> dist(params.min_small_file_size,
+                                               params.max_small_file_size);
     std::unordered_set<size_t> used_sizes;
     for (int i = 0; i < params.num_small_files; ++i) {
       size_t size;
@@ -135,17 +140,15 @@ void setup_bench_environment(
 }
 
 // --- Helper: Cleanup ---
-void cleanup_bench_environment() { /* ... identical to test_main.cpp version ...
-                                    */
+void cleanup_bench_environment() {
   std::cout << "Cleaning up benchmark environment..." << std::endl;
   std::error_code ec;
   fs::remove_all(BENCH_DIR, ec);
 }
 
 // --- Compression Work Function ---
-bool perform_compression_work(
-    const std::vector<FileHandler::WorkItem> &items,
-    ConfigData &cfg) { /* ... identical to test_main.cpp version ... */
+bool perform_compression_work(const std::vector<FileHandler::WorkItem> &items,
+                              ConfigData &cfg) {
   std::atomic<bool> error_flag = false;
 #pragma omp parallel for if (cfg.num_threads > 1) default(none)                \
     shared(items, cfg, error_flag) schedule(dynamic)
@@ -177,9 +180,9 @@ int main(int argc, char *argv[]) {
   if (params.type == "one_large") {
     std::cout << ", File Size: " << params.large_file_size << " bytes";
   } else {
-    std::cout << ", Num Small Files: " << params.num_small_files
-              << ", Sizes: random < " << params.config.large_file_threshold
-              << " bytes";
+    std::cout << ", Num Small Files: " << params.num_small_files << ", Sizes: ["
+              << params.min_small_file_size << " - "
+              << params.max_small_file_size << "] bytes";
   }
   std::cout << std::endl;
   std::cout << "Large Threshold: " << params.config.large_file_threshold

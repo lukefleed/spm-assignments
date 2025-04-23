@@ -1,3 +1,9 @@
+/**
+ * \file test_utils.cpp
+ * \brief Utility functions for generating random files, comparing files, and
+ * cleaning directories used in tests.
+ */
+
 #include "test_utils.hpp"
 
 #include <cstring>    // For strerror
@@ -18,6 +24,63 @@ namespace TestUtils {
 #define USE_DEV_URANDOM 0
 #endif
 
+// Helper to cleanup partial file on error
+static void cleanup_partial(std::ofstream &out_file, const std::string &path) {
+  out_file.close();
+  unlink(path.c_str());
+}
+
+#if USE_DEV_URANDOM
+/**
+ * \brief Fills output file using /dev/urandom. Returns true on success.
+ */
+static bool fill_with_dev_urandom(std::ofstream &out_file, size_t size,
+                                  int verbosity, const std::string &path) {
+  std::vector<char> buffer(std::min((size_t)4096, size));
+  size_t bytes_written = 0;
+
+  int rand_fd = open("/dev/urandom", O_RDONLY);
+  if (rand_fd < 0) {
+    if (verbosity >= 1)
+      std::cerr << "Warning: Cannot open /dev/urandom, falling back to "
+                   "pseudo-random data."
+                << std::endl;
+    return false;
+  }
+
+  while (bytes_written < size) {
+    size_t bytes_to_read = std::min(buffer.size(), size - bytes_written);
+    ssize_t bytes_read = read(rand_fd, buffer.data(), bytes_to_read);
+    if (bytes_read <= 0) {
+      if (verbosity >= 1)
+        std::cerr << "Error reading from /dev/urandom." << std::endl;
+      close(rand_fd);
+      cleanup_partial(out_file, path);
+      return false;
+    }
+    out_file.write(buffer.data(), bytes_read);
+    if (!out_file) {
+      if (verbosity >= 1)
+        std::cerr << "Error writing random data to file: " << path << std::endl;
+      close(rand_fd);
+      cleanup_partial(out_file, path);
+      return false;
+    }
+    bytes_written += bytes_read;
+  }
+  close(rand_fd);
+  return true;
+}
+#endif
+
+/**
+ * \brief Creates a file at the specified path filled with random data.
+ * \param path Path to the file to create.
+ * \param size Number of bytes to write; if zero, creates an empty file.
+ * \param verbosity Verbosity level (0: silent; >=1: warnings; >=2:
+ * informational messages).
+ * \return True if file creation succeeds, false otherwise.
+ */
 bool create_random_file(const std::string &path, size_t size, int verbosity) {
   std::ofstream out_file(path, std::ios::binary | std::ios::trunc);
   if (!out_file) {
@@ -26,62 +89,26 @@ bool create_random_file(const std::string &path, size_t size, int verbosity) {
                 << std::endl;
     return false;
   }
-  if (size == 0) { // Handle 0-byte case
+  if (size == 0) {
     out_file.close();
     return true;
   }
 
-  // Declare buffer and bytes_written outside the conditional block
+#if USE_DEV_URANDOM
+  // Try POSIX random source first
+  if (fill_with_dev_urandom(out_file, size, verbosity, path)) {
+    out_file.close();
+    return true;
+  }
+  // Fallback to pseudo-random if dev_urandom failed or unavailable
+#endif
+
+  // Fallback using C++ <random>
+  std::mt19937 gen(std::random_device{}());
+  std::uniform_int_distribution<char> distrib;
   std::vector<char> buffer(std::min((size_t)4096, size));
   size_t bytes_written = 0;
 
-#if USE_DEV_URANDOM
-  int rand_fd = open("/dev/urandom", O_RDONLY);
-  if (rand_fd < 0) {
-    if (verbosity >= 1)
-      std::cerr << "Warning: Cannot open /dev/urandom, falling back to "
-                   "pseudo-random data."
-                << std::endl;
-    goto fallback_random; // Use goto for fallback logic here
-  }
-
-  // Use the already declared buffer and bytes_written
-  while (bytes_written < size) {
-    size_t bytes_to_read = std::min(buffer.size(), size - bytes_written);
-    ssize_t bytes_read = read(rand_fd, buffer.data(), bytes_to_read);
-    if (bytes_read <= 0) {
-      if (verbosity >= 1)
-        std::cerr << "Error reading from /dev/urandom." << std::endl;
-      close(rand_fd);
-      out_file.close();
-      unlink(path.c_str()); // Clean up partial file
-      return false;
-    }
-    out_file.write(buffer.data(), bytes_read);
-    if (!out_file) {
-      if (verbosity >= 1)
-        std::cerr << "Error writing random data to file: " << path << std::endl;
-      close(rand_fd);
-      out_file.close();
-      unlink(path.c_str());
-      return false;
-    }
-    bytes_written += bytes_read;
-  }
-  close(rand_fd);
-  out_file.close();
-  return true;
-
-fallback_random: // Label for fallback mechanism
-  // Reset bytes_written for the fallback mechanism
-  bytes_written = 0;
-#endif // USE_DEV_URANDOM
-
-  // Fallback using C++ <random> - less ideal for binary data but works
-  std::mt19937 gen(std::random_device{}()); // Standard mersenne_twister_engine
-                                            // seeded with random_device
-  std::uniform_int_distribution<char> distrib; // Distribution for chars
-  // Use the already declared buffer and bytes_written
   while (bytes_written < size) {
     size_t bytes_to_generate = std::min(buffer.size(), size - bytes_written);
     for (size_t i = 0; i < bytes_to_generate; ++i) {
@@ -92,8 +119,7 @@ fallback_random: // Label for fallback mechanism
       if (verbosity >= 1)
         std::cerr << "Error writing pseudo-random data to file: " << path
                   << std::endl;
-      out_file.close();
-      unlink(path.c_str());
+      cleanup_partial(out_file, path);
       return false;
     }
     bytes_written += bytes_to_generate;
@@ -103,6 +129,13 @@ fallback_random: // Label for fallback mechanism
   return true;
 }
 
+/**
+ * \brief Compares two files byte-by-byte to determine if they are identical.
+ * \param path1 Path to the first file to compare.
+ * \param path2 Path to the second file to compare.
+ * \param verbosity Verbosity level (0: silent; >=1: error messages).
+ * \return True if files are identical, false otherwise.
+ */
 bool compare_files(const std::string &path1, const std::string &path2,
                    int verbosity) {
   std::ifstream file1(path1,
@@ -185,6 +218,17 @@ bool compare_files(const std::string &path1, const std::string &path2,
   return true; // Files are identical
 }
 
+/**
+ * \brief Removes files with a given suffix in a directory.
+ * \param directory Path to the directory to clean.
+ * \param suffix File suffix (extension) to match and remove (including the
+ * dot).
+ * \param recursive If true, process subdirectories recursively.
+ * \param verbosity Verbosity level (0: silent; >=1: warnings; >=2:
+ * informational messages).
+ * \return True if cleaning succeeds or directory does not exist, false on
+ * error.
+ */
 bool clean_files_with_suffix(const std::string &directory,
                              const std::string &suffix, bool recursive,
                              int verbosity) {

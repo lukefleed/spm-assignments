@@ -1,5 +1,6 @@
 #include "compressor.hpp"
-#include "miniz.h" // Include the actual miniz implementation
+#include "config.hpp"
+#include "miniz.h"
 
 #include <atomic>  // Added for atomic flag
 #include <cstring> // For strerror
@@ -16,6 +17,9 @@
 #include <vector>
 
 namespace Compressor {
+using ::FORMAT_VERSION;
+using ::MAGIC_NUMBER_LARGE_FILE;
+using ::SUFFIX;
 
 //-----------------------------------------------------------------------------
 // Internal Helper Functions (Anonymous Namespace)
@@ -24,7 +28,11 @@ namespace { // Start anonymous namespace
 
 // --- Memory Mapping Utilities ---
 
-/** @brief RAII wrapper for memory-mapped file pointers. */
+/**
+ * @class MappedFile
+ * @brief RAII wrapper for memory-mapped file pointers using POSIX mmap.
+ *        Manages the mapped memory region and the associated file descriptor.
+ */
 class MappedFile {
   unsigned char *ptr_ = nullptr;
   size_t size_ = 0;
@@ -55,8 +63,18 @@ public:
     return *this;
   }
 
-  ~MappedFile() { unmap(); }
+  ~MappedFile() noexcept { unmap(); }
 
+  /**
+   * @brief Maps an existing file into memory.
+   * @param fname Path to the file.
+   * @param size_in_out Expected size. If 0, determined via fstat. Updated with
+   * actual size.
+   * @param prot Memory protection flags (e.g., PROT_READ).
+   * @param flags Mapping flags (e.g., MAP_PRIVATE).
+   * @param open_flags Flags for opening the file (e.g., O_RDONLY).
+   * @return true if mapping was successful, false otherwise.
+   */
   bool map(const char *fname, size_t &size_in_out, int prot, int flags,
            int open_flags = O_RDONLY) {
     unmap(); // Ensure previous mapping is released
@@ -115,6 +133,14 @@ public:
     return true;
   }
 
+  /**
+   * @brief Creates/truncates a file, allocates space, and maps it for writing.
+   * @param fname Path to the output file.
+   * @param size The desired size of the file.
+   * @param prot Memory protection flags (default: PROT_READ | PROT_WRITE).
+   * @param flags Mapping flags (default: MAP_SHARED).
+   * @return true if allocation and mapping were successful, false otherwise.
+   */
   bool allocate_and_map(const char *fname, size_t size,
                         int prot = PROT_READ | PROT_WRITE,
                         int flags = MAP_SHARED) {
@@ -160,7 +186,10 @@ public:
     return true;
   }
 
-  void unmap() {
+  /**
+   * @brief Unmaps the memory region and closes the associated file descriptor.
+   */
+  void unmap() noexcept {
     if (ptr_ && size_ > 0) {
       munmap(ptr_, size_);
     }
@@ -179,6 +208,12 @@ public:
 
 // --- Large File Header I/O ---
 
+/**
+ * @brief Reads the LargeFileHeader from the beginning of a stream.
+ * @param in_file Input file stream positioned at the start.
+ * @param header The header structure to populate.
+ * @return true if read successfully and magic/version match, false otherwise.
+ */
 bool read_large_file_header(std::ifstream &in_file, LargeFileHeader &header) {
   in_file.read(reinterpret_cast<char *>(&header), sizeof(header));
   // Check magic number and version after reading
@@ -190,6 +225,13 @@ bool read_large_file_header(std::ifstream &in_file, LargeFileHeader &header) {
   return true;
 }
 
+/**
+ * @brief Reads the block metadata (compressed sizes) from a stream.
+ * @param in_file Input file stream positioned after the header.
+ * @param block_sizes Vector to store the read sizes.
+ * @param num_blocks Expected number of blocks.
+ * @return true if read successfully, false otherwise.
+ */
 bool read_block_metadata(std::ifstream &in_file,
                          std::vector<uint64_t> &block_sizes,
                          size_t num_blocks) {

@@ -15,6 +15,8 @@
 
 namespace fs = std::filesystem;
 
+constexpr int BANNER_WIDTH = 60;
+
 // --- Test Configuration ---
 const std::string TEST_DIR = "./test_data_correctness_cpp";
 const std::string ORIGINALS_DIR = TEST_DIR + "/originals";
@@ -27,7 +29,8 @@ const std::map<std::string, size_t> FILES_TO_CREATE = {
     {"subdir/small3.bin", 10 * 1024}};
 const int TEST_VERBOSITY = 1;
 
-// --- Helper: Setup ---
+/// @brief Set up or recreate test directory and sample files
+/// @param create_test_files If true, copy originals into test dir for testing
 void setup_test_environment(bool create_test_files) {
   std::cout << "Setting up test environment in " << TEST_DIR << "..."
             << std::endl;
@@ -59,23 +62,25 @@ void setup_test_environment(bool create_test_files) {
   std::cout << "Setup complete." << std::endl;
 }
 
-// --- Helper: Cleanup ---
+/// @brief Remove the test environment directory and its contents
 void cleanup_test_environment() {
   std::cout << "Cleaning up test environment..." << std::endl;
   std::error_code ec;
   fs::remove_all(TEST_DIR, ec);
 }
 
-// --- Test Logic ---
+/// @brief Execute correctness tests under given configuration
+/// @param cfg Configuration parameters for compression/decompression
+/// @return true if all tests pass, false otherwise
 bool run_tests(ConfigData cfg) { // Pass config by value to modify locally
   bool all_passed = true;
 
   // Stylized banner for test mode
-  std::cout << "\n" << std::string(50, '=') << std::endl;
+  std::cout << "\n" << std::string(BANNER_WIDTH, '=') << std::endl;
   std::cout << "  Test Mode : "
             << (cfg.num_threads == 1 ? "Sequential" : "Parallel") << std::endl;
   std::cout << "  Threads   : " << cfg.num_threads << std::endl;
-  std::cout << std::string(50, '=') << std::endl;
+  std::cout << std::string(BANNER_WIDTH, '=') << std::endl;
 
   try {
     // --- Compression Phase ---
@@ -360,16 +365,19 @@ bool run_tests(ConfigData cfg) { // Pass config by value to modify locally
   cleanup_test_environment(); // Cleanup after tests for this mode
 
   // Finish banner
-  std::cout << std::string(50, '=') << std::endl;
+  std::cout << std::string(BANNER_WIDTH, '=') << std::endl;
   std::cout << "  Tests Completed ("
             << (cfg.num_threads == 1 ? "Sequential" : "Parallel") << ")"
             << std::endl;
-  std::cout << std::string(50, '=') << std::endl;
+  std::cout << std::string(BANNER_WIDTH, '=') << std::endl;
 
   return all_passed;
 }
 
-// --- Main ---
+/// @brief Entry point for test driver
+/// @param argc Argument count
+/// @param argv Argument values
+/// @return exit code
 int main(int argc, char *argv[]) {
   std::string mode = "seq"; // Default to sequential if no arg
   if (argc > 1) {

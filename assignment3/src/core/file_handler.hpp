@@ -1,44 +1,61 @@
+/**
+ * @file file_handler.hpp
+ * @brief Defines functions for discovering and filtering files based on
+ * configuration. Handles path checking, recursion, and suffix filtering.
+ */
 #ifndef MINIZP_FILE_HANDLER_HPP
 #define MINIZP_FILE_HANDLER_HPP
 
 #include "config.hpp" // Uses ConfigData
 #include <filesystem> // Requires C++17
+#include <optional>
 #include <string>
 #include <vector>
 
 namespace FileHandler {
 
+using ::FORMAT_VERSION;
+using ::MAGIC_NUMBER_LARGE_FILE;
+using ::SUFFIX;
+
 /**
- * @brief Represents an item (file or directory) discovered for processing.
+ * @brief Represents a file discovered for processing.
  */
 struct WorkItem {
-  std::string path;          /**< Full path to the item. */
-  size_t size = 0;           /**< Size in bytes (if it's a file). */
-  bool is_directory = false; /**< True if the item is a directory. */
-  // We might not need is_directory if discover_work_items only returns files
+  std::string path; /**< Full path to the file. */
+  size_t size = 0;  /**< Size in bytes. */
+  // is_directory field removed: discover_work_items only returns files.
 };
 
 /**
- * @brief Checks if a path corresponds to a directory or a regular file.
- *
- * @param p The path to check.
- * @param filesize Output parameter: if it's a regular file, its size is stored
- * here.
- * @param verbosity Verbosity level for error messages.
- * @return true if it's a directory, false if it's a regular file.
- * @throws std::filesystem::filesystem_error on file system access errors
- * (unless handled internally).
+ * @brief Checks if a path corresponds to a directory.
+ * @param[in] p The path to check.
+ * @param[in] verbosity Verbosity level for logging errors.
+ * @return true if the path is a directory, false otherwise.
+ * @throws std::filesystem::filesystem_error on underlying file system errors if
+ * not handled internally based on verbosity.
  */
-bool is_directory_or_file(const std::filesystem::path &p, size_t &filesize,
-                          int verbosity);
+bool is_directory(const std::filesystem::path &p, int verbosity);
+
+/**
+ * @brief Gets the size of a regular file.
+ * @param[in] p The path to check.
+ * @param[in] verbosity Verbosity level for logging errors.
+ * @return std::optional<size_t> containing the file size if it's a regular file
+ * and size could be obtained, std::nullopt otherwise.
+ * @throws std::filesystem::filesystem_error on underlying file system errors if
+ * not handled internally based on verbosity.
+ */
+std::optional<size_t> get_regular_file_size(const std::filesystem::path &p,
+                                            int verbosity);
 
 /**
  * @brief Determines if a given filename should be processed based on mode and
  * suffix.
- *
- * @param filename The name of the file (not the full path).
- * @param is_compress_mode True if in compression mode, false for decompression.
- * @param suffix The suffix to check for (e.g., ".zip").
+ * @param[in] filename The name of the file (not the full path).
+ * @param[in] is_compress_mode True if in compression mode, false for
+ * decompression.
+ * @param[in] suffix The suffix to check for (e.g., ".zip").
  * @return true if the file should be processed, false if it should be skipped.
  */
 bool should_process(const std::string &filename, bool is_compress_mode,
@@ -46,16 +63,14 @@ bool should_process(const std::string &filename, bool is_compress_mode,
 
 /**
  * @brief Discovers all files to be processed based on initial paths and
- * configuration.
- *
- * Handles recursion and filtering based on the configuration.
- *
- * @param initial_paths Vector of starting file or directory paths from the
+ * configuration. Handles recursion and filtering based on the configuration.
+ * @param[in] initial_paths Vector of starting file or directory paths from the
  * command line.
- * @param cfg The application configuration.
+ * @param[in] cfg The application configuration.
  * @return std::vector<WorkItem> A list of files (WorkItem entries) to be
- * processed. Directories are not included in the final list.
- * @throws std::filesystem::filesystem_error on file system access errors.
+ * processed.
+ * @throws std::filesystem::filesystem_error on file system access errors during
+ * iteration if not handled internally.
  */
 std::vector<WorkItem>
 discover_work_items(const std::vector<std::string> &initial_paths,

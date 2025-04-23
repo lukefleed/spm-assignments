@@ -7,11 +7,31 @@
 #include <string>
 
 // --- Constants ---
-const std::string SUFFIX = ".zip";
+/**
+ * @brief Suffix for compressed files (e.g., ".zip").
+ */
+extern const std::string SUFFIX;
+
+/**
+ * @brief File size threshold to trigger large file processing logic. Default is
+ * 16 MiB.
+ */
 constexpr size_t LARGE_FILE_THRESHOLD_DEFAULT = 16 * 1024 * 1024; // 16 MiB
-constexpr size_t BLOCK_SIZE_DEFAULT = 4 * 1024 * 1024;            // 4 MiB
+
+/**
+ * @brief Size of blocks for large file processing. Default is 4 MiB.
+ */
+constexpr size_t BLOCK_SIZE_DEFAULT = 4 * 1024 * 1024; // 4 MiB
+
+/**
+ * @brief Magic number for large file format (ASCII for "MPBL").
+ */
 constexpr uint32_t MAGIC_NUMBER_LARGE_FILE =
     0x4D50424C; // ASCII for "MPBL" (Miniz Parallel Block)
+
+/**
+ * @brief Version number for large file format.
+ */
 constexpr uint16_t FORMAT_VERSION = 1;
 
 // --- Configuration Structure ---

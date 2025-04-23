@@ -1,15 +1,16 @@
 #ifndef MINIZP_COMPRESSOR_HPP
 #define MINIZP_COMPRESSOR_HPP
 
+#include "config.hpp" // Include shared constants
 #include "config.hpp" // Uses ConfigData
 #include <cstdint>    // For fixed-width integers
 #include <string>
 #include <vector>
 
-// Forward declaration (optional, can include miniz.h directly if preferred)
-// struct mz_zip_archive;
-
 namespace Compressor {
+using ::FORMAT_VERSION;
+using ::MAGIC_NUMBER_LARGE_FILE;
+using ::SUFFIX;
 
 /**
  * @brief Header structure for custom large compressed files.

@@ -6,23 +6,19 @@
 
 namespace BenchUtils {
 
-double run_benchmark(const std::function<bool()> &func_to_run, int iterations,
-                     int warmup_iterations) {
+BenchmarkResult run_benchmark(const std::function<bool()> &func_to_run,
+                              int iterations, int warmup_iterations) {
   if (iterations < 1) {
-    std::cerr << "Error: Benchmark requires at least 1 iteration." << std::endl;
-    return -1.0;
+    return {false, 0.0, BenchmarkError::InvalidIterations};
   }
   if (warmup_iterations < 0) {
-    std::cerr << "Error: Warmup iterations cannot be negative." << std::endl;
-    return -1.0;
+    return {false, 0.0, BenchmarkError::InvalidWarmup};
   }
 
   // --- Warmup Phase ---
   for (int i = 0; i < warmup_iterations; ++i) {
     if (!func_to_run()) {
-      std::cerr << "Error: Function failed during warmup iteration " << i << "."
-                << std::endl;
-      return -2.0; // Indicate failure during warmup
+      return {false, 0.0, BenchmarkError::WarmupFailed};
     }
   }
 
@@ -35,9 +31,7 @@ double run_benchmark(const std::function<bool()> &func_to_run, int iterations,
     timer.reset(); // Start timer for this iteration
 
     if (!func_to_run()) {
-      std::cerr << "Error: Function failed during measurement iteration " << i
-                << "." << std::endl;
-      return -3.0; // Indicate failure during measurement
+      return {false, 0.0, BenchmarkError::MeasurementFailed};
     }
 
     timings_s.push_back(timer.elapsed_s()); // Record elapsed time
@@ -45,8 +39,8 @@ double run_benchmark(const std::function<bool()> &func_to_run, int iterations,
 
   // --- Calculate Median ---
   if (timings_s.empty()) {
-    // Should not happen if iterations >= 1, but check
-    return -4.0;
+    // Should not happen if iterations >= 1, but defensive
+    return {false, 0.0, BenchmarkError::MeasurementFailed};
   }
 
   // Use nth_element for efficiency in finding the median
@@ -56,7 +50,7 @@ double run_benchmark(const std::function<bool()> &func_to_run, int iterations,
 
   if (timings_s.size() % 2 != 0) {
     // Odd number of elements, median is the middle one
-    return timings_s[mid_index];
+    return {true, timings_s[mid_index], BenchmarkError::None};
   } else {
     // Even number of elements, median is average of the two middle ones
     // nth_element puts the median-candidate at mid_index. We need the element
@@ -65,7 +59,7 @@ double run_benchmark(const std::function<bool()> &func_to_run, int iterations,
     // Find the maximum element in the lower half
     double mid_val0 =
         *std::max_element(timings_s.begin(), timings_s.begin() + mid_index);
-    return (mid_val0 + mid_val1) / 2.0;
+    return {true, (mid_val0 + mid_val1) / 2.0, BenchmarkError::None};
   }
 }
 
