@@ -212,8 +212,14 @@ int main(int argc, char *argv[]) {
         TestUtils::clean_files_with_suffix(BENCH_DIR, SUFFIX, true, 0);
         return perform_compression_work(work_items, cfg_seq);
       };
-      double time_seq = BenchUtils::run_benchmark(
+      BenchUtils::BenchmarkResult seq_result = BenchUtils::run_benchmark(
           seq_work_small, params.iterations, params.warmup);
+      if (!seq_result.success) {
+        throw std::runtime_error(
+            "Sequential baseline benchmark failed with code: " +
+            std::to_string(static_cast<int>(seq_result.error_code)));
+      }
+      double time_seq = seq_result.median_time_s;
       // Print and record baseline
       std::cout << "ManySmall: Seq baseline=" << std::fixed
                 << std::setprecision(2) << time_seq << "s" << std::endl;
@@ -231,8 +237,15 @@ int main(int argc, char *argv[]) {
           TestUtils::clean_files_with_suffix(BENCH_DIR, SUFFIX, true, 0);
           return perform_compression_work(work_items, cfg_p);
         };
-        double time_par = BenchUtils::run_benchmark(
+        BenchUtils::BenchmarkResult par_result = BenchUtils::run_benchmark(
             par_work_small, params.iterations, params.warmup);
+        if (!par_result.success) {
+          std::cerr << "Warning: Parallel benchmark failed for threads=" << th
+                    << " with code: " << static_cast<int>(par_result.error_code)
+                    << std::endl;
+          continue; // Skip this data point
+        }
+        double time_par = par_result.median_time_s;
         double speed = time_seq / time_par;
         csv_small << th << "," << time_seq << "," << time_par << "," << speed
                   << '\n';
@@ -271,8 +284,15 @@ int main(int argc, char *argv[]) {
         TestUtils::clean_files_with_suffix(BENCH_DIR, SUFFIX, true, 0);
         return perform_compression_work(work_items, cfg_seq);
       };
-      double time_seq_s =
+      BenchUtils::BenchmarkResult seq_result_bs =
           BenchUtils::run_benchmark(seq_work, params.iterations, params.warmup);
+      if (!seq_result_bs.success) {
+        throw std::runtime_error(
+            "Sequential baseline benchmark failed for blocksize=" +
+            std::to_string(bs) + " with code: " +
+            std::to_string(static_cast<int>(seq_result_bs.error_code)));
+      }
+      double time_seq_s = seq_result_bs.median_time_s;
       // Section header for this block size with sequential baseline
       std::cout << std::endl
                 << "BlockSize=" << bs << "  Seq(s)=" << std::fixed
@@ -297,8 +317,15 @@ int main(int argc, char *argv[]) {
           TestUtils::clean_files_with_suffix(BENCH_DIR, SUFFIX, true, 0);
           return perform_compression_work(work_items, cfg_par);
         };
-        double time_par_s = BenchUtils::run_benchmark(
+        BenchUtils::BenchmarkResult par_result_bs = BenchUtils::run_benchmark(
             par_work, params.iterations, params.warmup);
+        if (!par_result_bs.success) {
+          std::cerr << "Warning: Parallel benchmark failed for blocksize=" << bs
+                    << ", threads=" << th << " with code: "
+                    << static_cast<int>(par_result_bs.error_code) << std::endl;
+          continue; // Skip this data point
+        }
+        double time_par_s = par_result_bs.median_time_s;
         double speedup = time_seq_s / time_par_s;
         // Write CSV and print parallel row
         csv << bs << "," << th << "," << time_seq_s << "," << time_par_s << ","
