@@ -77,77 +77,164 @@ make clean           # Remove executables and object files
 make cleanall        # Also removes test and benchmark data directories
 ```
 
-### Manual Execution of Executables
+## CLI Reference
 
-#### Parallel App (`minizp`)
+### minizp
 
-```bash
-./minizp [options] <file-or-dir> [more files or dirs]
+**Synopsis**
+
+```
+./minizp [OPTIONS] <file-or-directory> [more files or dirs]
 ```
 
-Options:
+**Description**
+Parallel compression/decompression tool using Miniz and OpenMP. Processes files or directories according to mode flags.
 
-- `-C 0|1`: compression mode; `0` preserves originals (default), `1` removes originals
-- `-D 0|1`: decompression mode; `0` preserves `.zip`, `1` removes `.zip`
-- `-r 0|1`: recursion into subdirectories; default `0`
-- `-t N`: number of OpenMP threads; default is max available
-- `-q L`: verbosity level (`0`=silent, `1`=errors, `2`=verbose); default `1`
-- `-h`: display help
+**Options**
 
-Examples:
+- `-C <0|1>`
+  - Set compress mode. `0` = compress and **keep** originals (default), `1` = compress and **remove** originals after `.zip` creation.
+- `-D <0|1>`
+  - Set decompress mode. `0` = decompress and **keep** `.zip` files (default), `1` = decompress and **remove** `.zip` files after extraction.
+- `-r <0|1>`
+  - Recursive directory traversal. `0` = disabled (default), `1` = enabled.
+- `-t <N>`
+  - Number of OpenMP threads for parallel regions. Must be a positive integer. Default = maximum available cores.
+- `-q <L>`
+  - Verbosity level. `0` = silent, `1` = errors only (default), `2` = verbose logging.
+- `-h`
+  - Display help/usage and exit.
 
-```bash
-# Compress directory recursively, keep originals, 8 threads, verbose
-./minizp -C 0 -r 1 -t 8 -q 2 /path/to/dir
-# Decompress and remove .zip files
-./minizp -D 1 /path/to/file.zip
+**Examples**
+
+- Compress a directory recursively with 8 threads in verbose mode, preserving originals:
+
+  ```bash
+  ./minizp -C 0 -r 1 -t 8 -q 2 /path/to/dir
+  ```
+
+- Decompress a single file and remove the `.zip` archive:
+
+  ```bash
+  ./minizp -D 1 /path/to/file.zip
+  ```
+
+### minizp_seq
+
+**Synopsis**
+
+```
+make app_seq         # build sequential-only binary
+./minizp_seq [OPTIONS] <file-or-directory> [...]
 ```
 
-#### Sequential App (`minizp_seq`)
+**Description**
+Sequential-only build (no OpenMP). Same flags as `minizp`, but single-threaded regardless of `-t`.
 
-Same usage, but built without OpenMP or by specifying `-t 1`.
+### minizp_bench
 
-#### Benchmark App (`minizp_bench`)
+**Synopsis**
 
-```bash
-./minizp_bench --type=<type> [--threads=N] [--iterations=I] [--warmup=W] [...]
+```
+./minizp_bench \
+  --type=<TYPE> \
+  [--threads=<N>] \
+  [--iterations=<I>] \
+  [--warmup=<W>] \
+  [--large_size=<bytes>] \
+  [--num_small=<N>] \
+  [--min_size=<bytes>] [--max_size=<bytes>] \
+  [--verbosity=<L>] \
+  [--threshold=<bytes>] \
+  [--blocksize=<bytes>] \
+  [--block_sizes_list=<S1,S2,...>]
 ```
 
-Benchmark Types (`--type`):
+**Description**
+Benchmark driver that generates test data, sweeps over thread counts and block sizes, measures sequential and parallel performance, and writes CSV results under `results/data/`.
 
-- `one_large`: Single large file, matrix sweep over threads and block sizes.
-- `many_small`: Many small files, sweep over threads only.
-- `many_large_sequential`: Many large files, sequential dispatch over files, matrix sweep over inner threads and block sizes.
-- `many_large_parallel`: Many large files, oversubscribed nested parallelism, matrix sweep over threads (per level) and block sizes.
-- `many_large_parallel_right`: Many large files, controlled nested parallelism, matrix sweep over total threads and block sizes.
+**Options**
 
-### Benchmark CSV Output
+- `--type=<TYPE>`
+  - Type of benchmark (required). One of:
+    - `one_large`
+    - `many_small`
+    - `many_large_sequential`
+    - `many_large_parallel`
+    - `many_large_parallel_right`
+- `--threads=<N>`
+  - Maximum number of threads to sweep in outer or inner loops. Default = max available cores.
+- `--iterations=<I>`
+  - Number of timed measurement iterations per configuration. Default = 2.
+- `--warmup=<W>`
+  - Number of warmup runs before measurement. Default = 1.
+- `--large_size=<bytes>`
+  - Size for single large file in `one_large` type. Default = 512 MiB.
+- `--num_small=<N>`
+  - Number of small files to generate for `many_small`. Default = 4000.
+- `--min_size=<bytes>` / `--max_size=<bytes>`
+  - Size range for small-file generation. Defaults = 1 KiB / 1 MiB.
+- `--verbosity=<L>`
+  - Verbosity level (0-2). Default = 0.
+- `--threshold=<bytes>`
+  - Override large-file threshold (bytes). Default = 16 MiB.
+- `--blocksize=<bytes>`
+  - Block size for large-file sweeps. Default = 1 MiB.
+- `--block_sizes_list=<S1,S2,...>`
+  - Comma-separated list of block sizes (bytes) to override default matrix.
 
-After running `make bench` or manually invoking `minizp_bench`, CSV files are generated in `results/data/`:
+**Examples**
 
-- `benchmark_many_small.csv`: `threads,seq_time_s,par_time_s,speedup`
-- `benchmark_one_large.csv`: `block_size,threads,seq_time_s,par_time_s,speedup`
-- `benchmark_many_large_sequential.csv`: `block_size,threads,seq_time_s,par_time_s,speedup`
-- `benchmark_many_large_parallel.csv`: `block_size,threads,seq_time_s,par_time_s,speedup`
-- `benchmark_many_large_parallel_right.csv`: `block_size,threads,seq_time_s,par_time_s,speedup,t_outer,t_inner`
+- Benchmark many small files up to 8 threads:
 
-### Generating Plots
+  ```bash
+  ./minizp_bench --type=many_small --threads=8
+  ```
 
-Use `plot.py` to create PDF plots:
+- One large file matrix over custom block sizes:
 
-```bash
-./plot.py --one_large
-./plot.py --many_small
-./plot.py --many_large_sequential
-./plot.py --many_large_parallel
-./plot.py --many_large_parallel_right
-./plot.py --all             # Generate all plots
+  ```bash
+  ./minizp_bench --type=one_large --threads=4 --block_sizes_list=1048576,2097152,4194304
+  ```
+
+### plot.py
+
+**Synopsis**
+
+```
+./plot.py [OPTIONS]
 ```
 
-Plots are saved under `results/plots/<type>/`, for example:
+**Description**
+Generate PDF plots from benchmark CSV files located in `results/data/` and save under `results/plots/`.
 
-- `results/plots/one_large/speedup_matrix_one_large.pdf`
-- `results/plots/many_small/speedup_many_small.pdf`
-- `results/plots/many_large_sequential/speedup_matrix_many_large_sequential.pdf`
-- `results/plots/many_large_parallel/speedup_matrix_many_large_parallel.pdf`
-- `results/plots/many_large_parallel_right/speedup_matrix_many_large_right.pdf`
+**Options**
+
+- `--one_large`
+  - Generate plots for `one_large` benchmarks.
+- `--many_small`
+  - Generate plots for `many_small`.
+- `--many_large_sequential`
+  - Generate plots for `many_large_sequential`.
+- `--many_large_parallel`
+  - Generate plots for `many_large_parallel`.
+- `--many_large_parallel_right`
+  - Generate plots for `many_large_parallel_right`.
+- `--all`
+  - Generate all available plots.
+
+**Examples**
+
+- Generate all plots:
+
+  ```bash
+  ./plot.py --all
+  ```
+
+## Test Script Edge Cases
+
+The provided `test_minizp.sh` script ensures the following scenarios are correctly handled:
+
+- Empty directories (e.g., `nested/emptydir`)
+- Symlinked directories (e.g., `nested_symlink`)
+- Mixed input order (processing a directory and files in any order)
