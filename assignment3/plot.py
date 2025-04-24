@@ -47,7 +47,9 @@ def plot_one_large(script_dir):
         y=matrix.index,
         aspect="auto",
         color_continuous_scale='Viridis',
-        title='Speedup Matrix (one_large)'
+        title='Heatmap of Parallel Speedup | Single 512 MiB Dataset',
+        width=800,
+        height=600,
     )
     fig.update_layout(xaxis_tickangle=-45, yaxis_autorange='reversed')
     out_dir = os.path.join(script_dir, 'results', 'plots', 'one_large')
@@ -76,11 +78,13 @@ def plot_many_small(script_dir):
         x=df['threads'], y=df['speedup'], mode='lines+markers', name='measured'
     ))
     fig.add_trace(go.Scatter(
-        x=df['threads'], y=ideal, mode='lines', name='ideal Amdahl'
+        x=df['threads'], y=ideal, mode='lines', name='Amdahl'
     ))
     fig.update_layout(
-        title='Speedup vs Threads (many_small)',
-        xaxis_title='Threads', yaxis_title='Speedup'
+        title='Strong Scaling Analysis: 4000 files (1-50 KiB Each)',
+        xaxis_title='Number of Threads (p)', yaxis_title='Observed Speedup S(p)',
+        width=800,
+        height=600,
     )
     out_dir = os.path.join(script_dir, 'results', 'plots', 'many_small')
     ensure_dir(out_dir)
@@ -106,7 +110,7 @@ def plot_block_speedup(script_dir):
     fig_all = px.line(
         df_sel, x='threads', y='speedup', color='block_mib',
         markers=True, labels={'block_mib': 'Block Size (MiB)'},
-        title='Multiline Speedup vs Threads'
+        title='Strong Scaling across Thread Counts for Varying Block Sizes'
     )
     fig_all.write_image(os.path.join(out_dir, 'multiline_block_speedup.pdf'), format='pdf')
     # individual plots with Amdahl's ideal curve for each block size
@@ -119,10 +123,12 @@ def plot_block_speedup(script_dir):
         ideal = sub['threads'].apply(lambda t: 1/((1-p) + p/t))
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=sub['threads'], y=sub['speedup'], mode='lines+markers', name='measured'))
-        fig.add_trace(go.Scatter(x=sub['threads'], y=ideal, mode='lines', name='ideal Amdahl'))
+        fig.add_trace(go.Scatter(x=sub['threads'], y=ideal, mode='lines', name='Amdahl'))
         fig.update_layout(
-            title=f'Speedup vs Threads (Block {mib}MiB)',
-            xaxis_title='Threads', yaxis_title='Speedup'
+            title=f'Strong Scaling: Single 512 MiB File, Block Size = {mib} MiB',
+            xaxis_title='Number of Threads (p)', yaxis_title='Observed Speedup S(p)',
+            width=800,
+            height=600,
         )
         fig.write_image(os.path.join(out_dir, f'block_{mib}MiB_speedup.pdf'), format='pdf')
     print(f"block_speedup plots saved to {out_dir}")
