@@ -1,6 +1,6 @@
 # MinizP: Parallel Compression/Decompression with OpenMP and Miniz
 
-This project implements a parallel compressor/decompressor based on the Miniz library and OpenMP for DEFLATE compression of both small and large files (using block-based parallelism for large inputs).
+This project implements a parallel compressor/decompressor based on the Miniz library and OpenMP for DEFLATE compression of both small and large files (using block-based parallelism for large inputs). It includes benchmarks for various parallelization strategies.
 
 ## Project Structure
 
@@ -14,7 +14,7 @@ assignment3/
 │   ├── app/                    # Executables and CLI parsing
 │   │   ├── minizp.cpp          # Main program (CLI for compress/decompress)
 │   │   ├── test_main.cpp       # Unit tests driver (seq and par modes)
-│   │   ├── bench_main.cpp      # Benchmark driver (thread/block sweeps)
+│   │   ├── bench_main.cpp      # Benchmark driver (thread/block sweeps for different strategies)
 │   │   ├── cmdline.hpp         # Command-line options parser
 │   │   └── config.hpp          # Configuration data and default constants
 │   ├── core/                   # Core logic: file discovery, compress/decompress
@@ -27,18 +27,21 @@ assignment3/
 │       ├── test_utils.cpp
 │       ├── bench_utils.hpp     # Timer and benchmark runner
 │       └── bench_utils.cpp
-└── obj/                        # (generated) object files and directories
+├── obj/                        # (generated) object files and directories
+└── results/                    # (generated) benchmark data and plots
+    ├── data/                   # CSV benchmark results
+    └── plots/                  # PDF plots
 ```
 
 ### File Descriptions
 
 - **Makefile**: Defines build targets: `all` (parallel app, tests, bench), `app_seq`, `test`, `bench`, `clean`, `cleanall`.
-- **plot.py**: Generates three types of plots (heatmap, speedup vs threads, block-size speedup) from CSV benchmarks.
+- **plot.py**: Generates plots (heatmaps, speedup vs threads) from CSV benchmarks.
 - **miniz/**: Single-file Miniz implementation of DEFLATE.
 - **src/app/**
   - _minizp.cpp_: Parses CLI, discovers files via FileHandler, and runs compression/decompression in parallel.
   - _test_main.cpp_: Sets up test environment, runs correctness tests for both sequential and parallel modes.
-  - _bench_main.cpp_: Sets up benchmark environment (one large or many small files), measures performance over various threads and block sizes, writes CSV.
+  - _bench_main.cpp_: Sets up benchmark environment (one large, many small, or many large files), measures performance over various threads and block sizes for different parallel strategies (`one_large`, `many_small`, `many_large_sequential`, `many_large_parallel`, `many_large_parallel_right`), writes CSVs.
   - _cmdline.hpp_: Defines CLI options `-C`, `-D`, `-r`, `-t`, `-q`, and help.
   - _config.hpp_: Defines `ConfigData` (mode, thresholds, block size, threads, verbosity).
 - **src/core/**
@@ -69,7 +72,7 @@ cd assignment3
 make all             # Build parallel app, test, and bench executables
 make app_seq         # Build sequential-only app
 make test            # Run correctness tests (seq and par)
-make bench           # Run benchmarks for many_small and one_large
+make bench           # Run all benchmarks (many_small, one_large, many_large_*)
 make clean           # Remove executables and object files
 make cleanall        # Also removes test and benchmark data directories
 ```
@@ -104,21 +107,40 @@ Examples:
 
 Same usage, but built without OpenMP or by specifying `-t 1`.
 
+#### Benchmark App (`minizp_bench`)
+
+```bash
+./minizp_bench --type=<type> [--threads=N] [--iterations=I] [--warmup=W] [...]
+```
+
+Benchmark Types (`--type`):
+
+- `one_large`: Single large file, matrix sweep over threads and block sizes.
+- `many_small`: Many small files, sweep over threads only.
+- `many_large_sequential`: Many large files, sequential dispatch over files, matrix sweep over inner threads and block sizes.
+- `many_large_parallel`: Many large files, oversubscribed nested parallelism, matrix sweep over threads (per level) and block sizes.
+- `many_large_parallel_right`: Many large files, controlled nested parallelism, matrix sweep over total threads and block sizes.
+
 ### Benchmark CSV Output
 
-After running `make bench` or manually invoking `minizp_bench`, two CSV files are generated in the `assignment3/` directory:
+After running `make bench` or manually invoking `minizp_bench`, CSV files are generated in `results/data/`:
 
-- `benchmark_many_small.csv`: columns `threads,seq_time_s,par_time_s,speedup`
-- `benchmark_matrix_results.csv`: columns `block_size,threads,seq_time_s,par_time_s,speedup`
+- `benchmark_many_small.csv`: `threads,seq_time_s,par_time_s,speedup`
+- `benchmark_one_large.csv`: `block_size,threads,seq_time_s,par_time_s,speedup`
+- `benchmark_many_large_sequential.csv`: `block_size,threads,seq_time_s,par_time_s,speedup`
+- `benchmark_many_large_parallel.csv`: `block_size,threads,seq_time_s,par_time_s,speedup`
+- `benchmark_many_large_parallel_right.csv`: `block_size,threads,seq_time_s,par_time_s,speedup,t_outer,t_inner`
 
 ### Generating Plots
 
 Use `plot.py` to create PDF plots:
 
 ```bash
-./plot.py --one_large       # Heatmap: speedup vs threads & block size
-./plot.py --many_small      # Speedup vs threads for many small files with Amdahl curve
-./plot.py --block_speedup   # Speedup vs threads for selected block sizes
+./plot.py --one_large
+./plot.py --many_small
+./plot.py --many_large_sequential
+./plot.py --many_large_parallel
+./plot.py --many_large_parallel_right
 ./plot.py --all             # Generate all plots
 ```
 
@@ -126,4 +148,6 @@ Plots are saved under `results/plots/<type>/`, for example:
 
 - `results/plots/one_large/speedup_matrix_one_large.pdf`
 - `results/plots/many_small/speedup_many_small.pdf`
-- `results/plots/block_speedup/block_<MiB>MiB_speedup.pdf`
+- `results/plots/many_large_sequential/speedup_matrix_many_large_sequential.pdf`
+- `results/plots/many_large_parallel/speedup_matrix_many_large_parallel.pdf`
+- `results/plots/many_large_parallel_right/speedup_matrix_many_large_right.pdf`

@@ -3,19 +3,19 @@
 Plotting scripts for Assignment 3 benchmarks.
 
 Subcommands:
-  --one_large        Heatmap matrix of speedup vs threads & block size
+  --one_large        Heatmap matrix of speedup vs threads & block size (single large file)
   --many_small       Speedup vs threads plot (many small files) with Amdahl's ideal curve
-  --block_speedup    Line plot of speedup vs block size at max threads
-  --many_large_sequential   Strong scaling for many large files (sequential dispatch)
-  --many_large_parallel      Strong scaling for many large files (nested parallel)
+  --many_large_sequential   Heatmap matrix for many large files (sequential dispatch)
+  --many_large_parallel      Heatmap matrix for many large files (nested parallel)
+  --many_large_parallel_right Heatmap matrix for many large files (controlled nesting)
   --all              Generate all plots
 
 Usage:
   ./plot.py --one_large
   ./plot.py --many_small
-  ./plot.py --block_speedup
   ./plot.py --many_large_sequential
   ./plot.py --many_large_parallel
+  ./plot.py --many_large_parallel_right
   ./plot.py --all
 
 Requires:
@@ -51,7 +51,7 @@ def plot_one_large(script_dir):
         y=matrix.index,
         aspect="auto",
         color_continuous_scale='Viridis',
-        title='Heatmap of Parallel Speedup | Single 512 MiB Dataset',
+        title='Heatmap: Speedup vs Threads & Block Size (One Large File)',
         width=800,
         height=600,
     )
@@ -85,7 +85,7 @@ def plot_many_small(script_dir):
         x=df['threads'], y=ideal, mode='lines', name='Amdahl'
     ))
     fig.update_layout(
-        title='Strong Scaling Analysis: 4000 files (1-50 KiB Each)',
+        title='Strong Scaling Analysis: Many Small Files',
         xaxis_title='Number of Threads (p)', yaxis_title='Observed Speedup S(p)',
         width=800,
         height=600,
@@ -97,45 +97,7 @@ def plot_many_small(script_dir):
     print(f"many_small plot saved to {out_pdf}")
 
 
-def plot_block_speedup(script_dir):
-    csv_file = os.path.join(script_dir, 'benchmark_matrix_results.csv')
-    if not os.path.exists(csv_file):
-        print(f"Error: {csv_file} not found")
-        return
-    df = pd.read_csv(csv_file)
-    # add block size in MiB column
-    df['block_mib'] = df['block_size'] // (1024*1024)
-    # select block sizes to plot
-    selected = [1, 3, 6, 9, 12]
-    df_sel = df[df['block_mib'].isin(selected)].sort_values(['block_mib', 'threads'])
-    out_dir = os.path.join(script_dir, 'results', 'plots', 'block_speedup')
-    ensure_dir(out_dir)
-    # multiline plot (speedup vs threads for each selected block)
-    fig_all = px.line(
-        df_sel, x='threads', y='speedup', color='block_mib',
-        markers=True, labels={'block_mib': 'Block Size (MiB)'},
-        title='Strong Scaling across Thread Counts for Varying Block Sizes'
-    )
-    fig_all.write_image(os.path.join(out_dir, 'multiline_block_speedup.pdf'), format='pdf')
-    # individual plots with Amdahl's ideal curve for each block size
-    for mib in selected:
-        sub = df[df['block_mib'] == mib].sort_values('threads')
-        # compute parallel fraction p from max thread data
-        max_row = sub[sub['threads'] == sub['threads'].max()].iloc[0]
-        T = max_row['threads']; S = max_row['speedup']
-        p = (1 - 1/S) / (1 - 1/T) if T > 1 else 0
-        ideal = sub['threads'].apply(lambda t: 1/((1-p) + p/t))
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=sub['threads'], y=sub['speedup'], mode='lines+markers', name='measured'))
-        fig.add_trace(go.Scatter(x=sub['threads'], y=ideal, mode='lines', name='Amdahl'))
-        fig.update_layout(
-            title=f'Strong Scaling: Single 512 MiB File, Block Size = {mib} MiB',
-            xaxis_title='Number of Threads (p)', yaxis_title='Observed Speedup S(p)',
-            width=800,
-            height=600,
-        )
-        fig.write_image(os.path.join(out_dir, f'block_{mib}MiB_speedup.pdf'), format='pdf')
-    print(f"block_speedup plots saved to {out_dir}")
+# Removed plot_block_speedup as it's redundant with heatmaps
 
 
 def plot_many_large_sequential(script_dir):
@@ -144,23 +106,25 @@ def plot_many_large_sequential(script_dir):
         print(f"Error: {csv_file} not found")
         return
     df = pd.read_csv(csv_file)
-    df = df.sort_values('threads')
-    max_row = df.iloc[-1]
-    T = max_row['threads']
-    S = max_row['speedup']
-    p = (1 - 1/S) / (1 - 1/T) if T > 1 else 0
-    ideal = df['threads'].apply(lambda t: 1/((1-p) + p/t))
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=df['threads'], y=df['speedup'], mode='lines+markers', name='measured'))
-    fig.add_trace(go.Scatter(x=df['threads'], y=ideal, mode='lines', name='Amdahl'))
-    fig.update_layout(
-        title='Strong Scaling: Many Large Files Sequential Dispatch',
-        xaxis_title='Number of Threads (p)', yaxis_title='Speedup',
-        width=800, height=600
+    # Create heatmap
+    matrix = df.pivot(index='threads', columns='block_size', values='speedup')
+    matrix.columns = matrix.columns.astype(int) // (1024*1024) # Convert block_size to MiB
+    matrix.index = matrix.index.astype(str) # Keep threads as string categories
+    fig = px.imshow(
+        matrix,
+        labels=dict(x="Block Size (MiB)", y="Inner Threads (p)", color="Speedup"),
+        x=matrix.columns.astype(str),
+        y=matrix.index,
+        aspect="auto",
+        color_continuous_scale='Viridis',
+        title='Heatmap: Speedup vs Inner Threads & Block Size (Many Large Files - Sequential Dispatch)',
+        width=800,
+        height=600,
     )
+    fig.update_layout(xaxis_tickangle=-45, yaxis_autorange='reversed')
     out_dir = os.path.join(script_dir, 'results', 'plots', 'many_large_sequential')
     ensure_dir(out_dir)
-    out_pdf = os.path.join(out_dir, 'speedup_many_large_sequential.pdf')
+    out_pdf = os.path.join(out_dir, 'speedup_matrix_many_large_sequential.pdf')
     fig.write_image(out_pdf, format='pdf')
     print(f"many_large_sequential plot saved to {out_pdf}")
 
@@ -171,23 +135,25 @@ def plot_many_large_parallel(script_dir):
         print(f"Error: {csv_file} not found")
         return
     df = pd.read_csv(csv_file)
-    df = df.sort_values('threads')
-    max_row = df.iloc[-1]
-    T = max_row['threads']
-    S = max_row['speedup']
-    p = (1 - 1/S) / (1 - 1/T) if T > 1 else 0
-    ideal = df['threads'].apply(lambda t: 1/((1-p) + p/t))
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=df['threads'], y=df['speedup'], mode='lines+markers', name='measured'))
-    fig.add_trace(go.Scatter(x=df['threads'], y=ideal, mode='lines', name='Amdahl'))
-    fig.update_layout(
-        title='Strong Scaling: Many Large Files Nested Parallel',
-        xaxis_title='Number of Threads (p)', yaxis_title='Speedup',
-        width=800, height=600
+    # Create heatmap
+    matrix = df.pivot(index='threads', columns='block_size', values='speedup')
+    matrix.columns = matrix.columns.astype(int) // (1024*1024) # Convert block_size to MiB
+    matrix.index = matrix.index.astype(str) # Keep threads as string categories
+    fig = px.imshow(
+        matrix,
+        labels=dict(x="Block Size (MiB)", y="Threads per Level (p)", color="Speedup"),
+        x=matrix.columns.astype(str),
+        y=matrix.index,
+        aspect="auto",
+        color_continuous_scale='Viridis',
+        title='Heatmap: Speedup vs Threads & Block Size (Many Large Files - Oversubscribed Nesting)',
+        width=800,
+        height=600,
     )
+    fig.update_layout(xaxis_tickangle=-45, yaxis_autorange='reversed')
     out_dir = os.path.join(script_dir, 'results', 'plots', 'many_large_parallel')
     ensure_dir(out_dir)
-    out_pdf = os.path.join(out_dir, 'speedup_many_large_parallel.pdf')
+    out_pdf = os.path.join(out_dir, 'speedup_matrix_many_large_parallel.pdf')
     fig.write_image(out_pdf, format='pdf')
     print(f"many_large_parallel plot saved to {out_pdf}")
 
@@ -213,6 +179,25 @@ def plot_many_large_parallel_right(script_dir):
         width=800,
         height=600,
     )
+    # Add text annotations for t_outer and t_inner
+    annotations = []
+    for r_idx, p_val in enumerate(matrix.index): # p_val is string thread count
+        for c_idx, bs_val in enumerate(matrix.columns): # bs_val is int MiB
+            speedup_val = matrix.iloc[r_idx, c_idx]
+            if pd.isna(speedup_val): continue # Skip NaN values
+
+            # Find corresponding t_outer, t_inner in original df
+            row = df[(df['threads'] == int(p_val)) & (df['block_size'] == bs_val * 1024 * 1024)].iloc[0]
+            t_outer = row['t_outer']
+            t_inner = row['t_inner']
+            annotations.append(dict(
+                x=str(bs_val), # x uses string column name
+                y=p_val,       # y uses string index name
+                text=f"Sp={speedup_val:.2f}<br>({t_outer}x{t_inner})", # Display speedup and TxT
+                showarrow=False,
+                font=dict(color='white' if speedup_val < matrix.max().max() * 0.6 else 'black', size=8) # Adjust text color/size
+            ))
+    fig.update_layout(annotations=annotations)
     fig.update_layout(xaxis_tickangle=-45, yaxis_autorange='reversed')
     out_dir = os.path.join(script_dir, 'results', 'plots', 'many_large_parallel_right')
     ensure_dir(out_dir)
@@ -220,19 +205,16 @@ def plot_many_large_parallel_right(script_dir):
     fig.write_image(out_pdf, format='pdf')
     print(f"many_large_parallel_right plot saved to {out_pdf}")
 
-    # Optional: Add individual line plots vs threads for selected block sizes if needed
-    # (Similar to plot_block_speedup logic)
-
 
 def main():
     parser = argparse.ArgumentParser(description="Generate benchmark plots.")
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument('--one_large', action='store_true')
     group.add_argument('--many_small', action='store_true')
-    group.add_argument('--block_speedup', action='store_true') # Might need update if source CSV changes
+    # group.add_argument('--block_speedup', action='store_true') # Removed
     group.add_argument('--many_large_sequential', action='store_true')
     group.add_argument('--many_large_parallel', action='store_true')
-    group.add_argument('--many_large_parallel_right', action='store_true') # Add new flag
+    group.add_argument('--many_large_parallel_right', action='store_true')
     group.add_argument('--all', action='store_true')
     args = parser.parse_args()
 
@@ -241,14 +223,13 @@ def main():
         plot_one_large(script_dir)
     if args.many_small or args.all:
         plot_many_small(script_dir)
-    # if args.block_speedup or args.all: # Check if this still makes sense
+    # if args.block_speedup or args.all: # Removed
     #     plot_block_speedup(script_dir)
     if args.many_large_sequential or args.all:
         plot_many_large_sequential(script_dir)
     if args.many_large_parallel or args.all:
-        # Assuming many_large_parallel also becomes a heatmap now
-        plot_many_large_parallel(script_dir) # Make sure this function exists and plots heatmap
-    if args.many_large_parallel_right or args.all: # Add new call
+        plot_many_large_parallel(script_dir) # Now plots heatmap
+    if args.many_large_parallel_right or args.all:
         plot_many_large_parallel_right(script_dir)
 
 
