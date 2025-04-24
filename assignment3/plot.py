@@ -192,14 +192,47 @@ def plot_many_large_parallel(script_dir):
     print(f"many_large_parallel plot saved to {out_pdf}")
 
 
+def plot_many_large_parallel_right(script_dir):
+    csv_file = os.path.join(script_dir, 'results/data/benchmark_many_large_parallel_right.csv')
+    if not os.path.exists(csv_file):
+        print(f"Error: {csv_file} not found")
+        return
+    df = pd.read_csv(csv_file)
+    # Create heatmap similar to one_large
+    matrix = df.pivot(index='threads', columns='block_size', values='speedup')
+    matrix.columns = matrix.columns.astype(int) // (1024*1024) # Convert block_size to MiB
+    matrix.index = matrix.index.astype(str) # Keep threads as string categories if needed
+    fig = px.imshow(
+        matrix,
+        labels=dict(x="Block Size (MiB)", y="Total Threads (p)", color="Speedup"),
+        x=matrix.columns.astype(str),
+        y=matrix.index,
+        aspect="auto",
+        color_continuous_scale='Viridis',
+        title='Heatmap: Speedup vs Threads & Block Size (Many Large Files - Controlled Nesting)',
+        width=800,
+        height=600,
+    )
+    fig.update_layout(xaxis_tickangle=-45, yaxis_autorange='reversed')
+    out_dir = os.path.join(script_dir, 'results', 'plots', 'many_large_parallel_right')
+    ensure_dir(out_dir)
+    out_pdf = os.path.join(out_dir, 'speedup_matrix_many_large_right.pdf')
+    fig.write_image(out_pdf, format='pdf')
+    print(f"many_large_parallel_right plot saved to {out_pdf}")
+
+    # Optional: Add individual line plots vs threads for selected block sizes if needed
+    # (Similar to plot_block_speedup logic)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Generate benchmark plots.")
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument('--one_large', action='store_true')
     group.add_argument('--many_small', action='store_true')
-    group.add_argument('--block_speedup', action='store_true')
+    group.add_argument('--block_speedup', action='store_true') # Might need update if source CSV changes
     group.add_argument('--many_large_sequential', action='store_true')
     group.add_argument('--many_large_parallel', action='store_true')
+    group.add_argument('--many_large_parallel_right', action='store_true') # Add new flag
     group.add_argument('--all', action='store_true')
     args = parser.parse_args()
 
@@ -208,12 +241,15 @@ def main():
         plot_one_large(script_dir)
     if args.many_small or args.all:
         plot_many_small(script_dir)
-    if args.block_speedup or args.all:
-        plot_block_speedup(script_dir)
+    # if args.block_speedup or args.all: # Check if this still makes sense
+    #     plot_block_speedup(script_dir)
     if args.many_large_sequential or args.all:
         plot_many_large_sequential(script_dir)
     if args.many_large_parallel or args.all:
-        plot_many_large_parallel(script_dir)
+        # Assuming many_large_parallel also becomes a heatmap now
+        plot_many_large_parallel(script_dir) # Make sure this function exists and plots heatmap
+    if args.many_large_parallel_right or args.all: # Add new call
+        plot_many_large_parallel_right(script_dir)
 
 
 if __name__ == '__main__':
