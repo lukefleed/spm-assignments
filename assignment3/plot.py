@@ -28,6 +28,9 @@ import argparse
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+import numpy as np
+if not hasattr(np, 'bool'):
+    np.bool = bool
 
 
 def ensure_dir(path):
@@ -166,8 +169,9 @@ def plot_many_large_parallel_right(script_dir):
     df = pd.read_csv(csv_file)
     # Create heatmap similar to one_large
     matrix = df.pivot(index='threads', columns='block_size', values='speedup')
-    matrix.columns = matrix.columns.astype(int) // (1024*1024) # Convert block_size to MiB
-    matrix.index = matrix.index.astype(str) # Keep threads as string categories if needed
+    matrix.columns = matrix.columns.astype(int) // (1024*1024)  # Convert block_size to MiB
+    matrix.index = matrix.index.astype(str)  # Keep threads as string categories if needed
+
     fig = px.imshow(
         matrix,
         labels=dict(x="Block Size (MiB)", y="Total Threads (p)", color="Speedup"),
@@ -179,26 +183,10 @@ def plot_many_large_parallel_right(script_dir):
         width=800,
         height=600,
     )
-    # Add text annotations for t_outer and t_inner
-    annotations = []
-    for r_idx, p_val in enumerate(matrix.index): # p_val is string thread count
-        for c_idx, bs_val in enumerate(matrix.columns): # bs_val is int MiB
-            speedup_val = matrix.iloc[r_idx, c_idx]
-            if pd.isna(speedup_val): continue # Skip NaN values
 
-            # Find corresponding t_outer, t_inner in original df
-            row = df[(df['threads'] == int(p_val)) & (df['block_size'] == bs_val * 1024 * 1024)].iloc[0]
-            t_outer = row['t_outer']
-            t_inner = row['t_inner']
-            annotations.append(dict(
-                x=str(bs_val), # x uses string column name
-                y=p_val,       # y uses string index name
-                text=f"Sp={speedup_val:.2f}<br>({t_outer}x{t_inner})", # Display speedup and TxT
-                showarrow=False,
-                font=dict(color='white' if speedup_val < matrix.max().max() * 0.6 else 'black', size=8) # Adjust text color/size
-            ))
-    fig.update_layout(annotations=annotations)
+    # Remove annotations; just adjust layout
     fig.update_layout(xaxis_tickangle=-45, yaxis_autorange='reversed')
+
     out_dir = os.path.join(script_dir, 'results', 'plots', 'many_large_parallel_right')
     ensure_dir(out_dir)
     out_pdf = os.path.join(out_dir, 'speedup_matrix_many_large_right.pdf')
