@@ -64,10 +64,33 @@
 \maketitle
 \vspace{-1.5em}
 
+\section{Implementation strategies}
+\subsection{Many Small Files}
+Compressing a large set of small files naturally lends itself to parallel execution since each file can be treated as an independent unit of work. In our implementation we employ an OpenMP parallel for loop with dynamic scheduling to assign each file to a separate thread, accommodating disparities in individual file sizes and ensuring a balanced distribution of tasks across available cores. Before invoking the Miniz compression routine, every file is memory-mapped, which significantly reduces system call overhead and guarantees contiguous in-memory access. This optimization lowers latency and increases throughput, although for extremely small files the per-file initialization costs and shared I/O contention may diminish the returns of fine-grained parallelism.
 
+Memory mapping is performed via the \textsf{POSIX} \textsf{mmap} system call, which creates a direct mapping between the file's contents and the process's virtual address space. This strategy obviates explicit read calls and extra buffer copies, allowing the compressor to treat file data as a simple pointer array. While the first access to each memory page may trigger a page fault, the amortized cost is lower than repeated I/O operations, particularly for large contiguous regions.
 
-% \section{Experimental Performance Analysis}
+To distinguish between small and large inputs, we selected a threshold of 16 MiB. Files below this limit are processed by a single-threaded routine to avoid the overhead of thread management, whereas larger files are divided into parallel blocks to exploit multicore throughput. Empirically, 16 MiB represents a compromise point at which block-level parallelism begins to outweigh its setup costs without incurring excessive memory pressure.
 
-% The parallel implementations were benchmarked on a dual-socket system with two Intel Xeon Gold 5318Y CPUs, offering 48 physical cores (96 logical threads) in a NUMA architecture\footnote{We will see that this architecture affects the scalability of the implementations, that are NUMA-unaware}. The system runs Ubuntu 22.04 with 1TB RAM, and all code was compiled using \textsf{GCC 11.4.0}. Execution times reported are the median of 50 samples (each with 1 warmup) to ensure measurement reliability. Strong speedup is calculated relative to the optimized sequential baseline.
+In the custom format for large files, the first four bytes encode the magic number \texttt{0x4D50424C}, corresponding to the ASCII string “MPBL”. This marker enables instant recognition of our block format and guards against accidental or malicious input of unsupported data.
+
+\subsection{One Large File}
+When handling a single, monolithic input, we divide the file into configurable, fixed-size blocks to expose parallelism at the segment level. Each thread reads its assigned block directly from a memory-mapped region, applies Miniz compression using a thread-local compressor instance to avoid repeated state initialization, and records both compressed output and block metadata. Smaller block sizes permit finer load balancing and higher concurrency but introduce extra metadata overhead and may fragment compression context; larger blocks preserve context and can improve compression ratios, yet they reduce the degree of parallelism. We tested various block sizes to find the optimal trade-off between compression efficiency and parallel throughput.
+
+\subsection{Many Large Files}
+For multiple large files, we exploit two orthogonal forms of parallelism: across files and within each file. We evaluated three dispatch strategies. The first processes files in a sequential outer loop while compressing blocks in parallel, which prevents thread oversubscription but fails to utilize all cores when the file count is lower than the core count. The second naively parallelizes both the outer file loop and the inner block loops over the full thread budget, often resulting in $p \times p$ threads, excessive context switching, and degraded performance. The third, and preferred, approach partitions the total thread budget $p$ into $t_{\mathrm{out}}$ threads for file-level dispatch and $t_{\mathrm{in}}$ threads for block-level work under the constraint $t_{\mathrm{out}} \times t_{\mathrm{in}} \le p$. In practice we select $t_{\mathrm{out}} = \lceil\sqrt{p}\rceil$ and $t_{\mathrm{in}} = \lfloor p/t_{\mathrm{out}}\rfloor$, a simple heuristic that balances inter-file throughput and intra-file concurrency without oversubscribing CPU resources.
+
+\section{Benchmarking Methodology}
+The driver in \texttt{bench\_main.cpp} parses command-line options, generates test data (many small or large files), and measures median execution time using warmup runs. For each scenario (many small, one large, many large sequential, oversubscribed nesting, controlled nesting), we adjust OpenMP settings (nested parallelism, thread counts) and record results in CSV.
+
+\section{Correctness Testing}
+The test harness in \texttt{test\_main.cpp} sets up a controlled environment with random files, then executes compression and decompression in both sequential and parallel modes. It verifies:
+\begin{itemize}\itemsep0pt
+    \item Round-trip integrity via byte-wise comparison and MD5 checksums.
+    \item Edge cases: zero-length files, remove\_origin flag, invalid paths, threshold override, recursion on subdirectories.
+\end{itemize}
+
+\section{Experimental Results}
+% Placeholder: results and discussion will be inserted here after measurements complete.
 
 \end{document}
