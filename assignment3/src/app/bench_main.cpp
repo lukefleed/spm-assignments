@@ -106,7 +106,9 @@ bool parseBenchArgs(int argc, char *argv[], BenchParams &params) {
     if (args.count("max_size"))
       params.max_small_file_size = std::stoull(args["max_size"]);
     // Validations
-    if (params.type != "one_large" && params.type != "many_small")
+    if (params.type != "one_large" && params.type != "many_small" &&
+        params.type != "many_large_sequential" &&
+        params.type != "many_large_parallel")
       throw std::runtime_error("Invalid type");
     if (params.threads <= 0)
       throw std::runtime_error("Threads must be positive");
@@ -144,6 +146,22 @@ void setup_bench_environment(const BenchParams &params) {
     if (!TestUtils::create_random_file(file_path, params.large_file_size,
                                        0)) { // Verbosity 0 for bench setup
       throw std::runtime_error("Failed creation: large file");
+    }
+  } else if (params.type == "many_large_sequential" ||
+             params.type == "many_large_parallel") {
+    // Generate many large files sequentially for new scenarios
+    std::random_device rd;
+    std::mt19937_64 gen(rd());
+    std::uniform_int_distribution<size_t> dist(50ULL * 1024 * 1024,
+                                               250ULL * 1024 * 1024);
+    for (int i = 0; i < 10; ++i) {
+      size_t size = dist(gen);
+      std::string file_path =
+          std::string(BENCH_DIR) + "/large_file_" + std::to_string(i) + ".bin";
+      if (!TestUtils::create_random_file(file_path, size, 0)) {
+        throw std::runtime_error("Failed creation: large file " +
+                                 std::to_string(i));
+      }
     }
   } else { // many_small
     // Generate many small files with random, distinct sizes in user-defined
@@ -230,10 +248,17 @@ int main(int argc, char *argv[]) {
             << ", Warmup: " << params.warmup;
   if (params.type == "one_large") {
     std::cout << ", File Size: " << params.large_file_size << " bytes";
-  } else {
+  } else if (params.type == "many_small") {
     std::cout << ", Num Small Files: " << params.num_small_files << ", Sizes: ["
               << params.min_small_file_size << " - "
               << params.max_small_file_size << "] bytes";
+  } else if (params.type == "many_large_sequential" ||
+             params.type == "many_large_parallel") {
+    static const size_t MIN_LARGE = 50ULL * 1024 * 1024;
+    static const size_t MAX_LARGE = 250ULL * 1024 * 1024;
+    std::cout << ", Num Large Files: 10"
+              << ", Size Range: [" << MIN_LARGE << " - " << MAX_LARGE
+              << "] bytes";
   }
   std::cout << std::endl;
   std::cout << "Large Threshold: " << params.config.large_file_threshold
@@ -305,6 +330,113 @@ int main(int argc, char *argv[]) {
                   << std::fixed << std::setprecision(2) << speed << std::endl;
       }
       csv_small.close();
+      cleanup_bench_environment();
+      return 0;
+    }
+
+    if (params.type == "many_large_sequential") {
+      // Benchmark many large files with only block-level parallelism
+      std::vector<int> thread_counts;
+      for (int t = 1; t <= params.threads; ++t)
+        thread_counts.push_back(t);
+      std::ofstream csv_seq("results/data/benchmark_many_large_sequential.csv");
+      csv_seq << "threads,seq_time_s,par_time_s,speedup" << '\n';
+      // Sequential baseline (inner threads = 1)
+      ConfigData cfg_base = params.config;
+      double time_base;
+      {
+        cfg_base.num_threads = 1;
+        omp_set_nested(false);
+        // run sequential loop over files
+        auto seq_work = [&]() {
+          TestUtils::clean_files_with_suffix(BENCH_DIR, SUFFIX, true, 0);
+          for (auto &item : work_items)
+            Compressor::process_file(item.path, cfg_base);
+          return true;
+        };
+        auto res = BenchUtils::run_benchmark(seq_work, params.iterations,
+                                             params.warmup);
+        time_base = res.median_time_s;
+      }
+      csv_seq << 1 << "," << time_base << "," << time_base << ",1" << '\n';
+      // Print base and table header
+      std::cout << "ManyLargeSeq: base=" << std::fixed << std::setprecision(2)
+                << time_base << "s" << std::endl;
+      std::cout << std::setw(10) << "Threads" << std::setw(12) << "Par(s)"
+                << std::setw(10) << "Speedup" << std::endl;
+      for (int th : thread_counts) {
+        if (th == 1)
+          continue;
+        ConfigData cfg_p = params.config;
+        cfg_p.num_threads = th;
+        omp_set_nested(false);
+        auto work_p = [&]() {
+          TestUtils::clean_files_with_suffix(BENCH_DIR, SUFFIX, true, 0);
+          for (auto &item : work_items)
+            Compressor::process_file(item.path, cfg_p);
+          return true;
+        };
+        auto pres =
+            BenchUtils::run_benchmark(work_p, params.iterations, params.warmup);
+        double t_par = pres.median_time_s;
+        double speed = time_base / t_par;
+        csv_seq << th << "," << time_base << "," << t_par << "," << speed
+                << '\n';
+        std::cout << std::setw(10) << th << std::setw(12) << std::fixed
+                  << std::setprecision(2) << t_par << std::setw(10)
+                  << std::fixed << std::setprecision(2) << speed << std::endl;
+      }
+      csv_seq.close();
+      cleanup_bench_environment();
+      return 0;
+    }
+
+    if (params.type == "many_large_parallel") {
+      // Benchmark many large files with nested parallelism
+      std::vector<int> thread_counts;
+      for (int t = 1; t <= params.threads; ++t)
+        thread_counts.push_back(t);
+      std::ofstream csv_par("results/data/benchmark_many_large_parallel.csv");
+      csv_par << "threads,seq_time_s,par_time_s,speedup" << '\n';
+      // Sequential baseline
+      ConfigData cfg_b = params.config;
+      cfg_b.num_threads = 1;
+      omp_set_nested(false);
+      omp_set_num_threads(1);
+      auto seq_w = [&]() {
+        TestUtils::clean_files_with_suffix(BENCH_DIR, SUFFIX, true, 0);
+        return perform_compression_work(work_items, cfg_b);
+      };
+      auto r_base =
+          BenchUtils::run_benchmark(seq_w, params.iterations, params.warmup);
+      double t_base = r_base.median_time_s;
+      csv_par << 1 << "," << t_base << "," << t_base << ",1" << '\n';
+      // Print base and table header
+      std::cout << "ManyLargePar: base=" << std::fixed << std::setprecision(2)
+                << t_base << "s" << std::endl;
+      std::cout << std::setw(10) << "Threads" << std::setw(12) << "Par(s)"
+                << std::setw(10) << "Speedup" << std::endl;
+      for (int th : thread_counts) {
+        if (th == 1)
+          continue;
+        ConfigData cfg_p = params.config;
+        cfg_p.num_threads = th;
+        omp_set_nested(true);
+        omp_set_num_threads(th);
+        auto pwork = [&]() {
+          TestUtils::clean_files_with_suffix(BENCH_DIR, SUFFIX, true, 0);
+          return perform_compression_work(work_items, cfg_p);
+        };
+        auto r =
+            BenchUtils::run_benchmark(pwork, params.iterations, params.warmup);
+        double t_p = r.median_time_s;
+        double speed = t_base / t_p;
+        csv_par << th << "," << t_base << "," << t_p << "," << speed << '\n';
+        std::cout << std::setw(10) << th << std::setw(12) << std::fixed
+                  << std::setprecision(2) << t_p << std::setw(10) << std::fixed
+                  << std::setprecision(2) << speed << std::endl;
+      }
+      csv_par.close();
       cleanup_bench_environment();
       return 0;
     }

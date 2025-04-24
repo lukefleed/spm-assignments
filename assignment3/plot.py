@@ -6,12 +6,16 @@ Subcommands:
   --one_large        Heatmap matrix of speedup vs threads & block size
   --many_small       Speedup vs threads plot (many small files) with Amdahl's ideal curve
   --block_speedup    Line plot of speedup vs block size at max threads
-  --all              Generate all three plots
+  --many_large_sequential   Strong scaling for many large files (sequential dispatch)
+  --many_large_parallel      Strong scaling for many large files (nested parallel)
+  --all              Generate all plots
 
 Usage:
   ./plot.py --one_large
   ./plot.py --many_small
   ./plot.py --block_speedup
+  ./plot.py --many_large_sequential
+  ./plot.py --many_large_parallel
   ./plot.py --all
 
 Requires:
@@ -134,12 +138,68 @@ def plot_block_speedup(script_dir):
     print(f"block_speedup plots saved to {out_dir}")
 
 
+def plot_many_large_sequential(script_dir):
+    csv_file = os.path.join(script_dir, 'results/data/benchmark_many_large_sequential.csv')
+    if not os.path.exists(csv_file):
+        print(f"Error: {csv_file} not found")
+        return
+    df = pd.read_csv(csv_file)
+    df = df.sort_values('threads')
+    max_row = df.iloc[-1]
+    T = max_row['threads']
+    S = max_row['speedup']
+    p = (1 - 1/S) / (1 - 1/T) if T > 1 else 0
+    ideal = df['threads'].apply(lambda t: 1/((1-p) + p/t))
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=df['threads'], y=df['speedup'], mode='lines+markers', name='measured'))
+    fig.add_trace(go.Scatter(x=df['threads'], y=ideal, mode='lines', name='Amdahl'))
+    fig.update_layout(
+        title='Strong Scaling: Many Large Files Sequential Dispatch',
+        xaxis_title='Number of Threads (p)', yaxis_title='Speedup',
+        width=800, height=600
+    )
+    out_dir = os.path.join(script_dir, 'results', 'plots', 'many_large_sequential')
+    ensure_dir(out_dir)
+    out_pdf = os.path.join(out_dir, 'speedup_many_large_sequential.pdf')
+    fig.write_image(out_pdf, format='pdf')
+    print(f"many_large_sequential plot saved to {out_pdf}")
+
+
+def plot_many_large_parallel(script_dir):
+    csv_file = os.path.join(script_dir, 'results/data/benchmark_many_large_parallel.csv')
+    if not os.path.exists(csv_file):
+        print(f"Error: {csv_file} not found")
+        return
+    df = pd.read_csv(csv_file)
+    df = df.sort_values('threads')
+    max_row = df.iloc[-1]
+    T = max_row['threads']
+    S = max_row['speedup']
+    p = (1 - 1/S) / (1 - 1/T) if T > 1 else 0
+    ideal = df['threads'].apply(lambda t: 1/((1-p) + p/t))
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=df['threads'], y=df['speedup'], mode='lines+markers', name='measured'))
+    fig.add_trace(go.Scatter(x=df['threads'], y=ideal, mode='lines', name='Amdahl'))
+    fig.update_layout(
+        title='Strong Scaling: Many Large Files Nested Parallel',
+        xaxis_title='Number of Threads (p)', yaxis_title='Speedup',
+        width=800, height=600
+    )
+    out_dir = os.path.join(script_dir, 'results', 'plots', 'many_large_parallel')
+    ensure_dir(out_dir)
+    out_pdf = os.path.join(out_dir, 'speedup_many_large_parallel.pdf')
+    fig.write_image(out_pdf, format='pdf')
+    print(f"many_large_parallel plot saved to {out_pdf}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Generate benchmark plots.")
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument('--one_large', action='store_true')
     group.add_argument('--many_small', action='store_true')
     group.add_argument('--block_speedup', action='store_true')
+    group.add_argument('--many_large_sequential', action='store_true')
+    group.add_argument('--many_large_parallel', action='store_true')
     group.add_argument('--all', action='store_true')
     args = parser.parse_args()
 
@@ -150,6 +210,10 @@ def main():
         plot_many_small(script_dir)
     if args.block_speedup or args.all:
         plot_block_speedup(script_dir)
+    if args.many_large_sequential or args.all:
+        plot_many_large_sequential(script_dir)
+    if args.many_large_parallel or args.all:
+        plot_many_large_parallel(script_dir)
 
 
 if __name__ == '__main__':
