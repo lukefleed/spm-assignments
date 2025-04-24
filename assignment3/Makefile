@@ -99,14 +99,14 @@ bench: $(TARGET_BENCH) # Depends directly on the bench executable
 	@echo "Running Benchmarks (Many Small Files)..."
 	./$(TARGET_BENCH) --type=many_small \
 	                  --threads=$(or $(THREADS),$(shell nproc)) \
-	                  --iterations=10 \
-	                  --warmup=1
+	                  --iterations=5 \
+	                  --warmup=0
 	@echo ""
 	@echo "Running Benchmarks (One Large File)..."
 	./$(TARGET_BENCH) --type=one_large \
 	                  --threads=$(or $(THREADS),$(shell nproc)) \
-	                  --iterations=10 \
-	                  --warmup=1
+	                  --iterations=5 \
+	                  --warmup=0
 	@echo ""
 	@echo "Benchmarks Finished."
 
