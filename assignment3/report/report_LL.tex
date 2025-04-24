@@ -1,0 +1,73 @@
+\documentclass[10pt]{article}
+\usepackage[margin=0.8in]{geometry}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[english]{babel}
+
+\usepackage{fourier}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsfonts}
+\usepackage{amsthm}
+
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{subcaption}
+
+\usepackage{booktabs}
+
+\usepackage{etoolbox}
+\usepackage{siunitx}
+\usepackage{parskip}
+\usepackage{hyperref}
+\usepackage{cite}
+
+\usepackage{listings}
+\usepackage{color}
+
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,
+    breaklines=true,
+    captionpos=b,
+    keepspaces=true,
+    numbers=left,
+    numbersep=5pt,
+    showspaces=false,
+    showstringspaces=false,
+    showtabs=false,
+    tabsize=2,
+    language=C++
+}
+\lstset{style=mystyle}
+
+\newcommand{\code}[1]{\texttt{#1}}
+
+
+\title{Assignment 2: Miniz-based parallel compressor/decompressor in OpenMP}
+\author{Luca Lombardo \\ SPM Course a.a. 24/25}
+\date{}
+
+\begin{document}
+
+\maketitle
+\vspace{-1.5em}
+
+
+
+% \section{Experimental Performance Analysis}
+
+% The parallel implementations were benchmarked on a dual-socket system with two Intel Xeon Gold 5318Y CPUs, offering 48 physical cores (96 logical threads) in a NUMA architecture\footnote{We will see that this architecture affects the scalability of the implementations, that are NUMA-unaware}. The system runs Ubuntu 22.04 with 1TB RAM, and all code was compiled using \textsf{GCC 11.4.0}. Execution times reported are the median of 50 samples (each with 1 warmup) to ensure measurement reliability. Strong speedup is calculated relative to the optimized sequential baseline.
+
+\end{document}

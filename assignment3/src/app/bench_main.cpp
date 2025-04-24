@@ -48,8 +48,8 @@ struct BenchParams {
   size_t min_small_file_size =
       1 * 1024; ///< Minimum size for small files (bytes)
   size_t max_small_file_size =
-      50 * 1024;     ///< Maximum size for small files (bytes)
-  ConfigData config; ///< Compression configuration
+      1 * 1024 * 1024; ///< Maximum size for small files (bytes)
+  ConfigData config;   ///< Compression configuration
   std::vector<size_t> block_sizes_list; ///< Block sizes for matrix sweep
 };
 

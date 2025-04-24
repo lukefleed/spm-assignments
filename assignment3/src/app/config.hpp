@@ -16,6 +16,7 @@ inline const std::string SUFFIX = ".zip";
  * @brief File size threshold to trigger large file processing logic. Default is
  * 16 MiB.
  */
+// constexpr size_t LARGE_FILE_THRESHOLD_DEFAULT = 128 * 1024 * 1024; // 128 MiB
 constexpr size_t LARGE_FILE_THRESHOLD_DEFAULT = 16 * 1024 * 1024; // 16 MiB
 
 /**
