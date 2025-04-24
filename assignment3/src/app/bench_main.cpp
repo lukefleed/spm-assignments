@@ -212,8 +212,8 @@ void cleanup_bench_environment() {
 bool perform_compression_work(const std::vector<FileHandler::WorkItem> &items,
                               ConfigData &cfg) {
   std::atomic<bool> error_flag = false;
-#pragma omp parallel for if (cfg.num_threads > 1) default(none)                \
-    shared(items, cfg, error_flag) schedule(dynamic)
+#pragma omp parallel for default(none) shared(items, cfg, error_flag)          \
+    schedule(dynamic)
   for (size_t i = 0; i < items.size(); ++i) {
     if (error_flag.load())
       continue;
@@ -253,29 +253,29 @@ int main(int argc, char *argv[]) {
   // nesting globally if p > 1
 
   std::cout << "--- Benchmark Initializing ---" << std::endl;
-  // Update the print statement for the new type
   std::cout << "Type: " << params.type << ", Threads: " << params.threads
             << ", Iterations: " << params.iterations
             << ", Warmup: " << params.warmup;
   if (params.type == "one_large") {
+    // Keep one_large size in bytes for clarity, or convert to MiB? Let's keep
+    // bytes for now.
     std::cout << ", File Size: " << params.large_file_size << " bytes";
   } else if (params.type == "many_small") {
+    // Convert small file sizes to KiB for printing
     std::cout << ", Num Small Files: " << params.num_small_files << ", Sizes: ["
-              << params.min_small_file_size << " - "
-              << params.max_small_file_size << "] bytes";
+              << (params.min_small_file_size / 1024) << " - "
+              << (params.max_small_file_size / (1024)) << "] KiB"; // Use KiB
   } else if (params.type == "many_large_sequential" ||
              params.type == "many_large_parallel" ||
-             params.type == "many_large_parallel_right") { // Add new type
+             params.type == "many_large_parallel_right") {
     static const size_t MIN_LARGE = 50ULL * 1024 * 1024;
     static const size_t MAX_LARGE = 250ULL * 1024 * 1024;
-    // Use the defined constants here
+    // Convert large file size range to MiB for printing
     std::cout << ", Num Large Files: 10"
-              << ", Size Range: [" << MIN_LARGE << " - " << MAX_LARGE
-              << "] bytes";
+              << ", Size Range: [" << (MIN_LARGE / (1024 * 1024)) << " - "
+              << (MAX_LARGE / (1024 * 1024)) << "] MiB"; // Use MiB
   }
   std::cout << std::endl;
-  std::cout << "Large Threshold: " << params.config.large_file_threshold
-            << ", Block Size: " << params.config.block_size << std::endl;
 
   try {
     setup_bench_environment(params);
@@ -349,57 +349,107 @@ int main(int argc, char *argv[]) {
     }
 
     if (params.type == "many_large_sequential") {
-      // Benchmark many large files: sequential file-level dispatch, nested
-      // block parallelism
+      // Matrix benchmark: Sequential file dispatch, nested block parallelism
+      // over block sizes and threads
       std::vector<int> thread_counts;
       for (int t = 1; t <= params.threads; ++t)
         thread_counts.push_back(t);
+      // Define block sizes (1MiB to 12MiB) or use list if provided
+      std::vector<size_t> block_sizes;
+      if (!params.block_sizes_list.empty()) {
+        block_sizes = params.block_sizes_list;
+      } else {
+        for (int i = 1; i <= 12; ++i)
+          block_sizes.push_back(static_cast<size_t>(i) * 1024 * 1024);
+      }
+
       std::ofstream csv_seq("results/data/benchmark_many_large_sequential.csv");
-      csv_seq << "threads,seq_time_s,par_time_s,speedup" << '\n';
-      // Baseline: single-thread nested on each file
-      ConfigData cfg_b = params.config;
-      double base_time;
-      {
-        cfg_b.num_threads = 1;
-        omp_set_nested(true);
-        omp_set_num_threads(1);
-        auto work = [&]() {
-          TestUtils::clean_files_with_suffix(BENCH_DIR, SUFFIX, true, 0);
-          for (auto &item : work_items)
-            Compressor::process_file(item.path, cfg_b);
-          return true;
-        };
-        auto r =
-            BenchUtils::run_benchmark(work, params.iterations, params.warmup);
-        base_time = r.median_time_s;
-      }
-      csv_seq << 1 << "," << base_time << "," << base_time << ",1" << '\n';
-      std::cout << "ManyLargeSeq: Seq baseline=" << std::fixed
-                << std::setprecision(2) << base_time << "s" << std::endl;
-      std::cout << std::setw(8) << "Threads" << std::setw(12) << "Par(s)"
-                << std::setw(10) << "Speedup" << std::endl;
-      for (int th : thread_counts) {
-        if (th == 1)
-          continue;
-        ConfigData cfg_p = params.config;
-        cfg_p.num_threads = th;
-        omp_set_nested(true);
-        omp_set_num_threads(th);
-        auto work_p = [&]() {
-          TestUtils::clean_files_with_suffix(BENCH_DIR, SUFFIX, true, 0);
-          for (auto &item : work_items)
-            Compressor::process_file(item.path, cfg_p);
-          return true;
-        };
-        auto rp =
-            BenchUtils::run_benchmark(work_p, params.iterations, params.warmup);
-        double tp = rp.median_time_s;
-        double sp = base_time / tp;
-        csv_seq << th << "," << base_time << "," << tp << "," << sp << '\n';
-        std::cout << std::setw(8) << th << std::setw(12) << std::fixed
-                  << std::setprecision(2) << tp << std::setw(10) << sp
-                  << std::endl;
-      }
+      // Add block_size to CSV header
+      csv_seq << "block_size,threads,seq_time_s,par_time_s,speedup" << '\n';
+
+      // Outer loop over block sizes
+      for (size_t bs : block_sizes) {
+        params.config.block_size = bs; // Set current block size
+
+        // Baseline: single-thread nested on each file for this block size
+        ConfigData cfg_b = params.config;
+        double base_time;
+        {
+          cfg_b.num_threads = 1;
+          omp_set_nested(true);   // Allow inner parallelism even for baseline
+          omp_set_num_threads(1); // Outer loop is sequential C++
+          auto work = [&]() {
+            TestUtils::clean_files_with_suffix(BENCH_DIR, SUFFIX, true, 0);
+            // Sequential C++ loop over files
+            for (auto &item : work_items) {
+              // process_file uses cfg_b.num_threads (1) for inner parallelism
+              if (!Compressor::process_file(item.path, cfg_b))
+                return false;
+            }
+            return true;
+          };
+          auto r =
+              BenchUtils::run_benchmark(work, params.iterations, params.warmup);
+          if (!r.success)
+            throw std::runtime_error(
+                "many_large_sequential baseline failed for block_size=" +
+                std::to_string(bs));
+          base_time = r.median_time_s;
+        }
+        // Record baseline for this block size
+        csv_seq << bs << "," << 1 << "," << base_time << "," << base_time
+                << ",1" << '\n';
+
+        // Print section header and table header for this block size
+        std::cout << "\nBlockSize=" << (bs / (1024 * 1024))
+                  << "MiB  Seq(s)=" << std::fixed << std::setprecision(2)
+                  << base_time << "s (Sequential Dispatch)" << std::endl;
+        std::cout << std::setw(8) << "Threads" << std::setw(12) << "Par(s)"
+                  << std::setw(10) << "Speedup" << std::endl;
+
+        // Inner loop over thread counts for this block size
+        for (int th : thread_counts) {
+          if (th == 1)
+            continue; // Skip baseline, already recorded
+
+          ConfigData cfg_p = params.config; // Use current block size
+          cfg_p.num_threads = th; // Inner parallelism uses 'th' threads
+          omp_set_nested(true);   // Allow inner parallelism
+          // Outer loop is sequential C++, but set OMP threads for inner calls
+          // Note: omp_set_num_threads(th) here might be misleading as the outer
+          // loop isn't parallel OMP. The important part is cfg_p.num_threads =
+          // th passed to process_file. Let's set it anyway for consistency,
+          // though it only affects the inner regions.
+          omp_set_num_threads(th);
+
+          auto work_p = [&]() {
+            TestUtils::clean_files_with_suffix(BENCH_DIR, SUFFIX, true, 0);
+            // Sequential C++ loop over files
+            for (auto &item : work_items) {
+              // process_file uses cfg_p.num_threads (th) for inner parallelism
+              if (!Compressor::process_file(item.path, cfg_p))
+                return false;
+            }
+            return true;
+          };
+          auto rp = BenchUtils::run_benchmark(work_p, params.iterations,
+                                              params.warmup);
+          if (!rp.success) {
+            std::cerr << "Warning: many_large_sequential benchmark failed for "
+                         "threads="
+                      << th << " block_size=" << bs << std::endl;
+            continue;
+          }
+          double tp = rp.median_time_s;
+          double sp = base_time / tp;
+          // Record result for this block size and thread count
+          csv_seq << bs << "," << th << "," << base_time << "," << tp << ","
+                  << sp << '\n';
+          std::cout << std::setw(8) << th << std::setw(12) << std::fixed
+                    << std::setprecision(2) << tp << std::setw(10) << std::fixed
+                    << std::setprecision(2) << sp << std::endl;
+        }
+      } // End loop over block sizes
       csv_seq.close();
       cleanup_bench_environment();
       return 0;
@@ -446,7 +496,6 @@ int main(int argc, char *argv[]) {
           ConfigData cfg_p = params.config;
           cfg_p.num_threads = th;
           omp_set_nested(true);
-          omp_set_max_active_levels(2);
           omp_set_num_threads(th);
           auto par_work = [&]() {
             TestUtils::clean_files_with_suffix(BENCH_DIR, SUFFIX, true, 0);
@@ -517,19 +566,27 @@ int main(int argc, char *argv[]) {
           if (p == 1)
             continue;
 
-          // Calculate thread distribution
-          int t_outer = std::min(p, num_work_items);
-          // Ensure t_outer doesn't exceed p
-          t_outer = std::min(t_outer, p);
-          // Calculate t_inner, ensuring it's at least 1
-          int t_inner = std::max(1, p / t_outer);
-          // Optional: Refine t_inner to not exceed p / t_outer strictly?
-          // t_inner = std::min(t_inner, p); // Ensure t_inner <= p
-          // Example: p=7, nfiles=10 -> t_outer=7, t_inner=max(1, 7/7)=1.
-          // Total=7*1=7 <= 7. OK. Example: p=12, nfiles=4 -> t_outer=4,
-          // t_inner=max(1, 12/4)=3. Total=4*3=12 <= 12. OK. Example: p=10,
-          // nfiles=4 -> t_outer=4, t_inner=max(1, 10/4)=2. Total=4*2=8 <= 10.
-          // OK.
+          // Calculate thread distribution - MODIFIED LOGIC
+          // Aim for a balance closer to sqrt(p) for both levels
+          int ideal_outer =
+              static_cast<int>(std::ceil(std::sqrt(static_cast<double>(p))));
+          int t_outer =
+              std::min(ideal_outer, num_work_items); // Limit by number of files
+          t_outer =
+              std::min(t_outer, p); // Cannot use more threads than requested
+          t_outer = std::max(1, t_outer); // Ensure at least 1 outer thread
+
+          // Calculate t_inner based on remaining budget, ensure at least 1
+          int t_inner = (t_outer > 0) ? std::max(1, p / t_outer) : 1;
+
+          // Optional refinement: Ensure t_outer * t_inner <= p strictly?
+          // The current logic ensures this due to integer division.
+          // Example: p=10, nfiles=10 -> ideal_outer=4, t_outer=min(4,10)=4,
+          // t_inner=max(1, 10/4)=max(1,2)=2. Total=4*2=8 <= 10. OK. Example:
+          // p=8, nfiles=10 -> ideal_outer=3, t_outer=min(3,10)=3,
+          // t_inner=max(1, 8/3)=max(1,2)=2. Total=3*2=6 <= 8. OK. Example:
+          // p=12, nfiles=4 -> ideal_outer=4, t_outer=min(4,4)=4, t_inner=max(1,
+          // 12/4)=max(1,3)=3. Total=4*3=12 <= 12. OK.
 
           ConfigData cfg_p_right = params.config;
           cfg_p_right.num_threads = t_inner; // Pass t_inner to inner loops

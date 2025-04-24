@@ -37,7 +37,7 @@ OBJDIR_SEQ_RELEASE := obj/seq/release
 # --- Object File Generation ---
 # Core Objects (Parallel Release Example)
 CORE_OBJS_PAR_RELEASE := $(patsubst src/%.cpp,$(OBJDIR_PAR_RELEASE)/%.o, $(filter src/%.cpp, $(CORE_SRCS))) \
-                         $(patsubst miniz/%.c,$(OBJDIR_PAR_RELEASE)/miniz.o, $(filter miniz/%.c, $(CORE_SRCS)))
+			   $(patsubst miniz/%.c,$(OBJDIR_PAR_RELEASE)/miniz.o, $(filter miniz/%.c, $(CORE_SRCS)))
 # Main Object Files (Parallel Release Example)
 APP_MAIN_OBJ_PAR_RELEASE := $(patsubst src/%.cpp,$(OBJDIR_PAR_RELEASE)/%.o, $(APP_MAIN_SRC))
 TEST_MAIN_OBJ_PAR_RELEASE := $(patsubst src/%.cpp,$(OBJDIR_PAR_RELEASE)/%.o, $(TEST_MAIN_SRC))
@@ -98,15 +98,33 @@ test: $(TARGET_TEST) # Depends directly on the test executable
 bench: $(TARGET_BENCH) # Depends directly on the bench executable
 	@echo "Running Benchmarks (Many Small Files)..."
 	./$(TARGET_BENCH) --type=many_small \
-	                  --threads=$(or $(THREADS),$(shell nproc)) \
-	                  --iterations=5 \
-	                  --warmup=0
+			--threads=$(or $(THREADS),$(shell nproc)) \
+			--iterations=5 \
+			--warmup=0
 	@echo ""
-	@echo "Running Benchmarks (One Large File)..."
+	@echo "Running Benchmarks (One Large File - Matrix)..."
 	./$(TARGET_BENCH) --type=one_large \
-	                  --threads=$(or $(THREADS),$(shell nproc)) \
-	                  --iterations=5 \
-	                  --warmup=0
+			--threads=$(or $(THREADS),$(shell nproc)) \
+			--iterations=5 \
+			--warmup=0
+	@echo ""
+	@echo "Running Benchmarks (Many Large Files - Sequential Dispatch - Matrix)..."
+	./$(TARGET_BENCH) --type=many_large_sequential \
+			--threads=$(or $(THREADS),$(shell nproc)) \
+			--iterations=5 \
+			--warmup=0
+	@echo ""
+	@echo "Running Benchmarks (Many Large Files - Oversubscribed Parallel - Matrix)..."
+	./$(TARGET_BENCH) --type=many_large_parallel \
+			--threads=$(or $(THREADS),$(shell nproc)) \
+			--iterations=5 \
+			--warmup=0
+	@echo ""
+	@echo "Running Benchmarks (Many Large Files - Controlled Parallel - Matrix)..."
+	./$(TARGET_BENCH) --type=many_large_parallel_right \
+			--threads=$(or $(THREADS),$(shell nproc)) \
+			--iterations=5 \
+			--warmup=0
 	@echo ""
 	@echo "Benchmarks Finished."
 
