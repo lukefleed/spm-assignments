@@ -70,6 +70,11 @@ int main(int argc, char *argv[]) {
     return 0;
   }
 
+  // Enable nested parallelism and oversubscribe both levels as recommended
+  omp_set_nested(true);
+  omp_set_max_active_levels(2);
+  omp_set_num_threads(config.num_threads);
+
   // 3. Process Files in Parallel
   std::atomic<bool> processing_error = false;
   double start_time = omp_get_wtime();
