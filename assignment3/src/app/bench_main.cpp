@@ -253,7 +253,7 @@ int main(int argc, char *argv[]) {
       std::vector<int> thread_counts;
       for (int t = 1; t <= params.threads; ++t)
         thread_counts.push_back(t);
-      std::ofstream csv_small("benchmark_many_small.csv");
+      std::ofstream csv_small("results/data/benchmark_many_small.csv");
       csv_small << "threads,seq_time_s,par_time_s,speedup" << '\n';
       // Sequential baseline
       ConfigData cfg_seq = params.config;
@@ -319,7 +319,7 @@ int main(int argc, char *argv[]) {
     for (int t = 1; t <= params.threads; ++t)
       thread_counts.push_back(t);
     // Open CSV file for results
-    std::ofstream csv("benchmark_matrix_results.csv");
+    std::ofstream csv("results/data/benchmark_one_large.csv");
     csv << "block_size,threads,seq_time_s,par_time_s,speedup" << '\n';
 
     for (size_t bs : block_sizes) {

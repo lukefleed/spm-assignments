@@ -31,7 +31,7 @@ def ensure_dir(path):
 
 
 def plot_one_large(script_dir):
-    csv_file = os.path.join(script_dir, 'benchmark_matrix_results.csv')
+    csv_file = os.path.join(script_dir, 'results/data/benchmark_one_large.csv')
     if not os.path.exists(csv_file):
         print(f"Error: {csv_file} not found")
         return
@@ -60,7 +60,7 @@ def plot_one_large(script_dir):
 
 
 def plot_many_small(script_dir):
-    csv_file = os.path.join(script_dir, 'benchmark_many_small.csv')
+    csv_file = os.path.join(script_dir, 'results/data/benchmark_many_small.csv')
     if not os.path.exists(csv_file):
         print(f"Error: {csv_file} not found")
         return
