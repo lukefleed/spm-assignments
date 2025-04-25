@@ -181,7 +181,6 @@ def plot_many_large_parallel_right(script_dir):
         height=600,
     )
 
-    # Remove annotations; just adjust layout
     fig.update_layout(xaxis_tickangle=-45, yaxis_autorange='reversed')
 
     out_dir = os.path.join(script_dir, 'results', 'plots', 'many_large_parallel_right')
