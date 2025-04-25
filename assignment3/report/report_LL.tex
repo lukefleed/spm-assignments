@@ -66,7 +66,7 @@
 
 \title{Assignment 3: Miniz-based parallel compressor/decompressor in OpenMP}
 \author{Luca Lombardo \\ SPM Course a.a. 24/25}
-\date{May 2, 2025}
+\date{}
 
 \begin{document}
 
@@ -95,16 +95,16 @@ We verified the program's reliability and correctness with a thorough test suite
 
 We checked data integrity carefully using two methods: a direct byte-by-byte comparison between the original and decompressed data, and also comparing their MD5 checksums. We paid close attention to edge cases, like testing the flag that removes original files, handling bad input paths, and changing the small/large file threshold to make sure both code paths work correctly. We also explicitly tested both recursive and non-recursive file discovery. To check thread safety, the test harness itself can run in parallel; it uses atomic flags internally to reliably report any errors found during concurrent operations. Failures are reported immediately, and the test suite cleans up all generated files afterwards.
 
-% \section{Key Implementation Aspects}
+\section{Key Implementation Aspects}
 
-% Several implementation choices affect the compressor's function and speed. We set default configuration values like the 16 MiB small-file threshold and the 1 MiB block size based on initial tests, but users can change them at runtime for tuning.
-% File I/O heavily uses memory mapping with POSIX \code{mmap}. A C++ RAII wrapper simplifies managing these mapped memory regions for both reading inputs and writing outputs. This reduces intermediate data copies and system call overhead, which is especially helpful for large files.
+Several implementation choices affect the compressor's function and speed. We set default configuration values like the 16 MiB small-file threshold and the 1 MiB block size based on initial tests, but users can change them at runtime for tuning.
+File I/O heavily uses memory mapping with POSIX \code{mmap}. A C++ RAII wrapper simplifies managing these mapped memory regions for both reading inputs and writing outputs. This reduces intermediate data copies and system call overhead, which is especially helpful for large files.
 
-% The compressed output format depends on the original file size. Small files start with a simple 64-bit header storing the original size, followed directly by a standard zlib data stream from Miniz. Large files use a custom format designed for parallel work. It starts with a 32-bit magic number (\code{0x4D50424C}, "MPBL") and a version number. Importantly, after the header comes a table listing the compressed size of each data block. This table allows parallel decompression and could potentially support random access later. The compressed data streams for each block follow this table, concatenated together.
+The compressed output format depends on the original file size. Small files start with a simple 64-bit header storing the original size, followed directly by a standard zlib data stream from Miniz. Large files use a custom format designed for parallel work. It starts with a 32-bit magic number (\code{0x4D50424C}, "MPBL") and a version number. Importantly, after the header comes a table listing the compressed size of each data block. This table allows parallel decompression and could potentially support random access later. The compressed data streams for each block follow this table, concatenated together.
 
-% We manage parallel execution mainly using OpenMP's \code{parallel for} with \code{dynamic} scheduling, applying it either to files or to blocks within files. To avoid race conditions and keep data consistent, each thread uses its own instance of the Miniz compression or decompression state, possibly with its own temporary buffers. Error handling involves checking return codes from Miniz functions.
+We manage parallel execution mainly using OpenMP's \code{parallel for} with \code{dynamic} scheduling, applying it either to files or to blocks within files. To avoid race conditions and keep data consistent, each thread uses its own instance of the Miniz compression or decompression state, possibly with its own temporary buffers. Error handling involves checking return codes from Miniz functions.
 
-% Decompression follows the compression logic. It first reads the header to find the file format. For large files, it uses the block size table to process each compressed block correctly, potentially in parallel, writing the output data to the right places in the memory-mapped output file. The file discovery code handles recursive walks through directories, filters files based on whether we are compressing or decompressing and the file suffix, and includes basic error reporting if it can't access a file.
+Decompression follows the compression logic. It first reads the header to find the file format. For large files, it uses the block size table to process each compressed block correctly, potentially in parallel, writing the output data to the right places in the memory-mapped output file. The file discovery code handles recursive walks through directories, filters files based on whether we are compressing or decompressing and the file suffix, and includes basic error reporting if it can't access a file.
 
 
 \section{Experimental Results} \label{sec:results}
@@ -118,14 +118,14 @@ For this scenario, we generated 4000 files with sizes ranging randomly from 1KB 
     \centering
     % Updated path relative to report/report_LL.tex
     \includegraphics[width=0.7\textwidth]{../results/plots/many_small/speedup_many_small.pdf}
-    \caption{Strong scaling analysis for compressing many small files. Measured speedup compared to theoretical Amdahl prediction.}
+    \caption{Strong scaling analysis for compressing many small files.}
     \label{fig:many_small}
 \end{figure}
 
 \subsection*{One Large File}
 We tested compression of a single 512MB file generated using \texttt{dd} from \texttt{/dev/urandom}. Parallelism here is achieved solely by splitting the file into blocks. Figure~\ref{fig:one_large} shows the speedup heatmap varying threads and block size. Maximum speedup (around 23x) is achieved with the maximum number of threads (96) and a block size of approximately 6 MiB. Smaller block sizes (e.g., 1 MiB) perform noticeably worse, likely due to the increased relative overhead of managing metadata and thread synchronization for a very large number of small blocks within a single file context. Larger block sizes (>= 10 MiB) also reduce performance, probably by limiting the available parallelism (fewer blocks than threads) and increasing the chance of load imbalance if some blocks compress much slower than others. The 6 MiB block size seems to strike a good balance for this specific single-file scenario on this architecture.
 
-\begin{figure}[H]
+\begin{figure}[hbtp]
     \centering
     % Updated path relative to report/report_LL.tex
     \includegraphics[width=0.7\textwidth]{../results/plots/one_large/speedup_matrix_one_large.pdf}
@@ -147,21 +147,22 @@ The controlled nesting strategy partitions the total thread budget $P$ using the
     \label{fig:many_large_seq}
 \end{figure}
 
-\begin{figure}[H]
+\begin{figure}[hbtp]
     \centering
     \includegraphics[width=0.7\textwidth]{../results/plots/many_large_parallel/speedup_matrix_many_large_parallel.pdf}
     \caption{Oversubscribed Nesting ($p_{\text{inner}}=96$): speedup vs outer threads and block size.}
     \label{fig:many_large_over}
 \end{figure}
 
-\begin{figure}[H]
+\begin{figure}[hbtp]
     \centering
     \includegraphics[width=0.7\textwidth]{../results/plots/many_large_parallel_right/speedup_matrix_many_large_right.pdf}
     \caption{Controlled Nesting ($t_{\text{out}}\times t_{\text{in}}\le P$): speedup vs total threads and block size.}
     \label{fig:many_large_ctrl}
 \end{figure}
 
-% Regarding the underlying hardware architecture, this Miniz-based compression workload appeared largely insensitive to the NUMA characteristics of the dual-socket test machine, a contrast perhaps to memory-bandwidth or latency-critical applications. Speedup generally scaled well with the total number of available cores up to the machine's capacity, lacking significant performance deviations that would strongly suggest NUMA bottlenecks related to cross-socket data access. This behavior implies the task is predominantly CPU-bound. Factors such as the use of \code{mmap} for efficient I/O and OpenMP's potential for thread affinity likely help localize data access or mask remote access latencies. Consequently, performance seems governed primarily by CPU throughput, thread management overheads (particularly evident under oversubscription), and the trade-offs inherent in block size selection, rather than by challenges related to NUMA memory placement.
+% \subsubsection*{NUMA Effects}
+% Regarding the underlying hardware architecture, this Miniz-based compression workload appeared largely insensitive to the NUMA characteristics of the dual-socket test machine. Speedup generally scaled well with the total number of available cores up to the machine's capacity, lacking significant performance deviations that would strongly suggest NUMA bottlenecks related to cross-socket data access. This behavior implies the task is predominantly CPU-bound. Factors such as the use of \code{mmap} for efficient I/O and OpenMP's potential for thread affinity likely help localize data access or mask remote access latencies. Consequently, performance seems governed primarily by CPU throughput, thread management overheads (particularly evident under oversubscription), and the trade-offs inherent in block size selection, rather than by challenges related to NUMA memory placement (differently from the behavior observed in the previous assignments).
 
 
 \end{document}
