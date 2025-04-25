@@ -23,7 +23,6 @@ Requires:
 Install with: pip install pandas plotly kaleido
 """
 import os
-import sys
 import argparse
 import pandas as pd
 import plotly.express as px

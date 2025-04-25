@@ -598,6 +598,14 @@ bool compress_large_file(const std::string &input_path, size_t input_size,
   }
 
   // --- Phase 3: Cleanup ---
+  // Free allocated tdefl_compressor states
+  for (int t = 0; t < thread_count; ++t) {
+    if (thread_deflators[t]) {
+      tdefl_compressor_free(thread_deflators[t]);
+      thread_deflators[t] = nullptr; // Good practice
+    }
+  }
+
   if (!success) {
     std::filesystem::remove(output_path); // Remove partial/corrupt file
     return false;
