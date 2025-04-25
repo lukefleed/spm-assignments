@@ -99,8 +99,6 @@ def plot_many_small(script_dir):
     print(f"many_small plot saved to {out_pdf}")
 
 
-# Removed plot_block_speedup as it's redundant with heatmaps
-
 
 def plot_many_large_sequential(script_dir):
     csv_file = os.path.join(script_dir, 'results/data/benchmark_many_large_sequential.csv')
@@ -110,7 +108,7 @@ def plot_many_large_sequential(script_dir):
     df = pd.read_csv(csv_file)
     # Create heatmap
     matrix = df.pivot(index='threads', columns='block_size', values='speedup')
-    matrix.columns = matrix.columns.astype(int) // (1024*1024) # Convert block_size to MiB
+    matrix.columns = matrix.columns.astype(int) // (1024*1024)
     matrix.index = matrix.index.astype(str) # Keep threads as string categories
     fig = px.imshow(
         matrix,
@@ -139,7 +137,7 @@ def plot_many_large_parallel(script_dir):
     df = pd.read_csv(csv_file)
     # Create heatmap
     matrix = df.pivot(index='threads', columns='block_size', values='speedup')
-    matrix.columns = matrix.columns.astype(int) // (1024*1024) # Convert block_size to MiB
+    matrix.columns = matrix.columns.astype(int) // (1024*1024)
     matrix.index = matrix.index.astype(str) # Keep threads as string categories
     fig = px.imshow(
         matrix,
@@ -168,8 +166,8 @@ def plot_many_large_parallel_right(script_dir):
     df = pd.read_csv(csv_file)
     # Create heatmap similar to one_large
     matrix = df.pivot(index='threads', columns='block_size', values='speedup')
-    matrix.columns = matrix.columns.astype(int) // (1024*1024)  # Convert block_size to MiB
-    matrix.index = matrix.index.astype(str)  # Keep threads as string categories if needed
+    matrix.columns = matrix.columns.astype(int) // (1024*1024)
+    matrix.index = matrix.index.astype(str)
 
     fig = px.imshow(
         matrix,
@@ -198,7 +196,6 @@ def main():
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument('--one_large', action='store_true')
     group.add_argument('--many_small', action='store_true')
-    # group.add_argument('--block_speedup', action='store_true') # Removed
     group.add_argument('--many_large_sequential', action='store_true')
     group.add_argument('--many_large_parallel', action='store_true')
     group.add_argument('--many_large_parallel_right', action='store_true')
@@ -210,8 +207,6 @@ def main():
         plot_one_large(script_dir)
     if args.many_small or args.all:
         plot_many_small(script_dir)
-    # if args.block_speedup or args.all: # Removed
-    #     plot_block_speedup(script_dir)
     if args.many_large_sequential or args.all:
         plot_many_large_sequential(script_dir)
     if args.many_large_parallel or args.all:
