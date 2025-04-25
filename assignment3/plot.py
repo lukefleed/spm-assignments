@@ -209,7 +209,7 @@ def main():
     if args.many_large_sequential or args.all:
         plot_many_large_sequential(script_dir)
     if args.many_large_parallel or args.all:
-        plot_many_large_parallel(script_dir) # Now plots heatmap
+        plot_many_large_parallel(script_dir)
     if args.many_large_parallel_right or args.all:
         plot_many_large_parallel_right(script_dir)
 
