@@ -26,7 +26,7 @@
 #include <stdexcept>
 #include <string>
 #include <unordered_set>
-#include <vector> // Ensure vector is included
+#include <vector>
 
 namespace fs = std::filesystem;
 
@@ -117,7 +117,6 @@ bool parseBenchArgs(int argc, char *argv[], BenchParams &params) {
       throw std::runtime_error("Threads must be positive");
     if (params.min_small_file_size > params.max_small_file_size)
       throw std::runtime_error("min_size must not exceed max_size");
-    // Add other necessary validations here
   } catch (const std::exception &e) {
     std::cerr << "Error parsing arguments: " << e.what() << std::endl;
     return false;
@@ -250,11 +249,10 @@ int main(int argc, char *argv[]) {
   if (!parseBenchArgs(argc, argv, params))
     return 1;
 
-  // Ensure low verbosity for timing runs
   params.config.verbosity = 0;
   params.config.compress_mode = true;
   params.config.remove_origin = false;
-  params.config.recurse = true; // Assume we want to find all generated files
+  params.config.recurse = true; // we want to find all generated files
 
   // Configure OpenMP settings globally where applicable
   omp_set_max_active_levels(2); // Allow up to 2 levels of nesting
@@ -415,8 +413,7 @@ int main(int argc, char *argv[]) {
                 << ",1" << '\n';
 
         // Print section header and table header for this block size
-        std::cout << "\nBlockSize=" << (bs / (1024 * 1024))
-                  << " MiB" // <<< Added " MiB" here
+        std::cout << "\nBlockSize=" << (bs / (1024 * 1024)) << " MiB"
                   << "  Seq(s)=" << std::fixed << std::setprecision(2)
                   << base_time << "s (Sequential Dispatch)" << std::endl;
         std::cout << std::setw(8) << "Threads" << std::setw(12) << "Par(s)"
@@ -510,8 +507,7 @@ int main(int argc, char *argv[]) {
             << '\n';
 
         // Print section header and table header
-        std::cout << "\nBlockSize=" << (bs / (1024 * 1024))
-                  << " MiB" // <<< Added " MiB" here
+        std::cout << "\nBlockSize=" << (bs / (1024 * 1024)) << " MiB"
                   << "  Seq(s)=" << std::fixed << std::setprecision(2)
                   << time_seq << "s (Oversubscribed Nesting)" << std::endl;
         std::cout << std::setw(8) << "Threads" << std::setw(12) << "Par(s)"
@@ -601,8 +597,7 @@ int main(int argc, char *argv[]) {
             << ",1,1,1" // Baseline uses 1x1
             << '\n';
 
-        std::cout << "\nBlockSize=" << (bs / (1024 * 1024))
-                  << " MiB" // <<< Added " MiB" here
+        std::cout << "\nBlockSize=" << (bs / (1024 * 1024)) << " MiB"
                   << "  Seq(s)=" << std::fixed << std::setprecision(2)
                   << time_seq << "s (Controlled Nesting)" << std::endl;
         std::cout << std::setw(8) << "Threads" << std::setw(12) << "Par(s)"
@@ -713,8 +708,7 @@ int main(int argc, char *argv[]) {
         csv << bs << "," << 1 << "," << time_seq << "," << time_seq << ",1"
             << '\n';
 
-        std::cout << "\nBlockSize=" << (bs / (1024 * 1024))
-                  << " MiB" // <<< Added " MiB" here
+        std::cout << "\nBlockSize=" << (bs / (1024 * 1024)) << " MiB"
                   << "  Seq(s)=" << std::fixed << std::setprecision(2)
                   << time_seq << "s (One Large)" << std::endl;
         std::cout << std::setw(8) << "Threads" << std::setw(12) << "Par(s)"

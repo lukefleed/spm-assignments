@@ -13,7 +13,7 @@
 
 #include <atomic>
 #include <iostream>
-#include <omp.h> // Include for OpenMP functions
+#include <omp.h>
 #include <string>
 #include <vector>
 
@@ -70,7 +70,7 @@ int main(int argc, char *argv[]) {
     return 0;
   }
 
-  // Enable nested parallelism and oversubscribe both levels as recommended
+  // Enable nested parallelism and oversubscribe both levels
   omp_set_nested(true);
   omp_set_max_active_levels(2);
   omp_set_num_threads(config.num_threads);
@@ -81,17 +81,16 @@ int main(int argc, char *argv[]) {
 
 #pragma omp parallel for default(none)                                         \
     shared(work_items, config, processing_error, std::cerr, std::cout)         \
-    schedule(dynamic)
+        schedule(dynamic)
   for (size_t i = 0; i < work_items.size(); ++i) {
     // Check if an error occurred in another thread to potentially stop early
-    // (optional)
     if (processing_error.load()) {
       continue; // Skip remaining work if a critical error happened
     }
 
     const auto &item = work_items[i];
     // Compressor instance per thread if it has state, or shared if
-    // stateless/thread-safe Assuming stateless for now:
+    // stateless/thread-safe Assuming stateless:
     bool success = false;
 
     try {

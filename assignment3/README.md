@@ -14,7 +14,7 @@ assignment3/
 │   ├── app/                    # Executables and CLI parsing
 │   │   ├── minizp.cpp          # Main program (CLI for compress/decompress)
 │   │   ├── test_main.cpp       # Unit tests driver (seq and par modes)
-│   │   ├── bench_main.cpp      # Benchmark driver (thread/block sweeps for different strategies)
+│   │   ├── bench_main.cpp      # Benchmark driver
 │   │   ├── cmdline.hpp         # Command-line options parser
 │   │   └── config.hpp          # Configuration data and default constants
 │   ├── core/                   # Core logic: file discovery, compress/decompress
@@ -119,15 +119,6 @@ Parallel compression/decompression tool using Miniz and OpenMP. Processes files 
   ./minizp -D 1 /path/to/file.zip
   ```
 
-### minizp_seq
-
-**Synopsis**
-
-```
-make app_seq         # build sequential-only binary
-./minizp_seq [OPTIONS] <file-or-directory> [...]
-```
-
 **Description**
 Sequential-only build (no OpenMP). Same flags as `minizp`, but single-threaded regardless of `-t`.
 
@@ -136,17 +127,17 @@ Sequential-only build (no OpenMP). Same flags as `minizp`, but single-threaded r
 **Synopsis**
 
 ```
-./minizp_bench \
-  --type=<TYPE> \
-  [--threads=<N>] \
-  [--iterations=<I>] \
-  [--warmup=<W>] \
-  [--large_size=<bytes>] \
-  [--num_small=<N>] \
-  [--min_size=<bytes>] [--max_size=<bytes>] \
-  [--verbosity=<L>] \
-  [--threshold=<bytes>] \
-  [--blocksize=<bytes>] \
+./minizp_bench
+  --type=<TYPE>
+  [--threads=<N>]
+  [--iterations=<I>]
+  [--warmup=<W>]
+  [--large_size=<bytes>]
+  [--num_small=<N>]
+  [--min_size=<bytes>] [--max_size=<bytes>]
+  [--verbosity=<L>]
+  [--threshold=<bytes>]
+  [--blocksize=<bytes>]
   [--block_sizes_list=<S1,S2,...>]
 ```
 

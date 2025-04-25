@@ -204,8 +204,6 @@ static bool parseCommandLine(int argc, char *argv[], ConfigData &config,
   }
 
   // Configure OpenMP threads based on the parsed value or default.
-  // Note: omp_set_num_threads should ideally be called early in main.
-  // We set the value in config; the caller (main) should call omp_set...
   if (config.num_threads <= 0) {
     // If parsing resulted in an invalid number (e.g., not set or set to 0),
     // fall back to the OpenMP default.
@@ -215,8 +213,6 @@ static bool parseCommandLine(int argc, char *argv[], ConfigData &config,
       config.num_threads = 1;
     }
   }
-  // The actual call to omp_set_num_threads(config.num_threads) should be done
-  // in main after parsing.
 
   return true; // Parsing successful.
 }

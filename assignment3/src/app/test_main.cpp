@@ -145,7 +145,7 @@ void test_compression_phase(const ConfigData &cfg_base) {
   std::atomic<bool> compress_error = false;
 #pragma omp parallel for if (cfg.num_threads > 1) default(none)                \
     shared(items_to_compress, cfg, compress_error, std::cerr)                  \
-    schedule(dynamic)
+        schedule(dynamic)
   for (size_t i = 0; i < items_to_compress.size(); ++i) {
     if (compress_error.load())
       continue;
@@ -171,9 +171,7 @@ void test_decompression_phase(const ConfigData &cfg_base) {
   std::cout << "\n[Decompression Phase]" << std::endl;
   // Assume compression phase ran, zips exist, originals are in ORIGINALS_DIR
   // Remove original .bin files from TEST_DIR before decompressing
-  TestUtils::clean_files_with_suffix(TEST_DIR, ".bin", true,
-                                     TEST_VERBOSITY); // Adjust suffix if needed
-
+  TestUtils::clean_files_with_suffix(TEST_DIR, ".bin", true, TEST_VERBOSITY);
   ConfigData cfg = cfg_base; // Local copy to modify
   cfg.compress_mode = false;
   cfg.remove_origin = false;
@@ -184,7 +182,7 @@ void test_decompression_phase(const ConfigData &cfg_base) {
   std::atomic<bool> decompress_error = false;
 #pragma omp parallel for if (cfg.num_threads > 1) default(none)                \
     shared(items_to_decompress, cfg, decompress_error, std::cerr)              \
-    schedule(dynamic)
+        schedule(dynamic)
   for (size_t i = 0; i < items_to_decompress.size(); ++i) {
     if (decompress_error.load())
       continue;

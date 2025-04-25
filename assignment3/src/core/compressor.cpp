@@ -8,7 +8,7 @@
 #include "config.hpp"
 #include "miniz.h"
 
-#include <atomic>  // Added for atomic flag
+#include <atomic>
 #include <cstring> // For strerror
 #include <fcntl.h> // For open
 #include <filesystem>
