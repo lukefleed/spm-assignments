@@ -1,0 +1,1472 @@
+mkdir -p build/obj build/bin data build/plots
+g++ -std=c++11 -g -Wall -Wextra -Wpedantic -O3 -march=native -Iinclude -c src/utils.cpp -o build/obj/utils.o
+g++ -std=c++11 -g -Wall -Wextra -Wpedantic -O3 -march=native -Iinclude -c src/performance_timer.cpp -o build/obj/performance_timer.o
+g++ -std=c++11 -g -Wall -Wextra -Wpedantic -O3 -march=native -Iinclude -c src/mergesort_common.cpp -o build/obj/mergesort_common.o
+g++ -std=c++11 -g -Wall -Wextra -Wpedantic -O3 -march=native -Iinclude -I/home/lukefleed/Develop/fastflow -c src/mergesort_ff.cpp -o build/obj/mergesort_ff.o
+In file included from /home/lukefleed/Develop/fastflow/ff/utils.hpp:52,
+                 from /home/lukefleed/Develop/fastflow/ff/lb.hpp:39,
+                 from /home/lukefleed/Develop/fastflow/ff/farm.hpp:63,
+                 from src/mergesort_ff.cpp:14:
+/home/lukefleed/Develop/fastflow/ff/spin-lock.hpp: In function ‘void ff::init_unlocked(AtomicFlagWrapper*)’:
+/home/lukefleed/Develop/fastflow/ff/spin-lock.hpp:82:35: warning: unused parameter ‘l’ [-Wunused-parameter]
+   82 | _INLINE void init_unlocked(lock_t l) { }
+      |                            ~~~~~~~^
+/home/lukefleed/Develop/fastflow/ff/spin-lock.hpp: In function ‘void ff::init_locked(AtomicFlagWrapper*)’:
+/home/lukefleed/Develop/fastflow/ff/spin-lock.hpp:83:33: warning: unused parameter ‘l’ [-Wunused-parameter]
+   83 | _INLINE void init_locked(lock_t l)   { abort(); }
+      |                          ~~~~~~~^
+/home/lukefleed/Develop/fastflow/ff/spin-lock.hpp: In function ‘void init_locked(CLHSpinLock*)’:
+/home/lukefleed/Develop/fastflow/ff/spin-lock.hpp:167:37: warning: unused parameter ‘l’ [-Wunused-parameter]
+  167 | _INLINE void init_locked(clh_lock_t l) { abort(); }
+      |                          ~~~~~~~~~~~^
+/home/lukefleed/Develop/fastflow/ff/utils.hpp: In function ‘void ff::waitCall(double, double)’:
+/home/lukefleed/Develop/fastflow/ff/utils.hpp:66:29: warning: missing initializer for member ‘timespec::tv_nsec’ [-Wmissing-field-initializers]
+   66 |     struct timespec req = {0};
+      |                             ^
+/home/lukefleed/Develop/fastflow/ff/utils.hpp: In function ‘double ff::ffTime(int, bool)’:
+/home/lukefleed/Develop/fastflow/ff/utils.hpp:229:43: warning: unused parameter ‘lock’ [-Wunused-parameter]
+  229 | static inline double ffTime(int tag, bool lock=false) {
+      |                                      ~~~~~^~~~~~~~~~
+In file included from /home/lukefleed/Develop/fastflow/ff/node.hpp:41,
+                 from /home/lukefleed/Develop/fastflow/ff/lb.hpp:40:
+/home/lukefleed/Develop/fastflow/ff/buffer.hpp: In member function ‘bool ff::SWSR_Ptr_Buffer::mp_push(void*)’:
+/home/lukefleed/Develop/fastflow/ff/buffer.hpp:378:37: warning: unused parameter ‘data’ [-Wunused-parameter]
+  378 |     inline bool mp_push(void *const data) {
+      |                         ~~~~~~~~~~~~^~~~
+/home/lukefleed/Develop/fastflow/ff/buffer.hpp: In member function ‘bool ff::SWSR_Ptr_Buffer::mc_pop(void**)’:
+/home/lukefleed/Develop/fastflow/ff/buffer.hpp:383:32: warning: unused parameter ‘data’ [-Wunused-parameter]
+  383 |     inline bool mc_pop(void ** data) {
+      |                        ~~~~~~~~^~~~
+In file included from /home/lukefleed/Develop/fastflow/ff/mapper.hpp:36,
+                 from /home/lukefleed/Develop/fastflow/ff/node.hpp:43:
+/home/lukefleed/Develop/fastflow/ff/mapping_utils.hpp: In lambda function:
+/home/lukefleed/Develop/fastflow/ff/mapping_utils.hpp:272:71: warning: unused parameter ‘i’ [-Wunused-parameter]
+  272 |                     std::for_each(S.begin(), S.end(), [&n](int const& i) { ++n;});
+      |                                                            ~~~~~~~~~~~^
+/home/lukefleed/Develop/fastflow/ff/mapping_utils.hpp: In lambda function:
+/home/lukefleed/Develop/fastflow/ff/mapping_utils.hpp:278:59: warning: unused parameter ‘i’ [-Wunused-parameter]
+  278 |         std::for_each(S.begin(), S.end(), [&n](int const& i) { ++n;});
+      |                                                ~~~~~~~~~~~^
+In file included from /home/lukefleed/Develop/fastflow/ff/node.hpp:46:
+/home/lukefleed/Develop/fastflow/ff/barrier.hpp: In member function ‘virtual int ff::ffBarrier::barrierSetup(size_t)’:
+/home/lukefleed/Develop/fastflow/ff/barrier.hpp:55:45: warning: unused parameter ‘init’ [-Wunused-parameter]
+   55 |     virtual inline int  barrierSetup(size_t init) { return 0;}
+      |                                      ~~~~~~~^~~~
+/home/lukefleed/Develop/fastflow/ff/node.hpp: In member function ‘virtual bool ff::ff_node::init_input_blocking(pthread_mutex_t*&, pthread_cond_t*&, bool)’:
+/home/lukefleed/Develop/fastflow/ff/node.hpp:588:50: warning: unused parameter ‘feedback’ [-Wunused-parameter]
+  588 |                                             bool feedback=true) {
+      |                                             ~~~~~^~~~~~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/node.hpp: In member function ‘virtual bool ff::ff_node::init_output_blocking(pthread_mutex_t*&, pthread_cond_t*&, bool)’:
+/home/lukefleed/Develop/fastflow/ff/node.hpp:603:51: warning: unused parameter ‘feedback’ [-Wunused-parameter]
+  603 |                                              bool feedback=true) {
+      |                                              ~~~~~^~~~~~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/node.hpp: In member function ‘virtual int ff::ff_node::create_input_buffer(int, bool)’:
+/home/lukefleed/Develop/fastflow/ff/node.hpp:663:45: warning: ‘new’ of type ‘ff::uSWSR_Ptr_Buffer’ with extended alignment 64 [-Waligned-new=]
+  663 |         in = new FFBUFFER(nentries,fixedsize);
+      |                                             ^
+/home/lukefleed/Develop/fastflow/ff/node.hpp:663:45: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/node.hpp:663:45: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/node.hpp: In member function ‘virtual int ff::ff_node::create_output_buffer(int, bool)’:
+/home/lukefleed/Develop/fastflow/ff/node.hpp:689:46: warning: ‘new’ of type ‘ff::uSWSR_Ptr_Buffer’ with extended alignment 64 [-Waligned-new=]
+  689 |         out = new FFBUFFER(nentries,fixedsize);
+      |                                              ^
+/home/lukefleed/Develop/fastflow/ff/node.hpp:689:46: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/node.hpp:689:46: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/node.hpp: In member function ‘virtual int ff::ff_node::set_input(const ff::svector<ff::ff_node*>&)’:
+/home/lukefleed/Develop/fastflow/ff/node.hpp:729:61: warning: unused parameter ‘w’ [-Wunused-parameter]
+  729 |     virtual inline int set_input(const svector<ff_node *> & w) { return -1;}
+      |                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+/home/lukefleed/Develop/fastflow/ff/node.hpp: In member function ‘virtual int ff::ff_node::set_output(const ff::svector<ff::ff_node*>&)’:
+/home/lukefleed/Develop/fastflow/ff/node.hpp:732:62: warning: unused parameter ‘w’ [-Wunused-parameter]
+  732 |     virtual inline int set_output(const svector<ff_node *> & w) { return -1;}
+      |                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+/home/lukefleed/Develop/fastflow/ff/node.hpp: In member function ‘virtual void ff::ff_node::get_out_nodes_feedback(ff::svector<ff::ff_node*>&)’:
+/home/lukefleed/Develop/fastflow/ff/node.hpp:740:66: warning: unused parameter ‘w’ [-Wunused-parameter]
+  740 |     virtual inline void get_out_nodes_feedback(svector<ff_node*>&w) {}
+      |                                                ~~~~~~~~~~~~~~~~~~^
+/home/lukefleed/Develop/fastflow/ff/node.hpp: In member function ‘virtual void ff::ff_node::get_in_nodes_feedback(ff::svector<ff::ff_node*>&)’:
+/home/lukefleed/Develop/fastflow/ff/node.hpp:742:65: warning: unused parameter ‘w’ [-Wunused-parameter]
+  742 |     virtual inline void get_in_nodes_feedback(svector<ff_node*>&w) {}
+      |                                               ~~~~~~~~~~~~~~~~~~^
+/home/lukefleed/Develop/fastflow/ff/node.hpp: In member function ‘virtual void ff::ff_node::set_scheduling_ondemand(int)’:
+/home/lukefleed/Develop/fastflow/ff/node.hpp:747:52: warning: unused parameter ‘inbufferentries’ [-Wunused-parameter]
+  747 |     virtual void set_scheduling_ondemand(const int inbufferentries=1) {}
+      |                                          ~~~~~~~~~~^~~~~~~~~~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/node.hpp: In copy constructor ‘ff::ff_node::ff_node(const ff::ff_node&)’:
+/home/lukefleed/Develop/fastflow/ff/node.hpp:880:28: warning: unused parameter ‘node’ [-Wunused-parameter]
+  880 |     ff_node(const ff_node& node):ff_node() {}
+      |             ~~~~~~~~~~~~~~~^~~~
+/home/lukefleed/Develop/fastflow/ff/node.hpp: In member function ‘virtual void ff::ff_node::eosnotify(ssize_t)’:
+/home/lukefleed/Develop/fastflow/ff/node.hpp:969:36: warning: unused parameter ‘id’ [-Wunused-parameter]
+  969 |     virtual void eosnotify(ssize_t id=-1) {}
+      |                            ~~~~~~~~^~~~~
+/home/lukefleed/Develop/fastflow/ff/node.hpp: In static member function ‘static bool ff::ff_node::ff_send_out_comp(void*, long unsigned int, long unsigned int, void*)’:
+/home/lukefleed/Develop/fastflow/ff/node.hpp:1204:67: warning: unused parameter ‘retry’ [-Wunused-parameter]
+ 1204 |     static inline bool ff_send_out_comp(void * task,unsigned long retry,unsigned long ticks, void *obj) {
+      |                                                     ~~~~~~~~~~~~~~^~~~~
+/home/lukefleed/Develop/fastflow/ff/node.hpp:1204:87: warning: unused parameter ‘ticks’ [-Wunused-parameter]
+ 1204 |     static inline bool ff_send_out_comp(void * task,unsigned long retry,unsigned long ticks, void *obj) {
+      |                                                                         ~~~~~~~~~~~~~~^~~~~
+/home/lukefleed/Develop/fastflow/ff/node.hpp: In member function ‘virtual void ff::ff_node::registerAllGatherCallback(int (*)(void*, void**, void*), void*)’:
+/home/lukefleed/Develop/fastflow/ff/node.hpp:1281:50: warning: unused parameter ‘cb’ [-Wunused-parameter]
+ 1281 |     virtual void registerAllGatherCallback(int (*cb)(void *,void **, void*), void * arg) {}
+      |                                            ~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/node.hpp:1281:85: warning: unused parameter ‘arg’ [-Wunused-parameter]
+ 1281 |     virtual void registerAllGatherCallback(int (*cb)(void *,void **, void*), void * arg) {}
+      |                                                                              ~~~~~~~^~~
+/home/lukefleed/Develop/fastflow/ff/lb.hpp: In member function ‘bool ff::ff_loadbalancer::init_input_blocking(pthread_mutex_t*&, pthread_cond_t*&, bool)’:
+/home/lukefleed/Develop/fastflow/ff/lb.hpp:86:42: warning: unused parameter ‘feedback’ [-Wunused-parameter]
+   86 |                                     bool feedback=true) {
+      |                                     ~~~~~^~~~~~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/lb.hpp: In member function ‘bool ff::ff_loadbalancer::init_output_blocking(pthread_mutex_t*&, pthread_cond_t*&, bool)’:
+/home/lukefleed/Develop/fastflow/ff/lb.hpp:101:43: warning: unused parameter ‘feedback’ [-Wunused-parameter]
+  101 |                                      bool feedback=true) {
+      |                                      ~~~~~^~~~~~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/lb.hpp: In member function ‘void ff::ff_loadbalancer::set_output_blocking(pthread_mutex_t*&, pthread_cond_t*&)’:
+/home/lukefleed/Develop/fastflow/ff/lb.hpp:113:57: warning: unused parameter ‘m’ [-Wunused-parameter]
+  113 |     inline void set_output_blocking(pthread_mutex_t   *&m,
+      |                                     ~~~~~~~~~~~~~~~~~~~~^
+/home/lukefleed/Develop/fastflow/ff/lb.hpp:114:57: warning: unused parameter ‘c’ [-Wunused-parameter]
+  114 |                                     pthread_cond_t    *&c) {
+      |                                     ~~~~~~~~~~~~~~~~~~~~^
+/home/lukefleed/Develop/fastflow/ff/lb.hpp: In member function ‘virtual bool ff::ff_loadbalancer::schedule_task(void*, long unsigned int, long unsigned int)’:
+/home/lukefleed/Develop/fastflow/ff/lb.hpp:237:53: warning: unused parameter ‘ticks’ [-Wunused-parameter]
+  237 |                                       unsigned long ticks=0) {
+      |                                       ~~~~~~~~~~~~~~^~~~~~~
+/home/lukefleed/Develop/fastflow/ff/lb.hpp: In member function ‘void ff::ff_loadbalancer::absorb_eos(ff::svector<ff::ff_node*>&, size_t)’:
+/home/lukefleed/Develop/fastflow/ff/lb.hpp:441:16: warning: suggest explicit braces around empty body in ‘do’ statement [-Wempty-body]
+  441 |             do ; while(!W[i]->get(&task));
+      |                ^
+In file included from /home/lukefleed/Develop/fastflow/ff/farm.hpp:64:
+/home/lukefleed/Develop/fastflow/ff/gt.hpp: In member function ‘bool ff::ff_gatherer::init_input_blocking(pthread_mutex_t*&, pthread_cond_t*&, bool)’:
+/home/lukefleed/Develop/fastflow/ff/gt.hpp:78:42: warning: unused parameter ‘feedback’ [-Wunused-parameter]
+   78 |                                     bool feedback=true) {
+      |                                     ~~~~~^~~~~~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/gt.hpp: In member function ‘virtual void ff::ff_gatherer::notifyeos(int)’:
+/home/lukefleed/Develop/fastflow/ff/gt.hpp:159:39: warning: unused parameter ‘id’ [-Wunused-parameter]
+  159 |     virtual inline void notifyeos(int id) {}
+      |                                   ~~~~^~
+In file included from /home/lukefleed/Develop/fastflow/ff/farm.hpp:66:
+/home/lukefleed/Develop/fastflow/ff/multinode.hpp: In member function ‘virtual int ff::ff_minode::create_input_buffer(int, bool)’:
+/home/lukefleed/Develop/fastflow/ff/multinode.hpp:84:58: warning: ‘new’ of type ‘ff::ff_buffernode’ with extended alignment 32 [-Waligned-new=]
+   84 |         ff_node* t = new ff_buffernode(nentries,fixedsize);
+      |                                                          ^
+/home/lukefleed/Develop/fastflow/ff/multinode.hpp:84:58: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/multinode.hpp:84:58: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/multinode.hpp: In copy constructor ‘ff::ff_minode::ff_minode(const ff::ff_minode&)’:
+/home/lukefleed/Develop/fastflow/ff/multinode.hpp:226:5: warning: base class ‘class ff::ff_node’ should be explicitly initialized in the copy constructor [-Wextra]
+  226 |     ff_minode(const ff_minode& n) {
+      |     ^~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/multinode.hpp: In member function ‘virtual int ff::ff_monode::create_output_buffer(int, bool)’:
+/home/lukefleed/Develop/fastflow/ff/multinode.hpp:452:78: warning: ‘new’ of type ‘ff::ff_buffernode’ with extended alignment 32 [-Waligned-new=]
+  452 |         ff_node *t = new ff_buffernode(-1, get_out_buffer(), get_out_buffer());
+      |                                                                              ^
+/home/lukefleed/Develop/fastflow/ff/multinode.hpp:452:78: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/multinode.hpp:452:78: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/multinode.hpp: In copy constructor ‘ff::ff_monode::ff_monode(const ff::ff_monode&)’:
+/home/lukefleed/Develop/fastflow/ff/multinode.hpp:537:5: warning: base class ‘class ff::ff_node’ should be explicitly initialized in the copy constructor [-Wextra]
+  537 |     ff_monode(const ff_monode& n) {
+      |     ^~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/multinode.hpp: In member function ‘virtual int ff::ff_monode::run(bool)’:
+/home/lukefleed/Develop/fastflow/ff/multinode.hpp:678:18: warning: unused parameter ‘skip_init’ [-Wunused-parameter]
+  678 |     int run(bool skip_init=false) {
+      |             ~~~~~^~~~~~~~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/multinode.hpp: In copy constructor ‘ff::internal_mo_transformer::internal_mo_transformer(const ff::internal_mo_transformer&)’:
+/home/lukefleed/Develop/fastflow/ff/multinode.hpp:848:5: warning: base class ‘class ff::ff_monode’ should be explicitly initialized in the copy constructor [-Wextra]
+  848 |     internal_mo_transformer(const internal_mo_transformer& t) {
+      |     ^~~~~~~~~~~~~~~~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/multinode.hpp: In copy constructor ‘ff::internal_mi_transformer::internal_mi_transformer(const ff::internal_mi_transformer&)’:
+/home/lukefleed/Develop/fastflow/ff/multinode.hpp:915:5: warning: base class ‘class ff::ff_minode’ should be explicitly initialized in the copy constructor [-Wextra]
+  915 |     internal_mi_transformer(const internal_mi_transformer& t) {
+      |     ^~~~~~~~~~~~~~~~~~~~~~~
+In file included from /home/lukefleed/Develop/fastflow/ff/farm.hpp:68:
+/home/lukefleed/Develop/fastflow/ff/all2all.hpp: In member function ‘virtual int ff::ff_a2a::prepare()’:
+/home/lukefleed/Develop/fastflow/ff/all2all.hpp:70:22: error: ‘isfarm_withcollector’ was not declared in this scope
+   70 |                 if (!isfarm_withcollector(last)) { // ... with no collector
+      |                      ^~~~~~~~~~~~~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/all2all.hpp:103:104: warning: ‘new’ of type ‘ff::internal_mo_transformer’ with extended alignment 32 [-Waligned-new=]
+  103 |                 internal_mo_transformer *mo = new internal_mo_transformer(workers1[i], workers1_to_free);
+      |                                                                                                        ^
+/home/lukefleed/Develop/fastflow/ff/all2all.hpp:103:104: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/all2all.hpp:103:104: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/all2all.hpp:128:104: warning: ‘new’ of type ‘ff::internal_mi_transformer’ with extended alignment 32 [-Waligned-new=]
+  128 |                 internal_mi_transformer *mi = new internal_mi_transformer(workers2[i], workers2_to_free);
+      |                                                                                                        ^
+/home/lukefleed/Develop/fastflow/ff/all2all.hpp:128:104: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/all2all.hpp:128:104: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/all2all.hpp:154:121: warning: ‘new’ of type ‘ff::ff_buffernode’ with extended alignment 32 [-Waligned-new=]
+  154 |                 ff_node* t = new ff_buffernode(ondemand?ondemand:in_buffer_entries,ondemand?true:fixedsize, i, nworkers1);
+      |                                                                                                                         ^
+/home/lukefleed/Develop/fastflow/ff/all2all.hpp:154:121: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/all2all.hpp:154:121: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/all2all.hpp:178:114: warning: ‘new’ of type ‘ff::ff_buffernode’ with extended alignment 32 [-Waligned-new=]
+  178 |                     ff_node* t = new ff_buffernode(ondemand?ondemand:in_buffer_entries,ondemand?true:fixedsize, j);
+      |                                                                                                                  ^
+/home/lukefleed/Develop/fastflow/ff/all2all.hpp:178:114: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/all2all.hpp:178:114: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/all2all.hpp: In member function ‘int ff::ff_a2a::wrap_around()’:
+/home/lukefleed/Develop/fastflow/ff/all2all.hpp:454:79: warning: ‘new’ of type ‘ff::ff_buffernode’ with extended alignment 32 [-Waligned-new=]
+  454 |                         ff_node* t = new ff_buffernode(in_buffer_entries,false);
+      |                                                                               ^
+/home/lukefleed/Develop/fastflow/ff/all2all.hpp:454:79: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/all2all.hpp:454:79: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/all2all.hpp: In member function ‘virtual int ff::ff_a2a::create_output_buffer(int, bool)’:
+/home/lukefleed/Develop/fastflow/ff/all2all.hpp:622:70: warning: ‘new’ of type ‘ff::ff_buffernode’ with extended alignment 32 [-Waligned-new=]
+  622 |                     ff_node* t = new ff_buffernode(nentries,fixedsize);
+      |                                                                      ^
+/home/lukefleed/Develop/fastflow/ff/all2all.hpp:622:70: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/all2all.hpp:622:70: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/all2all.hpp: In member function ‘virtual bool ff::ff_a2a::init_input_blocking(pthread_mutex_t*&, pthread_cond_t*&, bool)’:
+/home/lukefleed/Develop/fastflow/ff/all2all.hpp:633:50: warning: unused parameter ‘m’ [-Wunused-parameter]
+  633 |     bool init_input_blocking(pthread_mutex_t   *&m,
+      |                              ~~~~~~~~~~~~~~~~~~~~^
+/home/lukefleed/Develop/fastflow/ff/all2all.hpp:634:50: warning: unused parameter ‘c’ [-Wunused-parameter]
+  634 |                              pthread_cond_t    *&c,
+      |                              ~~~~~~~~~~~~~~~~~~~~^
+/home/lukefleed/Develop/fastflow/ff/all2all.hpp:635:35: warning: unused parameter ‘feedback’ [-Wunused-parameter]
+  635 |                              bool feedback=true) {
+      |                              ~~~~~^~~~~~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/all2all.hpp: In member function ‘virtual bool ff::ff_a2a::init_output_blocking(pthread_mutex_t*&, pthread_cond_t*&, bool)’:
+/home/lukefleed/Develop/fastflow/ff/all2all.hpp:644:51: warning: unused parameter ‘m’ [-Wunused-parameter]
+  644 |     bool init_output_blocking(pthread_mutex_t   *&m,
+      |                               ~~~~~~~~~~~~~~~~~~~~^
+/home/lukefleed/Develop/fastflow/ff/all2all.hpp:645:51: warning: unused parameter ‘c’ [-Wunused-parameter]
+  645 |                               pthread_cond_t    *&c,
+      |                               ~~~~~~~~~~~~~~~~~~~~^
+/home/lukefleed/Develop/fastflow/ff/all2all.hpp:646:36: warning: unused parameter ‘feedback’ [-Wunused-parameter]
+  646 |                               bool feedback=true) {
+      |                               ~~~~~^~~~~~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/farm.hpp: At global scope:
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:1030:5: warning: type qualifiers ignored on function return type [-Wignored-qualifiers]
+ 1030 |     ordering_pair_t* const ordered_get_memory() { return ordering_Memory.begin(); }
+      |     ^~~~~~~~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/farm.hpp: In member function ‘virtual int ff::ff_farm::prepare()’:
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:255:85: warning: ‘new’ of type ‘ff::OrderedWorkerWrapper’ with extended alignment 32 [-Waligned-new=]
+  255 |                     workers[i] = new OrderedWorkerWrapper(workers[i], worker_cleanup);
+      |                                                                                     ^
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:255:85: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:255:85: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:308:21: error: ‘ff_pipeline’ was not declared in this scope
+  308 |                     ff_pipeline* pipe=reinterpret_cast<ff_pipeline*>(workers[i]);
+      |                     ^~~~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:308:56: error: ‘ff_pipeline’ does not name a type
+  308 |                     ff_pipeline* pipe=reinterpret_cast<ff_pipeline*>(workers[i]);
+      |                                                        ^~~~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:308:67: error: expected ‘>’ before ‘*’ token
+  308 |                     ff_pipeline* pipe=reinterpret_cast<ff_pipeline*>(workers[i]);
+      |                                                                   ^
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:309:44: error: request for member ‘get_node’ in ‘* pipe’, which is of non-class type ‘int(int*) noexcept’ {aka ‘int(int*)’}
+  309 |                     ff_node* node0 = pipe->get_node(0);
+      |                                            ^~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:310:44: error: request for member ‘get_lastnode’ in ‘* pipe’, which is of non-class type ‘int(int*) noexcept’ {aka ‘int(int*)’}
+  310 |                     ff_node* nodeN = pipe->get_lastnode();
+      |                                            ^~~~~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/farm.hpp: In lambda function:
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:415:90: warning: ‘new’ of type ‘ff::ff_buffernode’ with extended alignment 32 [-Waligned-new=]
+  415 |                     ff_buffernode* t = new ff_buffernode(out_buffer_entries, false, idx++);
+      |                                                                                          ^
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:415:90: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:415:90: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/farm.hpp: In member function ‘virtual int ff::ff_farm::prepare()’:
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:446:99: warning: ‘new’ of type ‘ff::ff_buffernode’ with extended alignment 32 [-Waligned-new=]
+  446 |                                 ff_node* t = new ff_buffernode(out_buffer_entries,fixedsize, idx++);
+      |                                                                                                   ^
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:446:99: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:446:99: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:453:91: warning: ‘new’ of type ‘ff::ff_buffernode’ with extended alignment 32 [-Waligned-new=]
+  453 |                             ff_node* t = new ff_buffernode(out_buffer_entries,fixedsize, i);
+      |                                                                                           ^
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:453:91: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:453:91: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/farm.hpp: In member function ‘virtual bool ff::ff_farm::init_input_blocking(pthread_mutex_t*&, pthread_cond_t*&, bool)’:
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:645:50: warning: unused parameter ‘feedback’ [-Wunused-parameter]
+  645 |                                             bool feedback=true) {
+      |                                             ~~~~~^~~~~~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/farm.hpp: In member function ‘virtual bool ff::ff_farm::init_output_blocking(pthread_mutex_t*&, pthread_cond_t*&, bool)’:
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:660:51: warning: unused parameter ‘feedback’ [-Wunused-parameter]
+  660 |                                              bool feedback=true) {
+      |                                              ~~~~~^~~~~~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/farm.hpp: In copy constructor ‘ff::ff_farm::ff_farm(const ff::ff_farm&)’:
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:780:5: warning: base class ‘class ff::ff_node’ should be explicitly initialized in the copy constructor [-Wextra]
+  780 |     ff_farm(const ff_farm& f) {
+      |     ^~~~~~~
+/home/lukefleed/Develop/fastflow/ff/farm.hpp: In member function ‘int ff::ff_farm::wrap_around()’:
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:1143:79: warning: ‘new’ of type ‘ff::ff_buffernode’ with extended alignment 32 [-Waligned-new=]
+ 1143 |         ff_buffernode *tmpbuffer = new ff_buffernode(out_buffer_entries, false);
+      |                                                                               ^
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:1143:79: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:1143:79: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/farm.hpp: In member function ‘virtual void* ff::ff_farm::svc(void*)’:
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:1773:22: warning: unused parameter ‘task’ [-Wunused-parameter]
+ 1773 |     void* svc(void * task) { return NULL; }
+      |               ~~~~~~~^~~~
+In file included from /home/lukefleed/Develop/fastflow/ff/farm.hpp:2017:
+/home/lukefleed/Develop/fastflow/ff/make_unique.hpp: At global scope:
+/home/lukefleed/Develop/fastflow/ff/make_unique.hpp:14:6: error: ‘unique_ptr’ in namespace ‘ff::std’ does not name a template type
+   14 | std::unique_ptr<T> make_unique_helper(std::false_type, Args&&... args) {
+      |      ^~~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/make_unique.hpp:19:6: error: ‘unique_ptr’ in namespace ‘ff::std’ does not name a template type
+   19 | std::unique_ptr<T> make_unique_helper(std::true_type, Args&&... args) {
+      |      ^~~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/make_unique.hpp:28:6: error: ‘unique_ptr’ in namespace ‘ff::std’ does not name a template type
+   28 | std::unique_ptr<T> make_unique(Args&&... args) {
+      |      ^~~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:2029:10: error: ‘vector’ in namespace ‘ff::std’ does not name a template type [-Wtemplate-body]
+ 2029 |     std::vector<std::unique_ptr<ff_node> > Workers;
+      |          ^~~~~~
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:2030:10: error: ‘unique_ptr’ in namespace ‘ff::std’ does not name a template type [-Wtemplate-body]
+ 2030 |     std::unique_ptr<ff_node>               Emitter;
+      |          ^~~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:2031:10: error: ‘unique_ptr’ in namespace ‘ff::std’ does not name a template type [-Wtemplate-body]
+ 2031 |     std::unique_ptr<ff_node>               Collector;
+      |          ^~~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:2039:24: error: expected ‘)’ before ‘<’ token [-Wtemplate-body]
+ 2039 |     ff_Farm(std::vector<std::unique_ptr<ff_node> > &&W,
+      |            ~           ^
+      |                        )
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:2059:24: error: expected ‘)’ before ‘<’ token [-Wtemplate-body]
+ 2059 |     ff_Farm(std::vector<std::unique_ptr<ff_node> > &&W,
+      |            ~           ^
+      |                        )
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:2074:24: error: expected ‘)’ before ‘<’ token [-Wtemplate-body]
+ 2074 |     ff_Farm(std::vector<std::unique_ptr<ff_node> > &&W,
+      |            ~           ^
+      |                        )
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:2089:24: error: expected ‘)’ before ‘<’ token [-Wtemplate-body]
+ 2089 |     ff_Farm(std::vector<std::unique_ptr<ff_node> > &&W, bool input_ch):
+      |            ~           ^
+      |                        )
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:2152:26: error: ‘ff::std::vector’ has not been declared [-Wtemplate-body]
+ 2152 |     int add_workers(std::vector<ff_node *> & w)                   = delete;
+      |                          ^~~~~~
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:2152:32: error: expected ‘,’ or ‘...’ before ‘<’ token [-Wtemplate-body]
+ 2152 |     int add_workers(std::vector<ff_node *> & w)                   = delete;
+      |                                ^
+/home/lukefleed/Develop/fastflow/ff/farm.hpp: In constructor ‘ff::ff_Farm<IN_t, OUT_t>::ff_Farm(ff::ff_Farm<IN_t, OUT_t>&&)’:
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:2100:52: error: ‘move’ is not a member of ‘ff::std’; did you mean ‘std::move’? [-Wtemplate-body]
+ 2100 |     ff_Farm(ff_Farm<IN_t, OUT_t> &&f):ff_farm(std::move(f)) {
+      |                                                    ^~~~
+In file included from /usr/include/c++/15.1.1/vector:64,
+                 from include/mergesort_common.h:5,
+                 from src/mergesort_ff.cpp:2:
+/usr/include/c++/15.1.1/bits/stl_algobase.h:666:5: note: ‘std::move’ declared here
+  666 |     move(_II __first, _II __last, _OI __result)
+      |     ^~~~
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:2102:9: error: ‘Workers’ was not declared in this scope; did you mean ‘workers’? [-Wtemplate-body]
+ 2102 |         Workers = std::move(f.Workers);
+      |         ^~~~~~~
+      |         workers
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:2102:24: error: ‘move’ is not a member of ‘ff::std’; did you mean ‘std::move’? [-Wtemplate-body]
+ 2102 |         Workers = std::move(f.Workers);
+      |                        ^~~~
+/usr/include/c++/15.1.1/bits/stl_algobase.h:666:5: note: ‘std::move’ declared here
+  666 |     move(_II __first, _II __last, _OI __result)
+      |     ^~~~
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:2102:31: error: ‘class ff::ff_Farm<IN_t, OUT_t>’ has no member named ‘Workers’; did you mean ‘workers’? [-Wtemplate-body]
+ 2102 |         Workers = std::move(f.Workers);
+      |                               ^~~~~~~
+      |                               workers
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:2103:9: error: ‘Emitter’ was not declared in this scope; did you mean ‘emitter’? [-Wtemplate-body]
+ 2103 |         Emitter = std::move(f.Emitter);
+      |         ^~~~~~~
+      |         emitter
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:2103:24: error: ‘move’ is not a member of ‘ff::std’; did you mean ‘std::move’? [-Wtemplate-body]
+ 2103 |         Emitter = std::move(f.Emitter);
+      |                        ^~~~
+/usr/include/c++/15.1.1/bits/stl_algobase.h:666:5: note: ‘std::move’ declared here
+  666 |     move(_II __first, _II __last, _OI __result)
+      |     ^~~~
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:2103:31: error: ‘class ff::ff_Farm<IN_t, OUT_t>’ has no member named ‘Emitter’; did you mean ‘emitter’? [-Wtemplate-body]
+ 2103 |         Emitter = std::move(f.Emitter);
+      |                               ^~~~~~~
+      |                               emitter
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:2104:9: error: ‘Collector’ was not declared in this scope; did you mean ‘collector’? [-Wtemplate-body]
+ 2104 |         Collector = std::move(f.Collector);
+      |         ^~~~~~~~~
+      |         collector
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:2104:26: error: ‘move’ is not a member of ‘ff::std’; did you mean ‘std::move’? [-Wtemplate-body]
+ 2104 |         Collector = std::move(f.Collector);
+      |                          ^~~~
+/usr/include/c++/15.1.1/bits/stl_algobase.h:666:5: note: ‘std::move’ declared here
+  666 |     move(_II __first, _II __last, _OI __result)
+      |     ^~~~
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:2104:33: error: ‘class ff::ff_Farm<IN_t, OUT_t>’ has no member named ‘Collector’; did you mean ‘collector’? [-Wtemplate-body]
+ 2104 |         Collector = std::move(f.Collector);
+      |                                 ^~~~~~~~~
+      |                                 collector
+/home/lukefleed/Develop/fastflow/ff/farm.hpp: In constructor ‘ff::ff_Farm<IN_t, OUT_t>::ff_Farm(FUNC_t, ssize_t, bool)’:
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:2119:14: error: ‘vector’ is not a member of ‘ff::std’; did you mean ‘std::vector’? [-Wtemplate-body]
+ 2119 |         std::vector<ff_node*> w(nw);
+      |              ^~~~~~
+In file included from /usr/include/c++/15.1.1/vector:68:
+/usr/include/c++/15.1.1/bits/stl_vector.h:458:11: note: ‘std::vector’ declared here
+  458 |     class vector : protected _Vector_base<_Tp, _Alloc>
+      |           ^~~~~~
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:2119:28: error: expected primary-expression before ‘*’ token [-Wtemplate-body]
+ 2119 |         std::vector<ff_node*> w(nw);
+      |                            ^
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:2119:29: error: expected primary-expression before ‘>’ token [-Wtemplate-body]
+ 2119 |         std::vector<ff_node*> w(nw);
+      |                             ^
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:2119:31: error: there are no arguments to ‘w’ that depend on a template parameter, so a declaration of ‘w’ must be available [-Wtemplate-body]
+ 2119 |         std::vector<ff_node*> w(nw);
+      |                               ^
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:2119:31: note: (if you use ‘-fpermissive’, G++ will accept your code, but allowing the use of an undeclared name is deprecated)
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:2120:31: error: ‘w’ was not declared in this scope [-Wtemplate-body]
+ 2120 |         for(int i=0;i<nw;++i) w[i]=new ff_node_F<IN_t,OUT_t>(F);
+      |                               ^
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:2121:30: error: ‘w’ was not declared in this scope [-Wtemplate-body]
+ 2121 |         ff_farm::add_workers(w);
+      |                              ^
+/home/lukefleed/Develop/fastflow/ff/farm.hpp: At global scope:
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:2178:10: error: ‘vector’ in namespace ‘ff::std’ does not name a template type [-Wtemplate-body]
+ 2178 |     std::vector<std::unique_ptr<ff_node> > Workers;
+      |          ^~~~~~
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:2183:25: error: expected ‘)’ before ‘<’ token [-Wtemplate-body]
+ 2183 |     ff_OFarm(std::vector<std::unique_ptr<ff_node> > &&W,  bool input_ch=false):
+      |             ~           ^
+      |                         )
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:2233:26: error: ‘ff::std::vector’ has not been declared [-Wtemplate-body]
+ 2233 |     int add_workers(std::vector<ff_node *> & w) = delete;
+      |                          ^~~~~~
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:2233:32: error: expected ‘,’ or ‘...’ before ‘<’ token [-Wtemplate-body]
+ 2233 |     int add_workers(std::vector<ff_node *> & w) = delete;
+      |                                ^
+/home/lukefleed/Develop/fastflow/ff/farm.hpp: In constructor ‘ff::ff_OFarm<IN_t, OUT_t>::ff_OFarm(FUNC_t, size_t, bool)’:
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:2199:13: error: ‘Workers’ was not declared in this scope; did you mean ‘workers’? [-Wtemplate-body]
+ 2199 |         if (Workers.size()>0) {
+      |             ^~~~~~~
+      |             workers
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:2205:13: error: ‘Workers’ was not declared in this scope; did you mean ‘workers’? [-Wtemplate-body]
+ 2205 |             Workers.push_back(make_unique<ff_node_F<IN_t,OUT_t>>(F));
+      |             ^~~~~~~
+      |             workers
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:2205:31: error: ‘make_unique’ was not declared in this scope [-Wtemplate-body]
+ 2205 |             Workers.push_back(make_unique<ff_node_F<IN_t,OUT_t>>(F));
+      |                               ^~~~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:2205:63: error: expected primary-expression before ‘>’ token [-Wtemplate-body]
+ 2205 |             Workers.push_back(make_unique<ff_node_F<IN_t,OUT_t>>(F));
+      |                                                               ^~
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:2206:14: error: ‘vector’ is not a member of ‘ff::std’; did you mean ‘std::vector’? [-Wtemplate-body]
+ 2206 |         std::vector<ff_node*> w(nw);
+      |              ^~~~~~
+/usr/include/c++/15.1.1/bits/stl_vector.h:458:11: note: ‘std::vector’ declared here
+  458 |     class vector : protected _Vector_base<_Tp, _Alloc>
+      |           ^~~~~~
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:2206:28: error: expected primary-expression before ‘*’ token [-Wtemplate-body]
+ 2206 |         std::vector<ff_node*> w(nw);
+      |                            ^
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:2206:29: error: expected primary-expression before ‘>’ token [-Wtemplate-body]
+ 2206 |         std::vector<ff_node*> w(nw);
+      |                             ^
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:2206:31: error: there are no arguments to ‘w’ that depend on a template parameter, so a declaration of ‘w’ must be available [-Wtemplate-body]
+ 2206 |         std::vector<ff_node*> w(nw);
+      |                               ^
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:2207:34: error: ‘w’ was not declared in this scope [-Wtemplate-body]
+ 2207 |         for(size_t i=0;i<nw;++i) w[i]= Workers[i].get();
+      |                                  ^
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:2207:40: error: ‘Workers’ was not declared in this scope; did you mean ‘workers’? [-Wtemplate-body]
+ 2207 |         for(size_t i=0;i<nw;++i) w[i]= Workers[i].get();
+      |                                        ^~~~~~~
+      |                                        workers
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:2208:30: error: ‘w’ was not declared in this scope [-Wtemplate-body]
+ 2208 |         ff_farm::add_workers(w);
+      |                              ^
+In file included from /home/lukefleed/Develop/fastflow/ff/ff.hpp:28,
+                 from src/mergesort_ff.cpp:15:
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp: At global scope:
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:649:24: error: ‘pair’ is not a member of ‘ff::std’; did you mean ‘std::pair’?
+  649 |     const svector<std::pair<ff_node*,bool>> get_and_remove_nodes() {
+      |                        ^~~~
+In file included from /usr/include/c++/15.1.1/bits/stl_algobase.h:64:
+/usr/include/c++/15.1.1/bits/stl_pair.h:89:12: note: ‘std::pair’ declared here
+   89 |     struct pair;
+      |            ^~~~
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:649:24: error: ‘pair’ is not a member of ‘ff::std’; did you mean ‘std::pair’?
+  649 |     const svector<std::pair<ff_node*,bool>> get_and_remove_nodes() {
+      |                        ^~~~
+/usr/include/c++/15.1.1/bits/stl_pair.h:89:12: note: ‘std::pair’ declared here
+   89 |     struct pair;
+      |            ^~~~
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:649:38: error: wrong number of template arguments (2, should be 1)
+  649 |     const svector<std::pair<ff_node*,bool>> get_and_remove_nodes() {
+      |                                      ^~~~
+In file included from /home/lukefleed/Develop/fastflow/ff/mapper.hpp:34:
+/home/lukefleed/Develop/fastflow/ff/svector.hpp:62:7: note: provided for ‘template<class T> class ff::svector’
+   62 | class svector {
+      |       ^~~~~~~
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:649:42: error: expected unqualified-id before ‘>’ token
+  649 |     const svector<std::pair<ff_node*,bool>> get_and_remove_nodes() {
+      |                                          ^~
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1415:23: error: ‘ff::std::ostream’ has not been declared
+ 1415 |     void ffStats(std::ostream & out) {
+      |                       ^~~~~~~
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp: In member function ‘virtual int ff::ff_pipeline::prepare()’:
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:206:86: warning: ‘new’ of type ‘ff::ff_buffernode’ with extended alignment 32 [-Waligned-new=]
+  206 |                         ff_node* t = new ff_buffernode(in_buffer_entries,fixedsize, i);
+      |                                                                                      ^
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:206:86: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:206:86: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:225:90: warning: ‘new’ of type ‘ff::ff_buffernode’ with extended alignment 32 [-Waligned-new=]
+  225 |                             ff_node* t = new ff_buffernode(in_buffer_entries,fixedsize, j);
+      |                                                                                          ^
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:225:90: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:225:90: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:342:86: warning: ‘new’ of type ‘ff::ff_buffernode’ with extended alignment 32 [-Waligned-new=]
+  342 |                         ff_node* t = new ff_buffernode(in_buffer_entries,fixedsize, j);
+      |                                                                                      ^
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:342:86: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:342:86: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:374:90: warning: ‘new’ of type ‘ff::ff_buffernode’ with extended alignment 32 [-Waligned-new=]
+  374 |                             ff_node* t = new ff_buffernode(in_buffer_entries,fixedsize, j);
+      |                                                                                          ^
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:374:90: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:374:90: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp: In copy constructor ‘ff::ff_pipeline::ff_pipeline(const ff::ff_pipeline&)’:
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:522:5: warning: base class ‘class ff::ff_node’ should be explicitly initialized in the copy constructor [-Wextra]
+  522 |     ff_pipeline(const ff_pipeline& p) {
+      |     ^~~~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp: In member function ‘int ff::ff_pipeline::wrap_around()’:
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:768:90: warning: ‘new’ of type ‘ff::ff_buffernode’ with extended alignment 32 [-Waligned-new=]
+  768 |                     ff_node *t = new ff_buffernode(last, get_in_buffer(), get_in_buffer());
+      |                                                                                          ^
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:768:90: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:768:90: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:806:82: warning: ‘new’ of type ‘ff::ff_buffernode’ with extended alignment 32 [-Waligned-new=]
+  806 |                     ff_node *t = new ff_buffernode(out_buffer_entries,false, last);
+      |                                                                                  ^
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:806:82: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:806:82: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:843:91: warning: ‘new’ of type ‘ff::ff_buffernode’ with extended alignment 32 [-Waligned-new=]
+  843 |                                 ff_node* t = new ff_buffernode(out_buffer_entries,false, j);
+      |                                                                                           ^
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:843:91: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:843:91: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:879:79: warning: ‘new’ of type ‘ff::ff_buffernode’ with extended alignment 32 [-Waligned-new=]
+  879 |                     ff_node* t = new ff_buffernode(out_buffer_entries,false, j);
+      |                                                                               ^
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:879:79: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:879:79: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:936:79: warning: ‘new’ of type ‘ff::ff_buffernode’ with extended alignment 32 [-Waligned-new=]
+  936 |                     ff_node* t = new ff_buffernode(out_buffer_entries,false, j);
+      |                                                                               ^
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:936:79: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:936:79: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:950:79: warning: ‘new’ of type ‘ff::ff_buffernode’ with extended alignment 32 [-Waligned-new=]
+  950 |                     ff_node* t = new ff_buffernode(out_buffer_entries,false, i);
+      |                                                                               ^
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:950:79: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:950:79: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:965:83: warning: ‘new’ of type ‘ff::ff_buffernode’ with extended alignment 32 [-Waligned-new=]
+  965 |                         ff_node* t = new ff_buffernode(out_buffer_entries,false, j);
+      |                                                                                   ^
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:965:83: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:965:83: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp: In member function ‘void ff::ff_pipeline::flatten()’:
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1256:28: error: ‘pair’ is not a member of ‘ff::std’; did you mean ‘std::pair’?
+ 1256 |         const svector<std::pair<ff_node*,bool>>& W = this->get_and_remove_nodes();
+      |                            ^~~~
+/usr/include/c++/15.1.1/bits/stl_pair.h:89:12: note: ‘std::pair’ declared here
+   89 |     struct pair;
+      |            ^~~~
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1256:28: error: ‘pair’ is not a member of ‘ff::std’; did you mean ‘std::pair’?
+ 1256 |         const svector<std::pair<ff_node*,bool>>& W = this->get_and_remove_nodes();
+      |                            ^~~~
+/usr/include/c++/15.1.1/bits/stl_pair.h:89:12: note: ‘std::pair’ declared here
+   89 |     struct pair;
+      |            ^~~~
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1256:42: error: wrong number of template arguments (2, should be 1)
+ 1256 |         const svector<std::pair<ff_node*,bool>>& W = this->get_and_remove_nodes();
+      |                                          ^~~~
+/home/lukefleed/Develop/fastflow/ff/svector.hpp:62:7: note: provided for ‘template<class T> class ff::svector’
+   62 | class svector {
+      |       ^~~~~~~
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1256:46: error: expected unqualified-id before ‘>’ token
+ 1256 |         const svector<std::pair<ff_node*,bool>>& W = this->get_and_remove_nodes();
+      |                                              ^~
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1258:26: error: ‘W’ was not declared in this scope
+ 1258 |         for(size_t i=0;i<W.size();++i) this->add_stage(W[i].first);
+      |                          ^
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1260:30: error: ‘W’ was not declared in this scope
+ 1260 |             for(size_t i=0;i<W.size();++i)
+      |                              ^
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1263:30: error: ‘W’ was not declared in this scope
+ 1263 |             for(size_t i=0;i<W.size();++i)
+      |                              ^
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp: In member function ‘void ff::ff_pipeline::ffStats(int&)’:
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1416:13: error: invalid operands of types ‘int’ and ‘const char [28]’ to binary ‘operator<<’
+ 1416 |         out << "FastFlow trace not enabled\n";
+      |         ~~~ ^~ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |         |      |
+      |         int    const char [28]
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp: In member function ‘virtual void* ff::ff_pipeline::svc(void*)’:
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1455:22: warning: unused parameter ‘task’ [-Wunused-parameter]
+ 1455 |     void* svc(void * task) { return NULL; }
+      |               ~~~~~~~^~~~
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp: In member function ‘virtual bool ff::ff_pipeline::init_input_blocking(pthread_mutex_t*&, pthread_cond_t*&, bool)’:
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1479:50: warning: unused parameter ‘feedback’ [-Wunused-parameter]
+ 1479 |                                             bool feedback=true) {
+      |                                             ~~~~~^~~~~~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp: In member function ‘virtual bool ff::ff_pipeline::init_output_blocking(pthread_mutex_t*&, pthread_cond_t*&, bool)’:
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1485:51: warning: unused parameter ‘feedback’ [-Wunused-parameter]
+ 1485 |                                              bool feedback=true) {
+      |                                              ~~~~~^~~~~~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp: At global scope:
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1620:51: error: expected class-name before ‘{’ token [-Wtemplate-body]
+ 1620 |         struct valid_stage_types : std::true_type {};
+      |                                                   ^
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1623:78: error: expected template-name before ‘<’ token [-Wtemplate-body]
+ 1623 |         struct valid_stage_types<A&&, B&&, Bs &&...> : std::integral_constant<bool, std::is_same<typename A::out_type, typename B::in_type>{} && valid_stage_types<B, Bs...>{}> {};
+      |                                                                              ^
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1623:78: error: expected ‘{’ before ‘<’ token [-Wtemplate-body]
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1623:164: error: ‘B’ was not declared in this scope [-Wtemplate-body]
+ 1623 |         struct valid_stage_types<A&&, B&&, Bs &&...> : std::integral_constant<bool, std::is_same<typename A::out_type, typename B::in_type>{} && valid_stage_types<B, Bs...>{}> {};
+      |                                                                                                                                                                    ^
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1623:167: error: ‘Bs’ was not declared in this scope [-Wtemplate-body]
+ 1623 |         struct valid_stage_types<A&&, B&&, Bs &&...> : std::integral_constant<bool, std::is_same<typename A::out_type, typename B::in_type>{} && valid_stage_types<B, Bs...>{}> {};
+      |                                                                                                                                                                       ^~
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1623:169: error: expected parameter pack before ‘...’ [-Wtemplate-body]
+ 1623 |         struct valid_stage_types<A&&, B&&, Bs &&...> : std::integral_constant<bool, std::is_same<typename A::out_type, typename B::in_type>{} && valid_stage_types<B, Bs...>{}> {};
+      |                                                                                                                                                                         ^~~
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1623:172: error: template argument 1 is invalid [-Wtemplate-body]
+ 1623 |         struct valid_stage_types<A&&, B&&, Bs &&...> : std::integral_constant<bool, std::is_same<typename A::out_type, typename B::in_type>{} && valid_stage_types<B, Bs...>{}> {};
+      |                                                                                                                                                                            ^
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1623:172: error: template argument 2 is invalid [-Wtemplate-body]
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1623:175: error: expected unqualified-id before ‘>’ token [-Wtemplate-body]
+ 1623 |         struct valid_stage_types<A&&, B&&, Bs &&...> : std::integral_constant<bool, std::is_same<typename A::out_type, typename B::in_type>{} && valid_stage_types<B, Bs...>{}> {};
+      |                                                                                                                                                                               ^
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1626:39: error: ‘unique_ptr’ is not a member of ‘ff::std’; did you mean ‘std::unique_ptr’? [-Wtemplate-body]
+ 1626 |         struct valid_stage_types<std::unique_ptr<A>&&, std::unique_ptr<B>&&, Bs &&...> : std::integral_constant<bool, std::is_same<typename A::out_type, typename B::in_type>{} && valid_stage_types<std::unique_ptr<B>, Bs...>{}> {};
+      |                                       ^~~~~~~~~~
+In file included from /usr/include/c++/15.1.1/memory:80,
+                 from src/mergesort_ff.cpp:7:
+/usr/include/c++/15.1.1/bits/unique_ptr.h:271:11: note: ‘std::unique_ptr’ declared here
+  271 |     class unique_ptr
+      |           ^~~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1626:39: error: ‘unique_ptr’ is not a member of ‘ff::std’; did you mean ‘std::unique_ptr’? [-Wtemplate-body]
+ 1626 |         struct valid_stage_types<std::unique_ptr<A>&&, std::unique_ptr<B>&&, Bs &&...> : std::integral_constant<bool, std::is_same<typename A::out_type, typename B::in_type>{} && valid_stage_types<std::unique_ptr<B>, Bs...>{}> {};
+      |                                       ^~~~~~~~~~
+/usr/include/c++/15.1.1/bits/unique_ptr.h:271:11: note: ‘std::unique_ptr’ declared here
+  271 |     class unique_ptr
+      |           ^~~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1626:51: error: template argument 1 is invalid [-Wtemplate-body]
+ 1626 |         struct valid_stage_types<std::unique_ptr<A>&&, std::unique_ptr<B>&&, Bs &&...> : std::integral_constant<bool, std::is_same<typename A::out_type, typename B::in_type>{} && valid_stage_types<std::unique_ptr<B>, Bs...>{}> {};
+      |                                                   ^
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1626:54: error: expected unqualified-id before ‘,’ token [-Wtemplate-body]
+ 1626 |         struct valid_stage_types<std::unique_ptr<A>&&, std::unique_ptr<B>&&, Bs &&...> : std::integral_constant<bool, std::is_same<typename A::out_type, typename B::in_type>{} && valid_stage_types<std::unique_ptr<B>, Bs...>{}> {};
+      |                                                      ^
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1626:203: error: ‘unique_ptr’ is not a member of ‘ff::std’; did you mean ‘std::unique_ptr’? [-Wtemplate-body]
+ 1626 |         struct valid_stage_types<std::unique_ptr<A>&&, std::unique_ptr<B>&&, Bs &&...> : std::integral_constant<bool, std::is_same<typename A::out_type, typename B::in_type>{} && valid_stage_types<std::unique_ptr<B>, Bs...>{}> {};
+      |                                                                                                                                                                                                           ^~~~~~~~~~
+/usr/include/c++/15.1.1/bits/unique_ptr.h:271:11: note: ‘std::unique_ptr’ declared here
+  271 |     class unique_ptr
+      |           ^~~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1626:203: error: ‘unique_ptr’ is not a member of ‘ff::std’; did you mean ‘std::unique_ptr’? [-Wtemplate-body]
+ 1626 |         struct valid_stage_types<std::unique_ptr<A>&&, std::unique_ptr<B>&&, Bs &&...> : std::integral_constant<bool, std::is_same<typename A::out_type, typename B::in_type>{} && valid_stage_types<std::unique_ptr<B>, Bs...>{}> {};
+      |                                                                                                                                                                                                           ^~~~~~~~~~
+/usr/include/c++/15.1.1/bits/unique_ptr.h:271:11: note: ‘std::unique_ptr’ declared here
+  271 |     class unique_ptr
+      |           ^~~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1626:214: error: ‘B’ was not declared in this scope [-Wtemplate-body]
+ 1626 |         struct valid_stage_types<std::unique_ptr<A>&&, std::unique_ptr<B>&&, Bs &&...> : std::integral_constant<bool, std::is_same<typename A::out_type, typename B::in_type>{} && valid_stage_types<std::unique_ptr<B>, Bs...>{}> {};
+      |                                                                                                                                                                                                                      ^
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1626:215: error: template argument 1 is invalid [-Wtemplate-body]
+ 1626 |         struct valid_stage_types<std::unique_ptr<A>&&, std::unique_ptr<B>&&, Bs &&...> : std::integral_constant<bool, std::is_same<typename A::out_type, typename B::in_type>{} && valid_stage_types<std::unique_ptr<B>, Bs...>{}> {};
+      |                                                                                                                                                                                                                       ^
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1626:226: error: expected unqualified-id before ‘>’ token [-Wtemplate-body]
+ 1626 |         struct valid_stage_types<std::unique_ptr<A>&&, std::unique_ptr<B>&&, Bs &&...> : std::integral_constant<bool, std::is_same<typename A::out_type, typename B::in_type>{} && valid_stage_types<std::unique_ptr<B>, Bs...>{}> {};
+      |                                                                                                                                                                                                                                  ^
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1629:39: error: ‘unique_ptr’ is not a member of ‘ff::std’; did you mean ‘std::unique_ptr’? [-Wtemplate-body]
+ 1629 |         struct valid_stage_types<std::unique_ptr<A>&&, B&&, Bs &&...> : std::integral_constant<bool, std::is_same<typename A::out_type, typename B::in_type>{} && valid_stage_types<B, Bs...>{}> {};
+      |                                       ^~~~~~~~~~
+/usr/include/c++/15.1.1/bits/unique_ptr.h:271:11: note: ‘std::unique_ptr’ declared here
+  271 |     class unique_ptr
+      |           ^~~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1629:39: error: ‘unique_ptr’ is not a member of ‘ff::std’; did you mean ‘std::unique_ptr’? [-Wtemplate-body]
+ 1629 |         struct valid_stage_types<std::unique_ptr<A>&&, B&&, Bs &&...> : std::integral_constant<bool, std::is_same<typename A::out_type, typename B::in_type>{} && valid_stage_types<B, Bs...>{}> {};
+      |                                       ^~~~~~~~~~
+/usr/include/c++/15.1.1/bits/unique_ptr.h:271:11: note: ‘std::unique_ptr’ declared here
+  271 |     class unique_ptr
+      |           ^~~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1629:51: error: template argument 1 is invalid [-Wtemplate-body]
+ 1629 |         struct valid_stage_types<std::unique_ptr<A>&&, B&&, Bs &&...> : std::integral_constant<bool, std::is_same<typename A::out_type, typename B::in_type>{} && valid_stage_types<B, Bs...>{}> {};
+      |                                                   ^
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1629:54: error: expected unqualified-id before ‘,’ token [-Wtemplate-body]
+ 1629 |         struct valid_stage_types<std::unique_ptr<A>&&, B&&, Bs &&...> : std::integral_constant<bool, std::is_same<typename A::out_type, typename B::in_type>{} && valid_stage_types<B, Bs...>{}> {};
+      |                                                      ^
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1629:181: error: ‘B’ was not declared in this scope [-Wtemplate-body]
+ 1629 |         struct valid_stage_types<std::unique_ptr<A>&&, B&&, Bs &&...> : std::integral_constant<bool, std::is_same<typename A::out_type, typename B::in_type>{} && valid_stage_types<B, Bs...>{}> {};
+      |                                                                                                                                                                                     ^
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1629:184: error: ‘Bs’ was not declared in this scope [-Wtemplate-body]
+ 1629 |         struct valid_stage_types<std::unique_ptr<A>&&, B&&, Bs &&...> : std::integral_constant<bool, std::is_same<typename A::out_type, typename B::in_type>{} && valid_stage_types<B, Bs...>{}> {};
+      |                                                                                                                                                                                        ^~
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1629:186: error: expected parameter pack before ‘...’ [-Wtemplate-body]
+ 1629 |         struct valid_stage_types<std::unique_ptr<A>&&, B&&, Bs &&...> : std::integral_constant<bool, std::is_same<typename A::out_type, typename B::in_type>{} && valid_stage_types<B, Bs...>{}> {};
+      |                                                                                                                                                                                          ^~~
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1629:189: error: template argument 1 is invalid [-Wtemplate-body]
+ 1629 |         struct valid_stage_types<std::unique_ptr<A>&&, B&&, Bs &&...> : std::integral_constant<bool, std::is_same<typename A::out_type, typename B::in_type>{} && valid_stage_types<B, Bs...>{}> {};
+      |                                                                                                                                                                                             ^
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1629:189: error: template argument 2 is invalid [-Wtemplate-body]
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1629:192: error: expected unqualified-id before ‘>’ token [-Wtemplate-body]
+ 1629 |         struct valid_stage_types<std::unique_ptr<A>&&, B&&, Bs &&...> : std::integral_constant<bool, std::is_same<typename A::out_type, typename B::in_type>{} && valid_stage_types<B, Bs...>{}> {};
+      |                                                                                                                                                                                                ^
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1631:44: error: ‘unique_ptr’ is not a member of ‘ff::std’; did you mean ‘std::unique_ptr’? [-Wtemplate-body]
+ 1631 |         struct valid_stage_types<A&&, std::unique_ptr<B>&&, Bs &&...> : std::integral_constant<bool, std::is_same<typename A::out_type, typename B::in_type>{} && valid_stage_types<std::unique_ptr<B>, Bs...>{}> {};
+      |                                            ^~~~~~~~~~
+/usr/include/c++/15.1.1/bits/unique_ptr.h:271:11: note: ‘std::unique_ptr’ declared here
+  271 |     class unique_ptr
+      |           ^~~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1631:44: error: ‘unique_ptr’ is not a member of ‘ff::std’; did you mean ‘std::unique_ptr’? [-Wtemplate-body]
+ 1631 |         struct valid_stage_types<A&&, std::unique_ptr<B>&&, Bs &&...> : std::integral_constant<bool, std::is_same<typename A::out_type, typename B::in_type>{} && valid_stage_types<std::unique_ptr<B>, Bs...>{}> {};
+      |                                            ^~~~~~~~~~
+/usr/include/c++/15.1.1/bits/unique_ptr.h:271:11: note: ‘std::unique_ptr’ declared here
+  271 |     class unique_ptr
+      |           ^~~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1631:56: error: template argument 2 is invalid [-Wtemplate-body]
+ 1631 |         struct valid_stage_types<A&&, std::unique_ptr<B>&&, Bs &&...> : std::integral_constant<bool, std::is_same<typename A::out_type, typename B::in_type>{} && valid_stage_types<std::unique_ptr<B>, Bs...>{}> {};
+      |                                                        ^
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1631:59: error: expected unqualified-id before ‘,’ token [-Wtemplate-body]
+ 1631 |         struct valid_stage_types<A&&, std::unique_ptr<B>&&, Bs &&...> : std::integral_constant<bool, std::is_same<typename A::out_type, typename B::in_type>{} && valid_stage_types<std::unique_ptr<B>, Bs...>{}> {};
+      |                                                           ^
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1631:186: error: ‘unique_ptr’ is not a member of ‘ff::std’; did you mean ‘std::unique_ptr’? [-Wtemplate-body]
+ 1631 |         struct valid_stage_types<A&&, std::unique_ptr<B>&&, Bs &&...> : std::integral_constant<bool, std::is_same<typename A::out_type, typename B::in_type>{} && valid_stage_types<std::unique_ptr<B>, Bs...>{}> {};
+      |                                                                                                                                                                                          ^~~~~~~~~~
+/usr/include/c++/15.1.1/bits/unique_ptr.h:271:11: note: ‘std::unique_ptr’ declared here
+  271 |     class unique_ptr
+      |           ^~~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1631:186: error: ‘unique_ptr’ is not a member of ‘ff::std’; did you mean ‘std::unique_ptr’? [-Wtemplate-body]
+ 1631 |         struct valid_stage_types<A&&, std::unique_ptr<B>&&, Bs &&...> : std::integral_constant<bool, std::is_same<typename A::out_type, typename B::in_type>{} && valid_stage_types<std::unique_ptr<B>, Bs...>{}> {};
+      |                                                                                                                                                                                          ^~~~~~~~~~
+/usr/include/c++/15.1.1/bits/unique_ptr.h:271:11: note: ‘std::unique_ptr’ declared here
+  271 |     class unique_ptr
+      |           ^~~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1631:197: error: ‘B’ was not declared in this scope [-Wtemplate-body]
+ 1631 |         struct valid_stage_types<A&&, std::unique_ptr<B>&&, Bs &&...> : std::integral_constant<bool, std::is_same<typename A::out_type, typename B::in_type>{} && valid_stage_types<std::unique_ptr<B>, Bs...>{}> {};
+      |                                                                                                                                                                                                     ^
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1631:198: error: template argument 1 is invalid [-Wtemplate-body]
+ 1631 |         struct valid_stage_types<A&&, std::unique_ptr<B>&&, Bs &&...> : std::integral_constant<bool, std::is_same<typename A::out_type, typename B::in_type>{} && valid_stage_types<std::unique_ptr<B>, Bs...>{}> {};
+      |                                                                                                                                                                                                      ^
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1631:209: error: expected unqualified-id before ‘>’ token [-Wtemplate-body]
+ 1631 |         struct valid_stage_types<A&&, std::unique_ptr<B>&&, Bs &&...> : std::integral_constant<bool, std::is_same<typename A::out_type, typename B::in_type>{} && valid_stage_types<std::unique_ptr<B>, Bs...>{}> {};
+      |                                                                                                                                                                                                                 ^
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1662:31: error: ‘ff::std::unique_ptr’ has not been declared [-Wtemplate-body]
+ 1662 |         void add2pipeall(std::unique_ptr<FIRST> & stage,ARGS&...args){
+      |                               ^~~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1662:41: error: expected ‘,’ or ‘...’ before ‘<’ token [-Wtemplate-body]
+ 1662 |         void add2pipeall(std::unique_ptr<FIRST> & stage,ARGS&...args){
+      |                                         ^
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1744:28: error: ‘ff::std::unique_ptr’ has not been declared [-Wtemplate-body]
+ 1744 |         int add_stage(std::unique_ptr<ff_node> &&s) {
+      |                            ^~~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1744:38: error: expected ‘,’ or ‘...’ before ‘<’ token [-Wtemplate-body]
+ 1744 |         int add_stage(std::unique_ptr<ff_node> &&s) {
+      |                                      ^
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp: In member function ‘void ff::ff_Pipe<IN_t, OUT_t>::add2pipeall(int)’:
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1663:29: error: ‘stage’ was not declared in this scope [-Wtemplate-body]
+ 1663 |             ff_node* node = stage.release();
+      |                             ^~~~~
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1666:29: error: ‘args’ was not declared in this scope [-Wtemplate-body]
+ 1666 |                 add2pipeall(args...); // recurse
+      |                             ^~~~
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp: In member function ‘int ff::ff_Pipe<IN_t, OUT_t>::add_stage(int)’:
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1745:22: error: ‘s’ was not declared in this scope [-Wtemplate-body]
+ 1745 |             add2pipe(s.release());
+      |                      ^
+In file included from /home/lukefleed/Develop/fastflow/ff/optimize.hpp:46,
+                 from /home/lukefleed/Develop/fastflow/ff/pipeline.hpp:1759:
+/home/lukefleed/Develop/fastflow/ff/combine.hpp: At global scope:
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:55:13: error: ‘unique_ptr’ in namespace ‘ff::std’ does not name a template type
+   55 | static std::unique_ptr<ff_node> unique_combine_nodes(T1& n1, T2& n2);
+      |             ^~~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:68:17: error: ‘unique_ptr’ in namespace ‘ff::std’ does not name a template type
+   68 |     friend std::unique_ptr<ff_node> unique_combine_nodes(T1& n1, T2& n2);
+      |                 ^~~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:205:23: error: ‘ff::std::ostream’ has not been declared
+  205 |     void ffStats(std::ostream & out) {
+      |                       ^~~~~~~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp: In copy constructor ‘ff::ff_comb::ff_comb(const ff::ff_comb&)’:
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:115:5: warning: base class ‘class ff::ff_minode’ should be explicitly initialized in the copy constructor [-Wextra]
+  115 |     ff_comb(const ff_comb& c) {
+      |     ^~~~~~~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:118:62: warning: ‘new’ of type ‘ff::ff_comb’ with extended alignment 32 [-Waligned-new=]
+  118 |                 comp_nodes.push_back(new ff_comb(*(ff_comb*)s));
+      |                                                              ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:118:62: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:118:62: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/combine.hpp: In member function ‘void ff::ff_comb::ffStats(int&)’:
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:206:13: error: invalid operands of types ‘int’ and ‘const char [28]’ to binary ‘operator<<’
+  206 |         out << "FastFlow trace not enabled\n";
+      |         ~~~ ^~ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |         |      |
+      |         int    const char [28]
+/home/lukefleed/Develop/fastflow/ff/combine.hpp: In member function ‘virtual bool ff::ff_comb::init_input_blocking(pthread_mutex_t*&, pthread_cond_t*&, bool)’:
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:628:35: warning: unused parameter ‘feedback’ [-Wunused-parameter]
+  628 |                              bool feedback=true) {
+      |                              ~~~~~^~~~~~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp: In member function ‘virtual bool ff::ff_comb::init_output_blocking(pthread_mutex_t*&, pthread_cond_t*&, bool)’:
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:647:36: warning: unused parameter ‘feedback’ [-Wunused-parameter]
+  647 |                               bool feedback=true) {
+      |                               ~~~~~^~~~~~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp: At global scope:
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:737:20: error: ‘unique_ptr’ in namespace ‘ff::std’ does not name a template type
+  737 | static inline std::unique_ptr<ff_node> unique_combine_nodes(T1& n1, T2& n2) {
+      |                    ^~~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp: In function ‘const ff::ff_pipeline ff::combine_nodes_in_pipeline(ff_node&, ff_node&, bool, bool)’:
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:782:88: warning: ‘new’ of type ‘ff::ff_comb’ with extended alignment 32 [-Waligned-new=]
+  782 |             ff_comb *p = new ff_comb(&node1, e, cleanup1, farm->isset_cleanup_emitter());
+      |                                                                                        ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:782:88: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:782:88: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:794:90: warning: ‘new’ of type ‘ff::ff_comb’ with extended alignment 32 [-Waligned-new=]
+  794 |             ff_comb *p = new ff_comb(c, &node2, farm->isset_cleanup_collector(), cleanup2);
+      |                                                                                          ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:794:90: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:794:90: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:812:64: warning: ‘new’ of type ‘ff::ff_comb’ with extended alignment 32 [-Waligned-new=]
+  812 |                                  farm2->isset_cleanup_emitter());
+      |                                                                ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:812:64: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:812:64: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/combine.hpp: In function ‘const ff::ff_farm ff::combine_farms_a2a(ff_farm&, ff_farm&)’:
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:843:23: warning: ‘new’ of type ‘ff::ff_a2a’ with extended alignment 32 [-Waligned-new=]
+  843 |     ff_a2a *a2a = new ff_a2a;
+      |                       ^~~~~~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:843:23: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:843:23: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:849:10: error: ‘vector’ is not a member of ‘ff::std’; did you mean ‘std::vector’?
+  849 |     std::vector<ff_node*> W1(w1.size());
+      |          ^~~~~~
+/usr/include/c++/15.1.1/bits/stl_vector.h:458:11: note: ‘std::vector’ declared here
+  458 |     class vector : protected _Vector_base<_Tp, _Alloc>
+      |           ^~~~~~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:849:24: error: expected primary-expression before ‘*’ token
+  849 |     std::vector<ff_node*> W1(w1.size());
+      |                        ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:849:25: error: expected primary-expression before ‘>’ token
+  849 |     std::vector<ff_node*> W1(w1.size());
+      |                         ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:849:27: error: ‘W1’ was not declared in this scope; did you mean ‘w1’?
+  849 |     std::vector<ff_node*> W1(w1.size());
+      |                           ^~
+      |                           w1
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:850:10: error: ‘vector’ is not a member of ‘ff::std’; did you mean ‘std::vector’?
+  850 |     std::vector<ff_node*> W2(w2.size());
+      |          ^~~~~~
+/usr/include/c++/15.1.1/bits/stl_vector.h:458:11: note: ‘std::vector’ declared here
+  458 |     class vector : protected _Vector_base<_Tp, _Alloc>
+      |           ^~~~~~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:850:24: error: expected primary-expression before ‘*’ token
+  850 |     std::vector<ff_node*> W2(w2.size());
+      |                        ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:850:25: error: expected primary-expression before ‘>’ token
+  850 |     std::vector<ff_node*> W2(w2.size());
+      |                         ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:850:27: error: ‘W2’ was not declared in this scope; did you mean ‘w2’?
+  850 |     std::vector<ff_node*> W2(w2.size());
+      |                           ^~
+      |                           w2
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:877:10: error: ‘vector’ is not a member of ‘ff::std’; did you mean ‘std::vector’?
+  877 |     std::vector<ff_node*> W;
+      |          ^~~~~~
+/usr/include/c++/15.1.1/bits/stl_vector.h:458:11: note: ‘std::vector’ declared here
+  458 |     class vector : protected _Vector_base<_Tp, _Alloc>
+      |           ^~~~~~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:877:24: error: expected primary-expression before ‘*’ token
+  877 |     std::vector<ff_node*> W;
+      |                        ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:877:25: error: expected primary-expression before ‘>’ token
+  877 |     std::vector<ff_node*> W;
+      |                         ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:877:27: error: ‘W’ was not declared in this scope
+  877 |     std::vector<ff_node*> W;
+      |                           ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp: In function ‘const ff::ff_farm ff::combine_farms_a2a(ff_farm&, const E_t&, ff_farm&)’:
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:898:23: warning: ‘new’ of type ‘ff::ff_a2a’ with extended alignment 32 [-Waligned-new=]
+  898 |     ff_a2a *a2a = new ff_a2a;
+      |                       ^~~~~~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:898:23: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:898:23: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:904:10: error: ‘vector’ is not a member of ‘ff::std’; did you mean ‘std::vector’? [-Wtemplate-body]
+  904 |     std::vector<ff_node*> W1(w1.size());
+      |          ^~~~~~
+/usr/include/c++/15.1.1/bits/stl_vector.h:458:11: note: ‘std::vector’ declared here
+  458 |     class vector : protected _Vector_base<_Tp, _Alloc>
+      |           ^~~~~~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:904:24: error: expected primary-expression before ‘*’ token [-Wtemplate-body]
+  904 |     std::vector<ff_node*> W1(w1.size());
+      |                        ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:904:25: error: expected primary-expression before ‘>’ token [-Wtemplate-body]
+  904 |     std::vector<ff_node*> W1(w1.size());
+      |                         ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:904:27: error: there are no arguments to ‘W1’ that depend on a template parameter, so a declaration of ‘W1’ must be available [-Wtemplate-body]
+  904 |     std::vector<ff_node*> W1(w1.size());
+      |                           ^~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:905:10: error: ‘vector’ is not a member of ‘ff::std’; did you mean ‘std::vector’? [-Wtemplate-body]
+  905 |     std::vector<ff_node*> W2(w2.size());
+      |          ^~~~~~
+/usr/include/c++/15.1.1/bits/stl_vector.h:458:11: note: ‘std::vector’ declared here
+  458 |     class vector : protected _Vector_base<_Tp, _Alloc>
+      |           ^~~~~~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:905:24: error: expected primary-expression before ‘*’ token [-Wtemplate-body]
+  905 |     std::vector<ff_node*> W2(w2.size());
+      |                        ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:905:25: error: expected primary-expression before ‘>’ token [-Wtemplate-body]
+  905 |     std::vector<ff_node*> W2(w2.size());
+      |                         ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:905:27: error: there are no arguments to ‘W2’ that depend on a template parameter, so a declaration of ‘W2’ must be available [-Wtemplate-body]
+  905 |     std::vector<ff_node*> W2(w2.size());
+      |                           ^~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:906:22: error: ‘W1’ was not declared in this scope; did you mean ‘w1’? [-Wtemplate-body]
+  906 |     for(size_t i=0;i<W1.size();++i) W1[i]=w1[i];
+      |                      ^~
+      |                      w1
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:907:22: error: ‘W2’ was not declared in this scope; did you mean ‘w2’? [-Wtemplate-body]
+  907 |     for(size_t i=0;i<W2.size();++i) W2[i]=w2[i];
+      |                      ^~
+      |                      w2
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:914:10: error: ‘vector’ is not a member of ‘ff::std’; did you mean ‘std::vector’? [-Wtemplate-body]
+  914 |     std::vector<ff_node*> Wtmp(W1.size());
+      |          ^~~~~~
+/usr/include/c++/15.1.1/bits/stl_vector.h:458:11: note: ‘std::vector’ declared here
+  458 |     class vector : protected _Vector_base<_Tp, _Alloc>
+      |           ^~~~~~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:914:24: error: expected primary-expression before ‘*’ token [-Wtemplate-body]
+  914 |     std::vector<ff_node*> Wtmp(W1.size());
+      |                        ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:914:25: error: expected primary-expression before ‘>’ token [-Wtemplate-body]
+  914 |     std::vector<ff_node*> Wtmp(W1.size());
+      |                         ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:914:32: error: ‘W1’ was not declared in this scope; did you mean ‘w1’? [-Wtemplate-body]
+  914 |     std::vector<ff_node*> Wtmp(W1.size());
+      |                                ^~
+      |                                w1
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:914:27: error: there are no arguments to ‘Wtmp’ that depend on a template parameter, so a declaration of ‘Wtmp’ must be available [-Wtemplate-body]
+  914 |     std::vector<ff_node*> Wtmp(W1.size());
+      |                           ^~~~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:923:71: warning: ‘new’ of type ‘ff::ff_comb’ with extended alignment 32 [-Waligned-new=]
+  923 |                                   farm1.isset_cleanup_workers() , true);
+      |                                                                       ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:923:71: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:923:71: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:925:13: error: ‘Wtmp’ was not declared in this scope; did you mean ‘tm’? [-Wtemplate-body]
+  925 |             Wtmp[i]=pc;
+      |             ^~~~
+      |             tm
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:933:13: error: ‘Wtmp’ was not declared in this scope; did you mean ‘tm’? [-Wtemplate-body]
+  933 |             Wtmp[i]=pc;
+      |             ^~~~
+      |             tm
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:936:23: error: ‘Wtmp’ was not declared in this scope; did you mean ‘tm’? [-Wtemplate-body]
+  936 |     a2a->add_firstset(Wtmp, farm2.ondemand_buffer(), true);  // cleanup set to true
+      |                       ^~~~
+      |                       tm
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:937:24: error: ‘W2’ was not declared in this scope; did you mean ‘w2’? [-Wtemplate-body]
+  937 |     a2a->add_secondset(W2, farm2.isset_cleanup_workers());
+      |                        ^~
+      |                        w2
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:940:10: error: ‘vector’ is not a member of ‘ff::std’; did you mean ‘std::vector’? [-Wtemplate-body]
+  940 |     std::vector<ff_node*> W;
+      |          ^~~~~~
+/usr/include/c++/15.1.1/bits/stl_vector.h:458:11: note: ‘std::vector’ declared here
+  458 |     class vector : protected _Vector_base<_Tp, _Alloc>
+      |           ^~~~~~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:940:24: error: expected primary-expression before ‘*’ token [-Wtemplate-body]
+  940 |     std::vector<ff_node*> W;
+      |                        ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:940:25: error: expected primary-expression before ‘>’ token [-Wtemplate-body]
+  940 |     std::vector<ff_node*> W;
+      |                         ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:940:27: error: ‘W’ was not declared in this scope [-Wtemplate-body]
+  940 |     std::vector<ff_node*> W;
+      |                           ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp: In function ‘const ff::ff_farm ff::combine_farms_nf(ff_farm&, ff_farm&)’:
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:988:10: error: ‘vector’ is not a member of ‘ff::std’; did you mean ‘std::vector’?
+  988 |     std::vector<ff_node*> W1(w1.size());
+      |          ^~~~~~
+/usr/include/c++/15.1.1/bits/stl_vector.h:458:11: note: ‘std::vector’ declared here
+  458 |     class vector : protected _Vector_base<_Tp, _Alloc>
+      |           ^~~~~~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:988:24: error: expected primary-expression before ‘*’ token
+  988 |     std::vector<ff_node*> W1(w1.size());
+      |                        ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:988:25: error: expected primary-expression before ‘>’ token
+  988 |     std::vector<ff_node*> W1(w1.size());
+      |                         ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:988:27: error: ‘W1’ was not declared in this scope; did you mean ‘w1’?
+  988 |     std::vector<ff_node*> W1(w1.size());
+      |                           ^~
+      |                           w1
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:989:10: error: ‘vector’ is not a member of ‘ff::std’; did you mean ‘std::vector’?
+  989 |     std::vector<ff_node*> W2(w2.size());
+      |          ^~~~~~
+/usr/include/c++/15.1.1/bits/stl_vector.h:458:11: note: ‘std::vector’ declared here
+  458 |     class vector : protected _Vector_base<_Tp, _Alloc>
+      |           ^~~~~~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:989:24: error: expected primary-expression before ‘*’ token
+  989 |     std::vector<ff_node*> W2(w2.size());
+      |                        ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:989:25: error: expected primary-expression before ‘>’ token
+  989 |     std::vector<ff_node*> W2(w2.size());
+      |                         ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:989:27: error: ‘W2’ was not declared in this scope; did you mean ‘w2’?
+  989 |     std::vector<ff_node*> W2(w2.size());
+      |                           ^~
+      |                           w2
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1010:10: error: ‘vector’ is not a member of ‘ff::std’; did you mean ‘std::vector’?
+ 1010 |     std::vector<ff_node*> Wtmp1(W1.size());
+      |          ^~~~~~
+/usr/include/c++/15.1.1/bits/stl_vector.h:458:11: note: ‘std::vector’ declared here
+  458 |     class vector : protected _Vector_base<_Tp, _Alloc>
+      |           ^~~~~~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1010:24: error: expected primary-expression before ‘*’ token
+ 1010 |     std::vector<ff_node*> Wtmp1(W1.size());
+      |                        ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1010:25: error: expected primary-expression before ‘>’ token
+ 1010 |     std::vector<ff_node*> Wtmp1(W1.size());
+      |                         ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1010:27: error: ‘Wtmp1’ was not declared in this scope
+ 1010 |     std::vector<ff_node*> Wtmp1(W1.size());
+      |                           ^~~~~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1016:60: warning: ‘new’ of type ‘ff::ff_comb’ with extended alignment 32 [-Waligned-new=]
+ 1016 |                               farm2.isset_cleanup_workers());
+      |                                                            ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1016:60: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1016:60: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/combine.hpp: In function ‘const ff::ff_pipeline ff::combine_ofarm_farm(ff_farm&, ff_farm&)’:
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1066:88: warning: ‘new’ of type ‘ff::OrderedCollectorWrapper’ with extended alignment 32 [-Waligned-new=]
+ 1066 |     OrderedCollectorWrapper* cw = new OrderedCollectorWrapper(DEF_OFARM_ONDEMAND_MEMORY);
+      |                                                                                        ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1066:88: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1066:88: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1080:10: error: ‘vector’ is not a member of ‘ff::std’; did you mean ‘std::vector’?
+ 1080 |     std::vector<ff_node*> W1(w1.size());
+      |          ^~~~~~
+/usr/include/c++/15.1.1/bits/stl_vector.h:458:11: note: ‘std::vector’ declared here
+  458 |     class vector : protected _Vector_base<_Tp, _Alloc>
+      |           ^~~~~~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1080:24: error: expected primary-expression before ‘*’ token
+ 1080 |     std::vector<ff_node*> W1(w1.size());
+      |                        ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1080:25: error: expected primary-expression before ‘>’ token
+ 1080 |     std::vector<ff_node*> W1(w1.size());
+      |                         ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1080:27: error: ‘W1’ was not declared in this scope; did you mean ‘w1’?
+ 1080 |     std::vector<ff_node*> W1(w1.size());
+      |                           ^~
+      |                           w1
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1082:78: warning: ‘new’ of type ‘ff::OrderedWorkerWrapper’ with extended alignment 32 [-Waligned-new=]
+ 1082 |         W1[i] = new OrderedWorkerWrapper(w1[i], farm1.isset_cleanup_workers());
+      |                                                                              ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1082:78: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1082:78: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1099:76: warning: ‘new’ of type ‘ff::ff_comb’ with extended alignment 32 [-Waligned-new=]
+ 1099 |                                         true, farm2.isset_cleanup_emitter());
+      |                                                                            ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1099:76: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1099:76: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1107:82: warning: ‘new’ of type ‘ff::ff_comb’ with extended alignment 32 [-Waligned-new=]
+ 1107 |                                             true, farm1.isset_cleanup_collector());
+      |                                                                                  ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1107:82: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1107:82: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1115:75: warning: ‘new’ of type ‘ff::ff_comb’ with extended alignment 32 [-Waligned-new=]
+ 1115 |                                              farm2.isset_cleanup_emitter());
+      |                                                                           ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1115:75: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1115:75: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1122:55: warning: ‘new’ of type ‘ff::ff_comb’ with extended alignment 32 [-Waligned-new=]
+ 1122 |                                             true, true);
+      |                                                       ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1122:55: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1122:55: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/combine.hpp: In function ‘const ff::ff_pipeline ff::combine_farms(ff_farm&, const C_t*, ff_farm&, const E_t*, bool)’:
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1282:27: warning: ‘new’ of type ‘ff::ff_a2a’ with extended alignment 32 [-Waligned-new=]
+ 1282 |         ff_a2a *a2a = new ff_a2a;
+      |                           ^~~~~~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1282:27: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1282:27: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1291:14: error: ‘vector’ is not a member of ‘ff::std’; did you mean ‘std::vector’? [-Wtemplate-body]
+ 1291 |         std::vector<ff_node*> W1(w1.size());
+      |              ^~~~~~
+/usr/include/c++/15.1.1/bits/stl_vector.h:458:11: note: ‘std::vector’ declared here
+  458 |     class vector : protected _Vector_base<_Tp, _Alloc>
+      |           ^~~~~~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1291:28: error: expected primary-expression before ‘*’ token [-Wtemplate-body]
+ 1291 |         std::vector<ff_node*> W1(w1.size());
+      |                            ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1291:29: error: expected primary-expression before ‘>’ token [-Wtemplate-body]
+ 1291 |         std::vector<ff_node*> W1(w1.size());
+      |                             ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1291:31: error: there are no arguments to ‘W1’ that depend on a template parameter, so a declaration of ‘W1’ must be available [-Wtemplate-body]
+ 1291 |         std::vector<ff_node*> W1(w1.size());
+      |                               ^~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1292:14: error: ‘vector’ is not a member of ‘ff::std’; did you mean ‘std::vector’? [-Wtemplate-body]
+ 1292 |         std::vector<ff_node*> W2(w2.size());
+      |              ^~~~~~
+/usr/include/c++/15.1.1/bits/stl_vector.h:458:11: note: ‘std::vector’ declared here
+  458 |     class vector : protected _Vector_base<_Tp, _Alloc>
+      |           ^~~~~~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1292:28: error: expected primary-expression before ‘*’ token [-Wtemplate-body]
+ 1292 |         std::vector<ff_node*> W2(w2.size());
+      |                            ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1292:29: error: expected primary-expression before ‘>’ token [-Wtemplate-body]
+ 1292 |         std::vector<ff_node*> W2(w2.size());
+      |                             ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1292:31: error: there are no arguments to ‘W2’ that depend on a template parameter, so a declaration of ‘W2’ must be available [-Wtemplate-body]
+ 1292 |         std::vector<ff_node*> W2(w2.size());
+      |                               ^~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1293:26: error: ‘W1’ was not declared in this scope; did you mean ‘w1’? [-Wtemplate-body]
+ 1293 |         for(size_t i=0;i<W1.size();++i) W1[i]=w1[i];
+      |                          ^~
+      |                          w1
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1294:26: error: ‘W2’ was not declared in this scope; did you mean ‘w2’? [-Wtemplate-body]
+ 1294 |         for(size_t i=0;i<W2.size();++i) W2[i]=w2[i];
+      |                          ^~
+      |                          w2
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1313:14: error: ‘vector’ is not a member of ‘ff::std’; did you mean ‘std::vector’? [-Wtemplate-body]
+ 1313 |         std::vector<ff_node*> Wtmp1(W1.size());
+      |              ^~~~~~
+/usr/include/c++/15.1.1/bits/stl_vector.h:458:11: note: ‘std::vector’ declared here
+  458 |     class vector : protected _Vector_base<_Tp, _Alloc>
+      |           ^~~~~~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1313:28: error: expected primary-expression before ‘*’ token [-Wtemplate-body]
+ 1313 |         std::vector<ff_node*> Wtmp1(W1.size());
+      |                            ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1313:29: error: expected primary-expression before ‘>’ token [-Wtemplate-body]
+ 1313 |         std::vector<ff_node*> Wtmp1(W1.size());
+      |                             ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1313:37: error: ‘W1’ was not declared in this scope; did you mean ‘w1’? [-Wtemplate-body]
+ 1313 |         std::vector<ff_node*> Wtmp1(W1.size());
+      |                                     ^~
+      |                                     w1
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1313:31: error: there are no arguments to ‘Wtmp1’ that depend on a template parameter, so a declaration of ‘Wtmp1’ must be available [-Wtemplate-body]
+ 1313 |         std::vector<ff_node*> Wtmp1(W1.size());
+      |                               ^~~~~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1322:75: warning: ‘new’ of type ‘ff::ff_comb’ with extended alignment 32 [-Waligned-new=]
+ 1322 |                                       farm1.isset_cleanup_workers() , true);
+      |                                                                           ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1322:75: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1322:75: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1324:17: error: ‘Wtmp1’ was not declared in this scope [-Wtemplate-body]
+ 1324 |                 Wtmp1[i]=pc;
+      |                 ^~~~~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1333:17: error: ‘Wtmp1’ was not declared in this scope [-Wtemplate-body]
+ 1333 |                 Wtmp1[i]=pc;
+      |                 ^~~~~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1337:27: error: ‘Wtmp1’ was not declared in this scope [-Wtemplate-body]
+ 1337 |         a2a->add_firstset(Wtmp1, farm2.ondemand_buffer(), true);  // cleanup set to true
+      |                           ^~~~~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1338:28: error: ‘W2’ was not declared in this scope; did you mean ‘w2’? [-Wtemplate-body]
+ 1338 |         a2a->add_secondset(W2, farm2.isset_cleanup_workers());
+      |                            ^~
+      |                            w2
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1341:14: error: ‘vector’ is not a member of ‘ff::std’; did you mean ‘std::vector’? [-Wtemplate-body]
+ 1341 |         std::vector<ff_node*> W;
+      |              ^~~~~~
+/usr/include/c++/15.1.1/bits/stl_vector.h:458:11: note: ‘std::vector’ declared here
+  458 |     class vector : protected _Vector_base<_Tp, _Alloc>
+      |           ^~~~~~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1341:28: error: expected primary-expression before ‘*’ token [-Wtemplate-body]
+ 1341 |         std::vector<ff_node*> W;
+      |                            ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1341:29: error: expected primary-expression before ‘>’ token [-Wtemplate-body]
+ 1341 |         std::vector<ff_node*> W;
+      |                             ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1341:31: error: ‘W’ was not declared in this scope [-Wtemplate-body]
+ 1341 |         std::vector<ff_node*> W;
+      |                               ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1363:23: warning: ‘new’ of type ‘ff::ff_a2a’ with extended alignment 32 [-Waligned-new=]
+ 1363 |     ff_a2a *a2a = new ff_a2a;
+      |                       ^~~~~~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1363:23: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1363:23: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1373:10: error: ‘vector’ is not a member of ‘ff::std’; did you mean ‘std::vector’? [-Wtemplate-body]
+ 1373 |     std::vector<ff_node*> W1(w1.size());
+      |          ^~~~~~
+/usr/include/c++/15.1.1/bits/stl_vector.h:458:11: note: ‘std::vector’ declared here
+  458 |     class vector : protected _Vector_base<_Tp, _Alloc>
+      |           ^~~~~~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1373:24: error: expected primary-expression before ‘*’ token [-Wtemplate-body]
+ 1373 |     std::vector<ff_node*> W1(w1.size());
+      |                        ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1373:25: error: expected primary-expression before ‘>’ token [-Wtemplate-body]
+ 1373 |     std::vector<ff_node*> W1(w1.size());
+      |                         ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1373:27: error: there are no arguments to ‘W1’ that depend on a template parameter, so a declaration of ‘W1’ must be available [-Wtemplate-body]
+ 1373 |     std::vector<ff_node*> W1(w1.size());
+      |                           ^~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1374:10: error: ‘vector’ is not a member of ‘ff::std’; did you mean ‘std::vector’? [-Wtemplate-body]
+ 1374 |     std::vector<ff_node*> W2(w2.size());
+      |          ^~~~~~
+/usr/include/c++/15.1.1/bits/stl_vector.h:458:11: note: ‘std::vector’ declared here
+  458 |     class vector : protected _Vector_base<_Tp, _Alloc>
+      |           ^~~~~~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1374:24: error: expected primary-expression before ‘*’ token [-Wtemplate-body]
+ 1374 |     std::vector<ff_node*> W2(w2.size());
+      |                        ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1374:25: error: expected primary-expression before ‘>’ token [-Wtemplate-body]
+ 1374 |     std::vector<ff_node*> W2(w2.size());
+      |                         ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1374:27: error: there are no arguments to ‘W2’ that depend on a template parameter, so a declaration of ‘W2’ must be available [-Wtemplate-body]
+ 1374 |     std::vector<ff_node*> W2(w2.size());
+      |                           ^~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1375:22: error: ‘W1’ was not declared in this scope; did you mean ‘w1’? [-Wtemplate-body]
+ 1375 |     for(size_t i=0;i<W1.size();++i) W1[i]=w1[i];
+      |                      ^~
+      |                      w1
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1376:22: error: ‘W2’ was not declared in this scope; did you mean ‘w2’? [-Wtemplate-body]
+ 1376 |     for(size_t i=0;i<W2.size();++i) W2[i]=w2[i];
+      |                      ^~
+      |                      w2
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1395:10: error: ‘vector’ is not a member of ‘ff::std’; did you mean ‘std::vector’? [-Wtemplate-body]
+ 1395 |     std::vector<ff_node*> Wtmp1(W1.size());
+      |          ^~~~~~
+/usr/include/c++/15.1.1/bits/stl_vector.h:458:11: note: ‘std::vector’ declared here
+  458 |     class vector : protected _Vector_base<_Tp, _Alloc>
+      |           ^~~~~~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1395:24: error: expected primary-expression before ‘*’ token [-Wtemplate-body]
+ 1395 |     std::vector<ff_node*> Wtmp1(W1.size());
+      |                        ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1395:25: error: expected primary-expression before ‘>’ token [-Wtemplate-body]
+ 1395 |     std::vector<ff_node*> Wtmp1(W1.size());
+      |                         ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1395:33: error: ‘W1’ was not declared in this scope; did you mean ‘w1’? [-Wtemplate-body]
+ 1395 |     std::vector<ff_node*> Wtmp1(W1.size());
+      |                                 ^~
+      |                                 w1
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1395:27: error: there are no arguments to ‘Wtmp1’ that depend on a template parameter, so a declaration of ‘Wtmp1’ must be available [-Wtemplate-body]
+ 1395 |     std::vector<ff_node*> Wtmp1(W1.size());
+      |                           ^~~~~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1404:71: warning: ‘new’ of type ‘ff::ff_comb’ with extended alignment 32 [-Waligned-new=]
+ 1404 |                                   farm1.isset_cleanup_workers() , true);
+      |                                                                       ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1404:71: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1404:71: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1405:13: error: ‘Wtmp1’ was not declared in this scope [-Wtemplate-body]
+ 1405 |             Wtmp1[i]=pc;
+      |             ^~~~~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1413:13: error: ‘Wtmp1’ was not declared in this scope [-Wtemplate-body]
+ 1413 |             Wtmp1[i]=pc;
+      |             ^~~~~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1417:23: error: ‘Wtmp1’ was not declared in this scope [-Wtemplate-body]
+ 1417 |     a2a->add_firstset(Wtmp1, farm2.ondemand_buffer(), true);  // cleanup set to true
+      |                       ^~~~~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1419:10: error: ‘vector’ is not a member of ‘ff::std’; did you mean ‘std::vector’? [-Wtemplate-body]
+ 1419 |     std::vector<ff_node*> Wtmp2(W2.size());
+      |          ^~~~~~
+/usr/include/c++/15.1.1/bits/stl_vector.h:458:11: note: ‘std::vector’ declared here
+  458 |     class vector : protected _Vector_base<_Tp, _Alloc>
+      |           ^~~~~~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1419:24: error: expected primary-expression before ‘*’ token [-Wtemplate-body]
+ 1419 |     std::vector<ff_node*> Wtmp2(W2.size());
+      |                        ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1419:25: error: expected primary-expression before ‘>’ token [-Wtemplate-body]
+ 1419 |     std::vector<ff_node*> Wtmp2(W2.size());
+      |                         ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1419:33: error: ‘W2’ was not declared in this scope; did you mean ‘w2’? [-Wtemplate-body]
+ 1419 |     std::vector<ff_node*> Wtmp2(W2.size());
+      |                                 ^~
+      |                                 w2
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1419:27: error: there are no arguments to ‘Wtmp2’ that depend on a template parameter, so a declaration of ‘Wtmp2’ must be available [-Wtemplate-body]
+ 1419 |     std::vector<ff_node*> Wtmp2(W2.size());
+      |                           ^~~~~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1428:70: warning: ‘new’ of type ‘ff::ff_comb’ with extended alignment 32 [-Waligned-new=]
+ 1428 |                                   true, farm2.isset_cleanup_workers());
+      |                                                                      ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1428:70: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1428:70: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1430:13: error: ‘Wtmp2’ was not declared in this scope [-Wtemplate-body]
+ 1430 |             Wtmp2[i]=pc;
+      |             ^~~~~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1439:13: error: ‘Wtmp2’ was not declared in this scope [-Wtemplate-body]
+ 1439 |             Wtmp2[i]=pc;
+      |             ^~~~~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1443:24: error: ‘Wtmp2’ was not declared in this scope [-Wtemplate-body]
+ 1443 |     a2a->add_secondset(Wtmp2, true);  // cleanup set to true
+      |                        ^~~~~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1445:10: error: ‘vector’ is not a member of ‘ff::std’; did you mean ‘std::vector’? [-Wtemplate-body]
+ 1445 |     std::vector<ff_node*> W;
+      |          ^~~~~~
+/usr/include/c++/15.1.1/bits/stl_vector.h:458:11: note: ‘std::vector’ declared here
+  458 |     class vector : protected _Vector_base<_Tp, _Alloc>
+      |           ^~~~~~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1445:24: error: expected primary-expression before ‘*’ token [-Wtemplate-body]
+ 1445 |     std::vector<ff_node*> W;
+      |                        ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1445:25: error: expected primary-expression before ‘>’ token [-Wtemplate-body]
+ 1445 |     std::vector<ff_node*> W;
+      |                         ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1445:27: error: ‘W’ was not declared in this scope [-Wtemplate-body]
+ 1445 |     std::vector<ff_node*> W;
+      |                           ^
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp: In function ‘int ff::combine_with_emitter(ff_farm&, ff_node*, bool)’:
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp:125:78: warning: ‘new’ of type ‘ff::ff_comb’ with extended alignment 32 [-Waligned-new=]
+  125 |                                    cleanup_node, farm.isset_cleanup_emitter());
+      |                                                                              ^
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp:125:78: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp:125:78: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp: In function ‘int ff::combine_with_collector(ff_farm&, ff_node*, bool)’:
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp:149:80: warning: ‘new’ of type ‘ff::ff_comb’ with extended alignment 32 [-Waligned-new=]
+  149 |                                    farm.isset_cleanup_collector(), cleanup_node);
+      |                                                                                ^
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp:149:80: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp:149:80: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp: In function ‘int ff::combine_right_with_farm(ff_farm&, T*, bool)’:
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp:225:10: error: ‘vector’ is not a member of ‘ff::std’; did you mean ‘std::vector’? [-Wtemplate-body]
+  225 |     std::vector<ff_node*> new_workers;
+      |          ^~~~~~
+/usr/include/c++/15.1.1/bits/stl_vector.h:458:11: note: ‘std::vector’ declared here
+  458 |     class vector : protected _Vector_base<_Tp, _Alloc>
+      |           ^~~~~~
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp:225:24: error: expected primary-expression before ‘*’ token [-Wtemplate-body]
+  225 |     std::vector<ff_node*> new_workers;
+      |                        ^
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp:225:25: error: expected primary-expression before ‘>’ token [-Wtemplate-body]
+  225 |     std::vector<ff_node*> new_workers;
+      |                         ^
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp:225:27: error: ‘new_workers’ was not declared in this scope [-Wtemplate-body]
+  225 |     std::vector<ff_node*> new_workers;
+      |                           ^~~~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp: In function ‘int ff::combine_right_with_a2a(ff_a2a&, T*, bool)’:
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp:251:10: error: ‘vector’ is not a member of ‘ff::std’; did you mean ‘std::vector’? [-Wtemplate-body]
+  251 |     std::vector<ff_node*> new_secondset;
+      |          ^~~~~~
+/usr/include/c++/15.1.1/bits/stl_vector.h:458:11: note: ‘std::vector’ declared here
+  458 |     class vector : protected _Vector_base<_Tp, _Alloc>
+      |           ^~~~~~
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp:251:24: error: expected primary-expression before ‘*’ token [-Wtemplate-body]
+  251 |     std::vector<ff_node*> new_secondset;
+      |                        ^
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp:251:25: error: expected primary-expression before ‘>’ token [-Wtemplate-body]
+  251 |     std::vector<ff_node*> new_secondset;
+      |                         ^
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp:251:27: error: ‘new_secondset’ was not declared in this scope; did you mean ‘useconds_t’? [-Wtemplate-body]
+  251 |     std::vector<ff_node*> new_secondset;
+      |                           ^~~~~~~~~~~~~
+      |                           useconds_t
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp: In function ‘int ff::combine_left_with_a2a(ff_a2a&, T*, bool)’:
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp:279:10: error: ‘vector’ is not a member of ‘ff::std’; did you mean ‘std::vector’? [-Wtemplate-body]
+  279 |     std::vector<ff_node*> new_firstset;
+      |          ^~~~~~
+/usr/include/c++/15.1.1/bits/stl_vector.h:458:11: note: ‘std::vector’ declared here
+  458 |     class vector : protected _Vector_base<_Tp, _Alloc>
+      |           ^~~~~~
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp:279:24: error: expected primary-expression before ‘*’ token [-Wtemplate-body]
+  279 |     std::vector<ff_node*> new_firstset;
+      |                        ^
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp:279:25: error: expected primary-expression before ‘>’ token [-Wtemplate-body]
+  279 |     std::vector<ff_node*> new_firstset;
+      |                         ^
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp:279:27: error: ‘new_firstset’ was not declared in this scope [-Wtemplate-body]
+  279 |     std::vector<ff_node*> new_firstset;
+      |                           ^~~~~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp: In function ‘int ff::optimize_static(ff_pipeline&, const OptLevel&)’:
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp:499:51: warning: default argument specified for lambda parameter [-Wc++14-extensions]
+  499 |        [](const svector<ff_node*>& nodeslist, int start=0)->int {
+      |                                               ~~~~^~~~~~~
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp:509:51: warning: default argument specified for lambda parameter [-Wc++14-extensions]
+  509 |        [](const svector<ff_node*>& nodeslist, int start=0)->int {
+      |                                               ~~~~^~~~~~~
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp: In lambda function:
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp:570:13: error: ‘vector’ is not a member of ‘ff::std’; did you mean ‘std::vector’?
+  570 |        std::vector<ff_node*> Workers(nworkers);
+      |             ^~~~~~
+/usr/include/c++/15.1.1/bits/stl_vector.h:458:11: note: ‘std::vector’ declared here
+  458 |     class vector : protected _Vector_base<_Tp, _Alloc>
+      |           ^~~~~~
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp:570:27: error: expected primary-expression before ‘*’ token
+  570 |        std::vector<ff_node*> Workers(nworkers);
+      |                           ^
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp:570:28: error: expected primary-expression before ‘>’ token
+  570 |        std::vector<ff_node*> Workers(nworkers);
+      |                            ^
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp:570:30: error: ‘Workers’ was not declared in this scope; did you mean ‘nworkers’?
+  570 |        std::vector<ff_node*> Workers(nworkers);
+      |                              ^~~~~~~
+      |                              nworkers
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp:573:56: warning: ‘new’ of type ‘ff::ff_comb’ with extended alignment 32 [-Waligned-new=]
+  573 |                ff_comb *p = new ff_comb(W[0][j],W[1][j]);
+      |                                                        ^
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp:573:56: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp:573:56: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp:577:62: warning: ‘new’ of type ‘ff::ff_comb’ with extended alignment 32 [-Waligned-new=]
+  577 |                const ff_comb *p = new ff_comb(W[0][j],W[1][j]);
+      |                                                              ^
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp:577:62: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp:577:62: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp:579:68: warning: ‘new’ of type ‘ff::ff_comb’ with extended alignment 32 [-Waligned-new=]
+  579 |                    const ff_comb* combtmp = new ff_comb(*p, W[i][j]);
+      |                                                                    ^
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp:579:68: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp:579:68: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp:589:31: warning: ‘new’ of type ‘ff::ff_farm’ with extended alignment 32 [-Waligned-new=]
+  589 |        ff_farm* newfarm = new ff_farm;
+      |                               ^~~~~~~
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp:589:31: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp:589:31: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp: In function ‘int ff::optimize_static(ff_pipeline&, const OptLevel&)’:
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp:636:56: warning: ‘new’ of type ‘ff::ff_farm’ with extended alignment 32 [-Waligned-new=]
+  636 |                        ff_farm* newfarm = new ff_farm(f);
+      |                                                        ^
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp:636:56: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp:636:56: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp:697:80: warning: ‘new’ of type ‘ff::internal_mi_transformer’ with extended alignment 32 [-Waligned-new=]
+  697 |                                ff_minode *mi = new internal_mi_transformer(next);
+      |                                                                                ^
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp:697:80: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp:697:80: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+src/mergesort_ff.cpp: In lambda function:
+src/mergesort_ff.cpp:65:64: warning: ‘new’ of type ‘FFInitialSortWorker’ with extended alignment 32 [-Waligned-new=]
+   65 |           std::unique_ptr<ff::ff_node>(new FFInitialSortWorker()));
+      |                                                                ^
+src/mergesort_ff.cpp:65:64: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+src/mergesort_ff.cpp:65:64: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+src/mergesort_ff.cpp: In function ‘void parallel_merge_sort_ff(Record*, size_t, size_t, int)’:
+src/mergesort_ff.cpp:68:6: error: no matching function for call to ‘ff::ff_Farm<SortChunkTask>::ff_Farm(std::vector<std::unique_ptr<ff::ff_node> >)’
+   68 |   }());
+      |      ^
+src/mergesort_ff.cpp:68:6: note: there are 3 candidates
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:2115:14: note: candidate 1: ‘template<class FUNC_t> ff::ff_Farm<IN_t, OUT_t>::ff_Farm(FUNC_t, ssize_t, bool) [with IN_t = SortChunkTask; OUT_t = SortChunkTask]’
+ 2115 |     explicit ff_Farm(FUNC_t F, ssize_t nw, bool input_ch=false):
+      |              ^~~~~~~
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:2115:14: note: candidate expects 2 arguments, 1 provided
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:2100:5: note: candidate 2: ‘ff::ff_Farm<IN_t, OUT_t>::ff_Farm(ff::ff_Farm<IN_t, OUT_t>&&) [with IN_t = SortChunkTask; OUT_t = SortChunkTask]’
+ 2100 |     ff_Farm(ff_Farm<IN_t, OUT_t> &&f):ff_farm(std::move(f)) {
+      |     ^~~~~~~
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:2100:36: note: no known conversion for argument 1 from ‘std::vector<std::unique_ptr<ff::ff_node> >’ to ‘ff::ff_Farm<SortChunkTask>&&’
+ 2100 |     ff_Farm(ff_Farm<IN_t, OUT_t> &&f):ff_farm(std::move(f)) {
+      |             ~~~~~~~~~~~~~~~~~~~~~~~^
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:2095:5: note: candidate 3: ‘ff::ff_Farm<IN_t, OUT_t>::ff_Farm(const ff::ff_Farm<IN_t, OUT_t>&) [with IN_t = SortChunkTask; OUT_t = SortChunkTask]’
+ 2095 |     ff_Farm(const ff_Farm<IN_t, OUT_t> &f): ff_farm(f) {
+      |     ^~~~~~~
+/home/lukefleed/Develop/fastflow/ff/farm.hpp:2095:41: note: no known conversion for argument 1 from ‘std::vector<std::unique_ptr<ff::ff_node> >’ to ‘const ff::ff_Farm<SortChunkTask>&’
+ 2095 |     ff_Farm(const ff_Farm<IN_t, OUT_t> &f): ff_farm(f) {
+      |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+src/mergesort_ff.cpp:110:14: error: ‘virtual bool ff::ff_node::push(void*)’ is protected within this context
+  110 |     farm.push(&task_descriptors[i]); // Using push, assuming it's the C++11
+      |     ~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/node.hpp:532:25: note: declared protected here
+  532 |     virtual inline bool push(void * ptr) { return out->push(ptr); }
+      |                         ^~~~
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp: In instantiation of ‘int ff::ff_pipeline::add_stage(const T&) [with T = ff::ff_farm]’:
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:1127:22:   required from here
+ 1127 |     newpipe.add_stage(newfarm1);
+      |     ~~~~~~~~~~~~~~~~~^~~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:596:29: warning: ‘new’ of type ‘ff::ff_farm’ with extended alignment 32 [-Waligned-new=]
+  596 |         ff_node *newstage = new T(s);
+      |                             ^~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:596:29: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/pipeline.hpp:596:29: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+/home/lukefleed/Develop/fastflow/ff/combine.hpp: In instantiation of ‘void ff::ff_comb::add_node(const T1&, ff::ff_node*) [with T1 = ff::ff_comb]’:
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:99:17:   required from ‘ff::ff_comb::ff_comb(T1&, T2&) [with T1 = const ff::ff_comb; T2 = ff::ff_node*]’
+   99 |         add_node(n1,n2);
+      |         ~~~~~~~~^~~~~~~
+/home/lukefleed/Develop/fastflow/ff/optimize.hpp:579:68:   required from here
+  579 |                    const ff_comb* combtmp = new ff_comb(*p, W[i][j]);
+      |                                                                    ^
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:234:21: warning: ‘new’ of type ‘ff::ff_comb’ with extended alignment 32 [-Waligned-new=]
+  234 |         T1 *node1 = new T1(n1);
+      |                     ^~~~~~~~~~
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:234:21: note: uses ‘void* operator new(std::size_t)’, which does not have an alignment parameter
+/home/lukefleed/Develop/fastflow/ff/combine.hpp:234:21: note: use ‘-faligned-new’ to enable C++17 over-aligned new support
+make: *** [Makefile:81: build/obj/mergesort_ff.o] Error 1
