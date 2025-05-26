@@ -4,7 +4,7 @@
 #include "record.h"
 #include "utils.h"
 
-#include <ff/ff.hpp>
+#include <ff/ff.hpp> // For ff_numCores
 
 #include <iostream>
 #include <memory> // For std::unique_ptr for robust memory management
@@ -13,14 +13,8 @@
 
 // Helper function to manage memory allocation and deallocation for Record
 // arrays This avoids raw new/delete in main and handles potential bad_alloc.
-std::unique_ptr<Record[]> allocate_record_array(size_t num_elements,
-                                                size_t r_payload_size_bytes) {
-  // Calculate the size of one record instance based on actual payload.
-  // While Record struct has MAX_RPAYLOAD_SIZE, we're interested in the
-  // memory footprint based on the runtime R_payload_size_bytes for the array.
-  // However, C++ allocates structs based on their declared size (Record).
-  // Pointer arithmetic within sort functions will use get_record_actual_size.
-  // For the array allocation itself, `new Record[num_elements]` is sufficient.
+std::unique_ptr<Record[]> allocate_record_array(size_t num_elements) {
+  // C++ allocates structs based on their declared size (Record).
   // The custom copy_record and memory operations in sorts handle the actual
   // payload size.
   try {
@@ -40,7 +34,7 @@ int main(int argc, char *argv[]) {
   }
 
   if (args.T_ff_threads <= 0) {
-    int detected_cores = ff_numCores();
+    int detected_cores = ff_numCores(); // Corrected to use ff:: namespace
     if (detected_cores <= 0)
       detected_cores = 1; // Fallback if detection fails
 
@@ -65,7 +59,7 @@ int main(int argc, char *argv[]) {
   }
 
   std::unique_ptr<Record[]> records_uptr =
-      allocate_record_array(args.N_elements, args.R_payload_size_bytes);
+      allocate_record_array(args.N_elements);
   if (!records_uptr) {
     return 1; // Allocation failure already reported
   }
@@ -82,8 +76,7 @@ int main(int argc, char *argv[]) {
 
   std::unique_ptr<Record[]> original_records_copy_uptr = nullptr;
   if (args.check_correctness && args.N_elements > 0) {
-    original_records_copy_uptr =
-        allocate_record_array(args.N_elements, args.R_payload_size_bytes);
+    original_records_copy_uptr = allocate_record_array(args.N_elements);
     if (!original_records_copy_uptr) {
       std::cerr << "Failed to allocate memory for correctness check copy."
                 << std::endl;
@@ -107,6 +100,7 @@ int main(int argc, char *argv[]) {
   timer.stop();
 
   if (args.perf_mode) {
+    // CSV: N,R,T,time
     std::cout << args.N_elements << "," << args.R_payload_size_bytes << ","
               << args.T_ff_threads << "," << timer.elapsed_seconds()
               << std::endl;
@@ -154,6 +148,6 @@ int main(int argc, char *argv[]) {
   }
 
   // Memory for records_array and original_records_copy_uptr is managed by
-  // unique_ptr
+  // unique_ptr, and will be freed when they go out of scope.
   return 0;
 }

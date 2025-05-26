@@ -1,169 +1,240 @@
-// src/mergesort_ff.cpp
 #include "mergesort_ff.h"
-#include "mergesort_common.h" // For copy_record
+#include "mergesort_common.h" // For copy_record, merge_records, RecordKeyCompare
+#include "record.h"           // For Record struct definition
 
-#include <algorithm> // For std::sort, std::min
-#include <ff/dc.hpp> // For ff_DC
-#include <ff/ff.hpp>
-#include <memory> // For std::unique_ptr if managing temp buffer manually (not strictly needed with vector)
-#include <vector>
+#include <algorithm> // For std::sort, an efficient sequential sorting algorithm
+#include <cassert>   // For assert
+#include <ff/dc.hpp> // FastFlow's generic divide-and-conquer component
+#include <ff/ff.hpp> // FastFlow core for parallel execution
+#include <iostream>  // For std::cerr in case of errors
+#include <memory>    // For std::unique_ptr, ensuring RAII for temporary buffers
+#include <vector> // For std::vector, used by the divide-and-conquer component
 
-// Define a cutoff for switching to sequential sort.
-// This value might need tuning based on Record size and system characteristics.
-// A common starting point for objects larger than simple integers is a few
-// hundred.
-#define MERGESORT_FF_CUTOFF 2048
+// Defines the size threshold below which array segments are sorted
+// sequentially. This is an important tuning parameter for balancing parallelism
+// overhead and the efficiency of sequential algorithms on small data sets.
+constexpr size_t PARALLEL_SORT_CUTOFF = 131072;
 
-// Internal structure to represent a sub-problem for the ff_DC pattern
-struct MergeSortTaskData {
-  Record *data;        // Pointer to the start of the sub-array
-  size_t num_elements; // Number of elements in this sub-array
+// Global pointers for main and auxiliary buffers for ping-pong strategy
+// WARNING: This makes parallel_merge_sort_ff non-reentrant.
+static Record *g_main_records_global_ptr = nullptr;
+static std::unique_ptr<Record[]> g_aux_records_global_uptr = nullptr;
+static Record *g_aux_records_global_ptr_raw =
+    nullptr; // Raw pointer for convenience
 
-  // Default constructor is required by ff_DC for the result type
-  MergeSortTaskData() : data(nullptr), num_elements(0) {}
-
-  MergeSortTaskData(Record *d, size_t n) : data(d), num_elements(n) {}
+// Structure representing a unit of work for the parallel sort:
+// a specific range (segment) of the array to be processed.
+struct DataSegmentToSort {
+  size_t offset;             // Offset from the start of the conceptual array.
+  size_t length;             // Number of elements in this segment.
+  size_t payload_byte_count; // Actual size of the payload in each Record.
+  bool source_is_main_array; // True if data for this segment is in
+                             // g_main_records_global_ptr
 };
 
-void parallel_merge_sort_ff(Record *records_array, size_t num_elements,
-                            size_t r_payload_size_bytes, int num_threads) {
-  if (num_elements == 0) {
-    return; // Nothing to sort
+// Structure representing the result of processing a DataSegmentToSort.
+struct SortedDataSegment {
+  size_t offset;             // Offset from the start of the conceptual array.
+  size_t element_count;      // Number of elements in this sorted segment.
+  size_t payload_byte_count; // Maintained for consistency.
+  bool result_is_in_main_array; // True if sorted data is in
+                                // g_main_records_global_ptr
+};
+
+// Predicate function for the divide-and-conquer framework:
+// Returns true if the task (segment) is small enough for sequential processing.
+bool is_segment_size_below_cutoff(const DataSegmentToSort &segment) {
+  return (segment.length <= PARALLEL_SORT_CUTOFF);
+}
+
+// Sequential sorting function for the base cases of the recursion:
+// Sorts the provided data segment using std::sort. The sort is in-place
+// in the buffer where the source data resides.
+void apply_sequential_sort_to_segment(const DataSegmentToSort &segment,
+                                      SortedDataSegment &result_marker) {
+  if (segment.length > 0) {
+    Record *source_ptr =
+        (segment.source_is_main_array ? g_main_records_global_ptr
+                                      : g_aux_records_global_ptr_raw) +
+        segment.offset;
+    std::sort(source_ptr, source_ptr + segment.length, RecordKeyCompare());
+  }
+  result_marker.offset = segment.offset;
+  result_marker.element_count = segment.length;
+  result_marker.payload_byte_count = segment.payload_byte_count;
+  result_marker.result_is_in_main_array = segment.source_is_main_array;
+}
+
+// Decomposition function for the divide-and-conquer framework:
+// Splits a larger sorting task into two smaller sub-tasks.
+void partition_data_segment(const DataSegmentToSort &segment_to_split,
+                            std::vector<DataSegmentToSort> &sub_segments) {
+  if (segment_to_split.length <= 1) {
+    return;
   }
 
-  // --- Define Divide and Conquer functions for ff_DC ---
+  size_t first_half_length = segment_to_split.length / 2;
 
-  // Condition function: determines if the problem is small enough for
-  // sequential execution
-  auto cond_fn = [](const MergeSortTaskData &task) -> bool {
-    return task.num_elements <= MERGESORT_FF_CUTOFF;
-  };
+  DataSegmentToSort left_sub_segment;
+  left_sub_segment.offset = segment_to_split.offset;
+  left_sub_segment.length = first_half_length;
+  left_sub_segment.payload_byte_count = segment_to_split.payload_byte_count;
+  left_sub_segment.source_is_main_array = segment_to_split.source_is_main_array;
+  sub_segments.push_back(left_sub_segment);
 
-  // Sequential function: solves the base case
-  auto seq_fn = [r_payload_size_bytes](const MergeSortTaskData &task,
-                                       MergeSortTaskData &result) {
-    // Sort the sub-array in-place using std::sort
-    std::sort(task.data, task.data + task.num_elements,
-              [](const Record &a, const Record &b) { return a.key < b.key; });
-    // Result metadata can point to the same (now sorted) data
-    result.data = task.data;
-    result.num_elements = task.num_elements;
-  };
+  DataSegmentToSort right_sub_segment;
+  right_sub_segment.offset = segment_to_split.offset + first_half_length;
+  right_sub_segment.length = segment_to_split.length - first_half_length;
+  right_sub_segment.payload_byte_count = segment_to_split.payload_byte_count;
+  right_sub_segment.source_is_main_array =
+      segment_to_split.source_is_main_array;
+  sub_segments.push_back(right_sub_segment);
+}
 
-  // Divide function: splits the problem into sub-problems
-  auto divide_fn = [](const MergeSortTaskData &task,
-                      std::vector<MergeSortTaskData> &sub_tasks) {
-    if (task.num_elements <= 1)
-      return; // Should be caught by cond_fn or handled
+// Merging function for the divide-and-conquer framework:
+// Combines two adjacently sorted data segments into a single, larger sorted
+// segment using the ping-pong strategy (merging into the "other" buffer).
+void merge_processed_segments(
+    std::vector<SortedDataSegment> &sorted_sub_segments,
+    SortedDataSegment &final_merged_segment_marker) {
+  if (sorted_sub_segments.size() != 2) {
+    std::cerr
+        << "Error: merge_processed_segments expects 2 sub-segments, received "
+        << sorted_sub_segments.size() << ". Merge operation aborted."
+        << std::endl;
+    if (sorted_sub_segments.empty()) {
+      final_merged_segment_marker.offset = 0;
+      final_merged_segment_marker.element_count = 0;
+      final_merged_segment_marker.payload_byte_count = 0;
+      final_merged_segment_marker.result_is_in_main_array = true; // Default
+    } else {
+      // Fallback, data might be inconsistent or partially merged.
+      // Copy properties from the first segment. This is not ideal.
+      final_merged_segment_marker = sorted_sub_segments[0];
+    }
+    return;
+  }
 
-    size_t mid_point = task.num_elements / 2;
+  SortedDataSegment &left_segment_res = sorted_sub_segments[0];
+  SortedDataSegment &right_segment_res = sorted_sub_segments[1];
 
-    // Left sub-problem
-    sub_tasks.emplace_back(task.data, mid_point);
-    // Right sub-problem
-    sub_tasks.emplace_back(task.data + mid_point,
-                           task.num_elements - mid_point);
-  };
+  // Assertion: Both sub-segments should be in the same buffer type (main or
+  // aux) as they are results from the same level of recursion.
+  assert(left_segment_res.result_is_in_main_array ==
+         right_segment_res.result_is_in_main_array);
 
-  // Combine function: merges results from sub-problems
-  auto combine_fn = [r_payload_size_bytes](
-                        std::vector<MergeSortTaskData> &sub_results,
-                        MergeSortTaskData &result) {
-    // Expecting two sub-results for MergeSort
-    if (sub_results.size() != 2) {
-      // This case should ideally not happen if divide_fn always produces 2
-      // sub_tasks and ff_DC processes them. If one sub_task is trivial (e.g. 0
-      // elements), it might lead to one result. Handle robustly if necessary.
-      // For now, assume two valid sub-results.
-      if (sub_results.empty()) { // Nothing to combine
-        result.data = nullptr;
-        result.num_elements = 0;
-        return;
+  Record *left_source_ptr = (left_segment_res.result_is_in_main_array
+                                 ? g_main_records_global_ptr
+                                 : g_aux_records_global_ptr_raw) +
+                            left_segment_res.offset;
+  Record *right_source_ptr = (right_segment_res.result_is_in_main_array
+                                  ? g_main_records_global_ptr
+                                  : g_aux_records_global_ptr_raw) +
+                             right_segment_res.offset;
+
+  // Determine the target buffer: it's the "other" buffer.
+  bool merge_target_is_main_array = !left_segment_res.result_is_in_main_array;
+  Record *target_buffer_base = merge_target_is_main_array
+                                   ? g_main_records_global_ptr
+                                   : g_aux_records_global_ptr_raw;
+  // The merged segment will start at the offset of the left sub-segment.
+  Record *merge_destination_ptr = target_buffer_base + left_segment_res.offset;
+
+  size_t total_merged_length =
+      left_segment_res.element_count + right_segment_res.element_count;
+  size_t payload_size = left_segment_res.payload_byte_count;
+
+  if (total_merged_length == 0) {
+    final_merged_segment_marker.offset = left_segment_res.offset;
+    final_merged_segment_marker.element_count = 0;
+    final_merged_segment_marker.payload_byte_count = payload_size;
+    final_merged_segment_marker.result_is_in_main_array =
+        merge_target_is_main_array;
+    return;
+  }
+
+  // Perform the merge directly into the target buffer.
+  // merge_records does not allocate; it uses the provided destination.
+  merge_records(merge_destination_ptr, left_source_ptr,
+                left_segment_res.element_count, right_source_ptr,
+                right_segment_res.element_count, payload_size);
+
+  // Update the marker for the final merged segment.
+  final_merged_segment_marker.offset = left_segment_res.offset;
+  final_merged_segment_marker.element_count = total_merged_length;
+  final_merged_segment_marker.payload_byte_count = payload_size;
+  final_merged_segment_marker.result_is_in_main_array =
+      merge_target_is_main_array;
+}
+
+// Public interface for performing parallel merge sort using FastFlow.
+void parallel_merge_sort_ff(Record *records_array, size_t n_elements,
+                            size_t r_payload_size_bytes, int num_threads) {
+  if (n_elements <= 1) {
+    return;
+  }
+
+  // Initialize global buffer pointers
+  g_main_records_global_ptr = records_array;
+  try {
+    g_aux_records_global_uptr = std::make_unique<Record[]>(n_elements);
+    g_aux_records_global_ptr_raw = g_aux_records_global_uptr.get();
+  } catch (const std::bad_alloc &e) {
+    std::cerr << "FATAL ERROR: Failed to allocate auxiliary buffer for merge "
+                 "sort (size: "
+              << n_elements << " records). " << e.what() << std::endl;
+    // Reset pointers in case of error before rethrow or exit
+    g_main_records_global_ptr = nullptr;
+    g_aux_records_global_uptr.reset();
+    g_aux_records_global_ptr_raw = nullptr;
+    throw; // Critical failure
+  }
+
+  int ff_worker_count = (num_threads > 0) ? num_threads : ff_numCores();
+  if (ff_worker_count <= 0) {
+    ff_worker_count = 1;
+  }
+
+  DataSegmentToSort initial_sorting_task;
+  initial_sorting_task.offset = 0;
+  initial_sorting_task.length = n_elements;
+  initial_sorting_task.payload_byte_count = r_payload_size_bytes;
+  initial_sorting_task.source_is_main_array =
+      true; // Data starts in the main array
+
+  SortedDataSegment final_operation_marker; // Result will be stored here
+
+  ff::ff_DC<DataSegmentToSort, SortedDataSegment> ff_sorter(
+      partition_data_segment,           // divide_f_t
+      merge_processed_segments,         // combine_f_t
+      apply_sequential_sort_to_segment, // seq_f_t
+      is_segment_size_below_cutoff,     // cond_f_t
+      initial_sorting_task,             // OperandType op
+      final_operation_marker,           // ResultType res
+      ff_worker_count                   // numw
+  );
+
+  ff_sorter.run_and_wait_end();
+
+  // After sorting, if the final result is in the auxiliary buffer, copy it
+  // back.
+  if (!final_operation_marker.result_is_in_main_array) {
+    if (final_operation_marker.element_count == n_elements &&
+        final_operation_marker.offset == 0) {
+      for (size_t i = 0; i < n_elements; ++i) {
+        copy_record(&g_main_records_global_ptr[i],
+                    &g_aux_records_global_ptr_raw[i], r_payload_size_bytes);
       }
-      // If only one result, it's already "combined"
-      result = sub_results[0];
-      return;
+    } else {
+      // This case should ideally not happen if logic is correct for full sort
+      std::cerr << "Warning: Final sorted segment is in auxiliary buffer but "
+                   "does not cover the whole array. Data might be inconsistent."
+                << std::endl;
     }
+  }
 
-    MergeSortTaskData &left_half = sub_results[0];
-    MergeSortTaskData &right_half = sub_results[1];
-
-    // Total elements in the merged range
-    size_t total_elements = left_half.num_elements + right_half.num_elements;
-    if (total_elements == 0) {
-      result.data =
-          left_half
-              .data; // Or right_half.data, should be same start if contiguous
-      result.num_elements = 0;
-      return;
-    }
-
-    // Create a temporary buffer for merging.
-    // Using std::vector for automatic memory management.
-    std::vector<Record> temp_buffer(total_elements);
-
-    Record *l_ptr = left_half.data;
-    Record *r_ptr = right_half.data;
-    Record *const l_end = left_half.data + left_half.num_elements;
-    Record *const r_end = right_half.data + right_half.num_elements;
-
-    size_t temp_idx = 0;
-
-    // Standard merge logic
-    while (l_ptr < l_end && r_ptr < r_end) {
-      if (r_ptr->key <
-          l_ptr->key) { // Check right first for stability (though std::sort is
-                        // not guaranteed stable here) For mergesort, standard
-                        // is (l_ptr->key <= r_ptr->key)
-        if (r_ptr->key < l_ptr->key) {
-          copy_record(&temp_buffer[temp_idx++], r_ptr++, r_payload_size_bytes);
-        } else { // l_ptr->key <= r_ptr->key
-          copy_record(&temp_buffer[temp_idx++], l_ptr++, r_payload_size_bytes);
-        }
-      } else { // l_ptr->key <= r_ptr->key to maintain stability from sub-sorts
-               // if they were stable
-        copy_record(&temp_buffer[temp_idx++], l_ptr++, r_payload_size_bytes);
-      }
-    }
-
-    // Copy any remaining elements from the left half
-    while (l_ptr < l_end) {
-      copy_record(&temp_buffer[temp_idx++], l_ptr++, r_payload_size_bytes);
-    }
-    // Copy any remaining elements from the right half
-    while (r_ptr < r_end) {
-      copy_record(&temp_buffer[temp_idx++], r_ptr++, r_payload_size_bytes);
-    }
-
-    // Copy sorted data from temp_buffer back to the original array segment
-    // The original segment starts at left_half.data
-    for (size_t i = 0; i < total_elements; ++i) {
-      copy_record(left_half.data + i, &temp_buffer[i], r_payload_size_bytes);
-    }
-
-    // The result of the combine operation is the merged range
-    result.data = left_half.data; // The merge happens into the start of the
-                                  // first sub-problem's data area
-    result.num_elements = total_elements;
-  };
-
-  // --- Setup and run FastFlow Divide and Conquer ---
-  MergeSortTaskData initial_problem(records_array, num_elements);
-  MergeSortTaskData
-      final_result; // ff_DC will populate this (mostly for metadata)
-
-  // Create the ff_DC object
-  ff::ff_DC<MergeSortTaskData, MergeSortTaskData> dac_sorter(
-      divide_fn, combine_fn, seq_fn, cond_fn, initial_problem,
-      final_result, // This will receive the metadata of the final sorted range
-      num_threads);
-
-  // Forcing ff_DC to not create its own farm if we want to embed it,
-  // or let it manage its threads. If num_threads is 1, it runs sequentially.
-  // If num_threads > 1, it creates an internal farm.
-  // dac_sorter.set_scheduling_policy(ff::ff_DC<...>::STATIC); // Or DYNAMIC,
-  // GUIDED - if needed
-
-  dac_sorter.run_and_wait_end();
-  // The records_array is now sorted in-place.
+  // Clean up global pointers
+  g_main_records_global_ptr = nullptr;
+  g_aux_records_global_uptr.reset();
+  g_aux_records_global_ptr_raw = nullptr;
 }

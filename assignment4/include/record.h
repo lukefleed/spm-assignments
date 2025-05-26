@@ -1,18 +1,22 @@
-// include/record.h
 #ifndef RECORD_H
 #define RECORD_H
 
 #include <cstddef> // For size_t
 
-// Maximum payload size for the rpayload array in struct Record.
-// This should be at least as large as the maximum -r value (e.g., 256).
+// Define the maximum possible payload size.
+// This must be a compile-time constant.
+// The actual payload size used for a given run (r_payload_size_bytes)
+// will be <= MAX_RPAYLOAD_SIZE.
 #ifndef MAX_RPAYLOAD_SIZE
-#define MAX_RPAYLOAD_SIZE 256
+#define MAX_RPAYLOAD_SIZE                                                      \
+  256 // Default, can be changed or set via compile flags
 #endif
 
 struct Record {
-  unsigned long key;                // Value used for sorting
-  char rpayload[MAX_RPAYLOAD_SIZE]; // Fixed-size buffer for payload data
+  unsigned long key;                // Sorting value
+  char rpayload[MAX_RPAYLOAD_SIZE]; // Fixed-size buffer for payload
+                                    // The actual used part is
+                                    // r_payload_size_bytes
 };
 
 #endif // RECORD_H
