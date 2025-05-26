@@ -19,6 +19,9 @@ assignment1/softmax_auto
 assignment1/softmax_avx
 assignment1/softmax_plain
 assignment2/build
+assignment4/data
+assignment4/build
+assignment4/fastflow
 
 # object files
 assignment1/softmax_test.o
