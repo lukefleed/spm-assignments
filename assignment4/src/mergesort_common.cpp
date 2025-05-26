@@ -27,8 +27,10 @@ void copy_record(Record *dest, const Record *src, size_t r_payload_size_bytes) {
   // This ensures consistent state, crucial for byte-wise comparisons or
   // checksums if they were ever performed on the whole MAX_RPAYLOAD_SIZE
   // region.
+  /*
   if (bytes_to_copy < MAX_RPAYLOAD_SIZE) {
     std::memset(dest->rpayload + bytes_to_copy, 0,
                 MAX_RPAYLOAD_SIZE - bytes_to_copy);
   }
+  */
 }

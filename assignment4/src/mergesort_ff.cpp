@@ -12,7 +12,7 @@
 // This value might need tuning based on Record size and system characteristics.
 // A common starting point for objects larger than simple integers is a few
 // hundred.
-#define MERGESORT_FF_CUTOFF 512
+#define MERGESORT_FF_CUTOFF 2048
 
 // Internal structure to represent a sub-problem for the ff_DC pattern
 struct MergeSortTaskData {
