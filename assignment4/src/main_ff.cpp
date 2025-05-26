@@ -1,3 +1,4 @@
+#include "mergesort_common.h" // For sequential_merge_sort_recursive, Record, get_record_actual_size, merge_records
 #include "mergesort_ff.h"
 #include "performance_timer.h"
 #include "record.h"
