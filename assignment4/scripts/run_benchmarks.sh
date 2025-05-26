@@ -46,14 +46,12 @@ else
 fi
 
 # --- Configuration ---
-NUM_RUNS=5 # Number of runs for each configuration to calculate mean and std_dev
-BASE_SEED=42 # Base seed for data generation, can be incremented for different N,R pairs
+NUM_RUNS=5
+BASE_SEED=42
 
-# Output CSV file
 RESULTS_CSV="results_${MODE}.csv"
 
 # --- Helper Functions ---
-# Function to calculate mean of a list of numbers
 mean() {
     local sum=0
     local count=0
@@ -68,11 +66,10 @@ mean() {
     fi
 }
 
-# Function to calculate standard deviation of a list of numbers
 std_dev() {
     local data_points="$1"
     local count=$(echo "$data_points" | wc -w)
-    if [ "$count" -lt 2 ]; then # Std dev not meaningful for < 2 points
+    if [ "$count" -lt 2 ]; then
         echo "0"
         return
     fi
@@ -82,6 +79,8 @@ std_dev() {
         local diff=$(echo "$val - $m" | bc -l)
         sum_sq_diff=$(echo "$sum_sq_diff + ($diff * $diff)" | bc -l)
     done
+    # For sample standard deviation, divide by (count - 1). For population, divide by count.
+    # Using (count - 1) as it's common for experimental runs.
     echo "sqrt($sum_sq_diff / ($count - 1))" | bc -l
 }
 
@@ -91,17 +90,14 @@ echo "Starting Performance Benchmarks for ${MODE} mode..."
 echo "Results will be saved to ${RESULTS_CSV}"
 echo "Number of runs per configuration: ${NUM_RUNS}"
 
-# Create data directory if it doesn't exist
 mkdir -p "$DATA_DIR"
 
-# Write CSV Header
 if [ "$MODE" == "single_node" ]; then
     echo "N,R,T,mean_time_sec,std_dev_time_sec,min_time_sec,max_time_sec" > "$RESULTS_CSV"
-else # hybrid
+else
     echo "N,R,T,P,mean_time_sec,std_dev_time_sec,min_time_sec,max_time_sec" > "$RESULTS_CSV"
 fi
 
-# Convert string lists to arrays
 read -r -a N_VALUES <<< "$N_VALUES_LIST_STR"
 read -r -a R_VALUES <<< "$R_VALUES_LIST_STR"
 read -r -a T_VALUES <<< "$T_VALUES_LIST_STR"
@@ -109,14 +105,11 @@ if [ "$MODE" == "hybrid" ]; then
     read -r -a P_VALUES <<< "$P_VALUES_LIST_STR"
 fi
 
-# --- Main Benchmark Loop ---
 current_seed=$BASE_SEED
 
 for N_VAL in "${N_VALUES[@]}"; do
     for R_VAL in "${R_VALUES[@]}"; do
 
-        # Generate data ONCE for this N, R combination (using current_seed)
-        # This ensures all thread/process counts for this N,R use the same input data.
         DATA_FILE="${DATA_DIR}/perf_N${N_VAL}_R${R_VAL}_Seed${current_seed}.dat"
         echo "Generating data for N=${N_VAL}, R=${R_VAL} (Seed: ${current_seed}) -> ${DATA_FILE}"
         python3 "${GENERATOR_SCRIPT}" --size "${N_VAL}" --payload "${R_VAL}" --output "${DATA_FILE}" --seed "${current_seed}" --distribution "random"
@@ -124,17 +117,17 @@ for N_VAL in "${N_VALUES[@]}"; do
             echo "ERROR: Data generation failed for N=${N_VAL}, R=${R_VAL}. Skipping this combination."
             continue
         fi
-        current_seed=$((current_seed + 1)) # Use a different seed for the next N,R pair
+        current_seed=$((current_seed + 1))
 
         for T_VAL in "${T_VALUES[@]}"; do
             if [ "$MODE" == "single_node" ]; then
-                P_ITER_LIST=(0) # Dummy list for single_node to fit loop structure
+                P_ITER_LIST=(0)
             else
                 P_ITER_LIST=("${P_VALUES[@]}")
             fi
 
-            for P_VAL in "${P_ITER_LIST[@]}"; do # Loop once for single_node, P_VAL will be 0
-                TIMES_STR="" # String to hold times for this config
+            for P_VAL in "${P_ITER_LIST[@]}"; do
+                TIMES_STR=""
 
                 CMD_BASE="${EXECUTABLE_PATH} -s ${N_VAL} -r ${R_VAL} -t ${T_VAL} --input ${DATA_FILE} --perf_mode"
                 if [ "$MODE" == "hybrid" ]; then
@@ -145,35 +138,30 @@ for N_VAL in "${N_VALUES[@]}"; do
                     echo "Benchmarking: N=${N_VAL}, R=${R_VAL}, T_FF=${T_VAL}"
                 fi
 
-                min_time="Infinity"
-                max_time="-Infinity"
+                # Initialize min_time to a very large number, max_time to a very small number (or first run's time)
+                min_time=""
+                max_time=""
 
                 for i in $(seq 1 $NUM_RUNS); do
                     echo -n "  Run $i/$NUM_RUNS: "
-                    # Execute the command and capture output (expected CSV: N,R,T,time or N,R,T,P,time)
-                    # The --perf_mode output from main_ff.cpp is "N,R,T,time_sec"
-                    # The --perf_mode output from main_hybrid.cpp should be "N,R,T,P,time_sec"
 
                     run_output=$($CMD_RUN)
                     if [ $? -ne 0 ]; then
                         echo "ERROR during execution. Output: $run_output"
-                        # Decide if you want to skip this config or exit entirely
-                        TIMES_STR="" # Invalidate times for this config
+                        TIMES_STR=""
                         break
                     fi
 
-                    # Extract time (last field of CSV output)
                     exec_time=$(echo "$run_output" | awk -F',' '{print $NF}')
 
                     echo "${exec_time}s"
                     TIMES_STR="${TIMES_STR}${exec_time} "
 
-                    # Update min/max
-                    if (( $(echo "$exec_time < $min_time" |bc -l) )); then min_time=$exec_time; fi
-                    if (( $(echo "$exec_time > $max_time" |bc -l) )); then max_time=$exec_time; fi
+                    if [ -z "$min_time" ] || (( $(echo "$exec_time < $min_time" |bc -l) )); then min_time=$exec_time; fi
+                    if [ -z "$max_time" ] || (( $(echo "$exec_time > $max_time" |bc -l) )); then max_time=$exec_time; fi
                 done
 
-                if [ -z "$TIMES_STR" ]; then # If there was an error in runs
+                if [ -z "$TIMES_STR" ]; then
                     echo "  Skipping results for this configuration due to errors."
                     continue
                 fi
@@ -183,14 +171,14 @@ for N_VAL in "${N_VALUES[@]}"; do
 
                 if [ "$MODE" == "single_node" ]; then
                     echo "${N_VAL},${R_VAL},${T_VAL},${mean_val},${std_dev_val},${min_time},${max_time}" >> "$RESULTS_CSV"
-                else # hybrid
+                else
                     echo "${N_VAL},${R_VAL},${T_VAL},${P_VAL},${mean_val},${std_dev_val},${min_time},${max_time}" >> "$RESULTS_CSV"
                 fi
                 echo "  Mean: ${mean_val}s, StdDev: ${std_dev_val}s, Min: ${min_time}s, Max: ${max_time}s"
-                echo "" # Newline for readability
-            done # End P_VAL loop
-        done # End T_VAL loop
-    done # End R_VAL loop
-done # End N_VAL loop
+                echo ""
+            done
+        done
+    done
+done
 
 echo "Benchmark suite finished. Results are in ${RESULTS_CSV}"

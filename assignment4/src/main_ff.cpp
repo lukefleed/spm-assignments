@@ -3,6 +3,8 @@
 #include "record.h"
 #include "utils.h"
 
+#include <ff/ff.hpp>
+
 #include <iostream>
 #include <memory> // For std::unique_ptr for robust memory management
 #include <string>
@@ -36,33 +38,17 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  if (args.T_ff_threads <= 0 &&
-      args.N_elements > 1) { // N_elements > 1 because single element is trivial
-    // For parallel_merge_sort_ff, T_ff_threads must be > 0 for parallel
-    // execution. The function itself handles T_ff_threads <= 1 by calling
-    // sequential_merge_sort. However, it's good practice for the main driver to
-    // expect a positive thread count if parallelism is implied. If the user
-    // intends a sequential run via this executable, they should still specify
-    // -t 1. Let's refine this: parallel_merge_sort_ff internally handles -t <=1
-    // by falling back to sequential. So, a warning might be more appropriate,
-    // or ensure parse_arguments enforces -t >= 1 for this binary. For now,
-    // we'll let parallel_merge_sort_ff handle it, but it's a point for
-    // consideration. The assignment implies T_ff_threads would be like 16, 32,
-    // etc. for parallel. For T=0, it should default to some sensible number or
-    // be disallowed by parse_arguments. Assuming parse_arguments ensures
-    // args.T_ff_threads has a valid default or user value. If args.T_ff_threads
-    // is not provided, parse_arguments should handle this or set a default. For
-    // this specific executable, T_ff_threads is a key parameter.
-    if (args.T_ff_threads ==
-        0) { // If not set by user and no default set by parser
-      if (!args.perf_mode) {
-        std::cout << "Number of FastFlow threads (-t) not specified or zero. "
-                     "Defaulting to 1 thread (sequential execution within "
-                     "parallel_merge_sort_ff)."
-                  << std::endl;
-      }
-      args.T_ff_threads = 1; // Fallback or ensure parser sets a default >0.
+  if (args.T_ff_threads <= 0) {
+    int detected_cores = ff_numCores();
+    if (detected_cores <= 0)
+      detected_cores = 1; // Fallback if detection fails
+
+    if (!args.perf_mode) {
+      std::cout << "Number of FastFlow threads (-t) not specified or invalid. "
+                   "Defaulting to system's available cores: "
+                << detected_cores << std::endl;
     }
+    args.T_ff_threads = detected_cores;
   }
 
   if (!args.perf_mode) {
@@ -102,14 +88,12 @@ int main(int argc, char *argv[]) {
                 << std::endl;
       return 1;
     }
-    // Deep copy the records for verification
-    char *src_ptr = reinterpret_cast<char *>(records_array);
-    char *dst_ptr = reinterpret_cast<char *>(original_records_copy_uptr.get());
-    size_t record_actual_size =
-        get_record_actual_size(args.R_payload_size_bytes);
+    // Deep copy the records for verification using copy_record
+    Record *src_array_ptr = records_array;
+    Record *dst_array_ptr = original_records_copy_uptr.get();
     for (size_t i = 0; i < args.N_elements; ++i) {
-      std::memcpy(dst_ptr + i * record_actual_size,
-                  src_ptr + i * record_actual_size, record_actual_size);
+      copy_record(&dst_array_ptr[i], &src_array_ptr[i],
+                  args.R_payload_size_bytes);
     }
   }
 

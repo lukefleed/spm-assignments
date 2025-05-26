@@ -117,22 +117,16 @@ void generate_random_records(Record *records_array, const Arguments &args) {
   std::uniform_int_distribution<int> payload_char_dist(
       0, 255); // For payload bytes
 
-  char *current_record_ptr = reinterpret_cast<char *>(records_array);
-  size_t record_mem_size = get_record_actual_size(args.R_payload_size_bytes);
-
   for (size_t i = 0; i < args.N_elements; ++i) {
-    Record *rec = reinterpret_cast<Record *>(current_record_ptr);
+    Record *rec = &records_array[i]; // USE ARRAY INDEXING
     rec->key = key_dist(rng);
     for (size_t j = 0; j < args.R_payload_size_bytes; ++j) {
       rec->rpayload[j] = static_cast<char>(payload_char_dist(rng));
     }
-    // Pad remaining MAX_RPAYLOAD_SIZE - R_payload_size_bytes with 0s if
-    // desired, though not strictly necessary if copy_record is used. For
-    // safety, to ensure defined state for the full struct buffer:
+    // Pad remaining MAX_RPAYLOAD_SIZE - R_payload_size_bytes with 0s
     for (size_t j = args.R_payload_size_bytes; j < MAX_RPAYLOAD_SIZE; ++j) {
       rec->rpayload[j] = 0;
     }
-    current_record_ptr += record_mem_size;
   }
 }
 
@@ -151,45 +145,43 @@ bool load_records_from_file(Record *records_array, const Arguments &args) {
     return false;
   }
 
-  size_t record_mem_size = get_record_actual_size(args.R_payload_size_bytes);
-  char *current_record_ptr = reinterpret_cast<char *>(records_array);
-
   for (size_t i = 0; i < args.N_elements; ++i) {
-    Record *rec = reinterpret_cast<Record *>(current_record_ptr);
+    Record *rec = &records_array[i];
+
     // Read key
     infile.read(reinterpret_cast<char *>(&rec->key), sizeof(unsigned long));
+    if (!infile || infile.gcount() !=
+                       static_cast<std::streamsize>(sizeof(unsigned long))) {
+      std::cerr << "Error: Failed to read key for record " << i;
+      if (infile.eof()) {
+        std::cerr << " (unexpected EOF).";
+      }
+      std::cerr << " Expected " << args.N_elements << " records, read " << i
+                << "." << std::endl;
+      return false;
+    }
+
     // Read only the actual payload size
     infile.read(rec->rpayload, args.R_payload_size_bytes);
-
-    if (infile.gcount() !=
-            static_cast<std::streamsize>(args.R_payload_size_bytes) ||
-        (infile.gcount() !=
-             static_cast<std::streamsize>(sizeof(unsigned long)) &&
-         i == 0 &&
-         infile.tellg() ==
-             static_cast<std::ios::pos_type>(sizeof(unsigned long)))) {
-      if (infile.eof() && i < args.N_elements) {
-        std::cerr << "Error: Unexpected EOF. Read " << i
-                  << " records, expected " << args.N_elements << "."
-                  << std::endl;
-        return false;
-      } else if (infile.fail()) {
-        std::cerr << "Error: Failed to read record " << i
-                  << " from file: " << args.input_file_path << std::endl;
-        return false;
+    if (!infile || infile.gcount() != static_cast<std::streamsize>(
+                                          args.R_payload_size_bytes)) {
+      std::cerr << "Error: Failed to read payload for record " << i;
+      if (infile.eof()) {
+        std::cerr << " (unexpected EOF).";
       }
+      std::cerr << " Expected " << args.N_elements << " records, read " << i
+                << " (plus current key)." << std::endl;
+      return false;
     }
-    // Zero out the rest of MAX_RPAYLOAD_SIZE for consistency if desired, though
-    // not strictly necessary if downstream code correctly uses
-    // R_payload_size_bytes.
+
+    // Zero out the rest of MAX_RPAYLOAD_SIZE
     for (size_t j = args.R_payload_size_bytes; j < MAX_RPAYLOAD_SIZE; ++j) {
       rec->rpayload[j] = 0;
     }
-    current_record_ptr += record_mem_size;
   }
 
   // Check for extra data
-  infile.peek(); // Attempts to read one more character
+  infile.peek();
   if (!infile.eof()) {
     std::cerr
         << "Warning: Input file contains more data than N_elements specified."
@@ -215,12 +207,8 @@ bool save_records_to_file(const Record *records_array, const Arguments &args) {
     return false;
   }
 
-  size_t record_mem_size = get_record_actual_size(args.R_payload_size_bytes);
-  const char *current_record_ptr =
-      reinterpret_cast<const char *>(records_array);
-
   for (size_t i = 0; i < args.N_elements; ++i) {
-    const Record *rec = reinterpret_cast<const Record *>(current_record_ptr);
+    const Record *rec = &records_array[i]; // USE ARRAY INDEXING
     // Write key
     outfile.write(reinterpret_cast<const char *>(&rec->key),
                   sizeof(unsigned long));
@@ -232,7 +220,6 @@ bool save_records_to_file(const Record *records_array, const Arguments &args) {
                 << " to file: " << args.output_file_path << std::endl;
       return false;
     }
-    current_record_ptr += record_mem_size;
   }
   return true;
 }
@@ -246,29 +233,24 @@ bool verify_sorted_records(
     const Record *original_records_array_copy_for_checksum,
     const Arguments &args) {
   if (args.N_elements == 0)
-    return true; // An empty array is considered sorted.
+    return true;
 
   // Check 1: Non-decreasing order of keys
-  size_t record_mem_size = get_record_actual_size(args.R_payload_size_bytes);
-  const char *current_ptr = reinterpret_cast<const char *>(records_array);
-  const Record *current_rec = reinterpret_cast<const Record *>(current_ptr);
-
   for (size_t i = 0; i < args.N_elements - 1; ++i) {
-    const char *next_ptr = current_ptr + record_mem_size;
-    const Record *next_rec = reinterpret_cast<const Record *>(next_ptr);
-    if (current_rec->key > next_rec->key) {
+    // if (current_rec->key > next_rec->key) { // CHANGED
+    if (records_array[i].key > records_array[i + 1].key) { // USE ARRAY INDEXING
       if (!args.perf_mode) {
         std::cerr << "Correctness Error: Array not sorted at index " << i
                   << " and " << i + 1 << "." << std::endl;
-        std::cerr << "  records[" << i << "].key = " << current_rec->key
+        std::cerr << "  records[" << i
+                  << "].key = " << records_array[i].key // USE ARRAY INDEXING
                   << std::endl;
-        std::cerr << "  records[" << i + 1 << "].key = " << next_rec->key
+        std::cerr << "  records[" << i + 1 << "].key = "
+                  << records_array[i + 1].key // USE ARRAY INDEXING
                   << std::endl;
       }
       return false;
     }
-    current_ptr = next_ptr;
-    current_rec = next_rec;
   }
 
   // Check 2: (Optional) Data integrity using checksums if original data is
@@ -276,20 +258,15 @@ bool verify_sorted_records(
   if (original_records_array_copy_for_checksum != nullptr) {
     unsigned long original_key_sum = 0;
     unsigned long sorted_key_sum = 0;
-    // Further checksums for payloads could be added if necessary but are more
-    // complex.
-
-    const char *orig_ptr_char = reinterpret_cast<const char *>(
-        original_records_array_copy_for_checksum);
-    const char *sorted_ptr_char = reinterpret_cast<const char *>(records_array);
 
     for (size_t i = 0; i < args.N_elements; ++i) {
+      // original_key_sum += (reinterpret_cast<const Record
+      // *>(orig_ptr_char))->key; // CHANGED
       original_key_sum +=
-          (reinterpret_cast<const Record *>(orig_ptr_char))->key;
-      sorted_key_sum +=
-          (reinterpret_cast<const Record *>(sorted_ptr_char))->key;
-      orig_ptr_char += record_mem_size;
-      sorted_ptr_char += record_mem_size;
+          original_records_array_copy_for_checksum[i].key; // USE ARRAY INDEXING
+      // sorted_key_sum += (reinterpret_cast<const Record
+      // *>(sorted_ptr_char))->key; // CHANGED
+      sorted_key_sum += records_array[i].key; // USE ARRAY INDEXING
     }
 
     if (original_key_sum != sorted_key_sum) {
@@ -315,29 +292,23 @@ bool verify_sorted_records(
 void print_records_sample(const Record *records_array, const Arguments &args,
                           size_t sample_size) {
   if (args.perf_mode)
-    return; // Suppress printing in performance mode.
+    return;
 
   std::cout << "Printing sample of " << std::min(sample_size, args.N_elements)
             << " records:" << std::endl;
-  size_t record_mem_size = get_record_actual_size(args.R_payload_size_bytes);
-  const char *current_record_ptr =
-      reinterpret_cast<const char *>(records_array);
 
   for (size_t i = 0; i < std::min(sample_size, args.N_elements); ++i) {
-    const Record *rec = reinterpret_cast<const Record *>(current_record_ptr);
+    const Record *rec = &records_array[i]; // USE ARRAY INDEXING
     std::cout << "  Record[" << i << "]: Key=" << rec->key << ", Payload=[";
     // Print first few bytes of payload for brevity
     for (size_t j = 0; j < std::min(args.R_payload_size_bytes, (size_t)8);
          ++j) {
-      // Print as hex to handle non-printable characters
       std::cout << std::hex << std::setw(2) << std::setfill('0')
                 << (static_cast<int>(rec->rpayload[j]) & 0xFF) << " ";
     }
     if (args.R_payload_size_bytes > 8) {
       std::cout << "...";
     }
-    std::cout << std::dec << "]"
-              << std::endl; // Switch back to decimal for next line
-    current_record_ptr += record_mem_size;
+    std::cout << std::dec << "]" << std::endl;
   }
 }
