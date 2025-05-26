@@ -1,7 +1,7 @@
 # Compiler and flags
 CXX = g++
 MPICXX = mpicxx
-CXX_STD = -std=c++17 # Come da specifiche del corso
+CXX_STD = -std=c++17
 OPTIM_FLAGS = -O3 -march=native
 DEBUG_FLAGS = -g -Wall -Wextra -Wpedantic
 COMMON_FLAGS = $(CXX_STD) $(DEBUG_FLAGS)
