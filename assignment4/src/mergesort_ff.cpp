@@ -4,6 +4,7 @@
 
 #include <algorithm> // For std::sort, an efficient sequential sorting algorithm
 #include <cassert>   // For assert
+#include <cstring>   // For std::memcpy
 #include <ff/dc.hpp> // FastFlow's generic divide-and-conquer component
 #include <ff/ff.hpp> // FastFlow core for parallel execution
 #include <iostream>  // For std::cerr in case of errors
@@ -221,10 +222,16 @@ void parallel_merge_sort_ff(Record *records_array, size_t n_elements,
   if (!final_operation_marker.result_is_in_main_array) {
     if (final_operation_marker.element_count == n_elements &&
         final_operation_marker.offset == 0) {
-      for (size_t i = 0; i < n_elements; ++i) {
-        copy_record(&g_main_records_global_ptr[i],
-                    &g_aux_records_global_ptr_raw[i], r_payload_size_bytes);
-      }
+      // std::cerr << "[DEBUG] Final result is in auxiliary buffer. Copying back
+      // to main array." << std::endl; Replace loop of copy_record calls with a
+      // single memcpy for performance. This assumes that copying the entire
+      // Record struct (including full MAX_RPAYLOAD_SIZE) is acceptable and
+      // correct for the user's needs at this stage. If ZERO_UNUSED_PAYLOAD was
+      // disabled in copy_record, the behavior for the payload tail (beyond
+      // r_payload_size_bytes) might differ slightly, but this is generally
+      // faster.
+      std::memcpy(g_main_records_global_ptr, g_aux_records_global_ptr_raw,
+                  n_elements * sizeof(Record));
     } else {
       // This case should ideally not happen if logic is correct for full sort
       std::cerr << "Warning: Final sorted segment is in auxiliary buffer but "

@@ -5,6 +5,11 @@
 #include <memory>    // For std::unique_ptr (RAII for temporary buffers)
 #include <stdexcept> // For potential error handling if needed
 
+// If defined, the unused part of the record's payload will be zeroed out
+// during copy_record. For performance benchmarks where this is not strictly
+// necessary, undefine it.
+// #define ZERO_UNUSED_PAYLOAD
+
 // Copies a single Record from src to dest.
 void copy_record(Record *dest, const Record *src, size_t r_payload_size_bytes) {
   if (!dest || !src) {
@@ -24,6 +29,7 @@ void copy_record(Record *dest, const Record *src, size_t r_payload_size_bytes) {
     std::memcpy(dest->rpayload, src->rpayload, bytes_to_copy);
   }
 
+#ifdef ZERO_UNUSED_PAYLOAD
   // Optional: Zero out the rest of the payload buffer in dest if
   // r_payload_size_bytes < MAX_RPAYLOAD_SIZE. This ensures consistent state if
   // the full MAX_RPAYLOAD_SIZE buffer is ever inspected. However, if
@@ -34,6 +40,7 @@ void copy_record(Record *dest, const Record *src, size_t r_payload_size_bytes) {
     std::memset(dest->rpayload + bytes_to_copy, 0,
                 MAX_RPAYLOAD_SIZE - bytes_to_copy);
   }
+#endif
 }
 
 // Merges two sorted arrays of Records (left_array and right_array) into
