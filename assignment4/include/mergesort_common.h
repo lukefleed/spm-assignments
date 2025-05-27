@@ -1,32 +1,34 @@
 #ifndef MERGESORT_COMMON_H
 #define MERGESORT_COMMON_H
 
-#include "record.h" // Ensures Record struct is defined
+#include "record.h" // For Record struct
 #include <cstddef>  // For size_t
 
-// Copies a single Record.
-// Assumes dest and src point to valid memory locations.
+// Copies a single record, respecting r_payload_size_bytes.
+// The actual size of the record in memory is sizeof(Record), but this function
+// ensures that only the relevant part of the payload is copied if needed,
+// though for fixed-size structs, a direct struct copy is often sufficient and
+// simpler. For simplicity and since rpayload is fixed size in Record, direct
+// struct copy is fine. If r_payload_size_bytes was meant to dynamically size
+// Records, the approach would differ. Given the current Record struct, a simple
+// assignment works. This function is provided for conceptual clarity if deeper
+// payload handling was intended.
+void copy_record_payload_aware(Record *dest, const Record *src,
+                               size_t r_payload_size_bytes);
+
+// Simple record copy function (wrapper around copy_record_payload_aware)
 void copy_record(Record *dest, const Record *src, size_t r_payload_size_bytes);
 
-// Merges two sorted arrays of Records (left_array and right_array) into
-// dest_array. Assumes dest_array has enough space to hold all elements from
-// both.
-void merge_records(Record *dest_array, Record *left_array, size_t left_len,
-                   Record *right_array, size_t right_len,
-                   size_t r_payload_size_bytes);
+// Sorts an array of records in-place using std::sort.
+// Relies on a comparator for Record type (based on 'key').
+void sequential_sort_records(Record *records, size_t num_records,
+                             size_t r_payload_size_bytes);
 
-// Sequentially sorts an array of Records using a recursive merge sort.
-// Requires a temporary buffer of the same size as records_array for merging.
-void sequential_merge_sort_recursive(Record *records_array, size_t n_elements,
-                                     size_t r_payload_size_bytes,
-                                     Record *temp_buffer);
-
-// Comparator struct for sorting Records based on their keys.
-// This is suitable for use with std::sort or other standard algorithms.
-struct RecordKeyCompare {
-  bool operator()(const Record &a, const Record &b) const {
-    return a.key < b.key;
-  }
-};
+// Merges two sorted arrays (left_records and right_records) into
+// result_records. Assumes result_records has enough space to hold (left_count +
+// right_count) elements.
+void merge_two_sorted_runs(const Record *left_records, size_t left_count,
+                           const Record *right_records, size_t right_count,
+                           Record *result_records, size_t r_payload_size_bytes);
 
 #endif // MERGESORT_COMMON_H

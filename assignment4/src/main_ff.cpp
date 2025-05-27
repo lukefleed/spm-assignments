@@ -82,12 +82,12 @@ int main(int argc, char *argv[]) {
                 << std::endl;
       return 1;
     }
-    // Deep copy the records for verification using copy_record
+    // Deep copy the records for verification using copy_record_payload_aware
     Record *src_array_ptr = records_array;
     Record *dst_array_ptr = original_records_copy_uptr.get();
     for (size_t i = 0; i < args.N_elements; ++i) {
-      copy_record(&dst_array_ptr[i], &src_array_ptr[i],
-                  args.R_payload_size_bytes);
+      copy_record_payload_aware(&dst_array_ptr[i], &src_array_ptr[i],
+                                args.R_payload_size_bytes);
     }
   }
 
