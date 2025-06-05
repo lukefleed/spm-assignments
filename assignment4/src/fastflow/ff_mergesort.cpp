@@ -1,518 +1,208 @@
-#include "../common/timer.hpp"
-#include "../common/utils.hpp"
+#include "../common/record.hpp"
 #include <algorithm>
+#include <deque>
 #include <ff/ff.hpp>
-#include <iostream>
+#include <functional>
 #include <memory>
-#include <queue>
 #include <vector>
 
 using namespace ff;
 
-// ====== STRUCTURES FOR PIPELINE ======
+/**
+ * @struct SortChunk
+ * @brief Represents a chunk of data.
+ */
 struct SortChunk {
   std::vector<Record> data;
-  size_t chunk_id;
-  size_t level;
-
-  SortChunk(std::vector<Record> d, size_t id, size_t lvl = 0)
-      : data(std::move(d)), chunk_id(id), level(lvl) {}
 };
 
-struct MergePair {
-  std::vector<Record> left;
-  std::vector<Record> right;
-  size_t result_id;
-  size_t level;
-
-  MergePair(std::vector<Record> l, std::vector<Record> r, size_t id, size_t lvl)
-      : left(std::move(l)), right(std::move(r)), result_id(id), level(lvl) {}
-};
-
-// ====== FIRST FARM: SORTING ======
+/**
+ * @class SortEmitter
+ * @brief Emitter for the sorting farm. Chunks the initial dataset.
+ */
 class SortEmitter : public ff_node {
 private:
-  std::vector<Record> &original_data_ref;
-  size_t num_workers_in_farm;
-  size_t chunk_size_val;
-  size_t current_chunk_idx;
-  size_t total_chunks_to_emit_val;
-  std::vector<SortChunk> prepared_chunks_val;
+  std::vector<Record> &original_data;
+  size_t chunk_size;
+  size_t num_chunks;
+  size_t chunks_sent = 0;
 
 public:
-  SortEmitter(std::vector<Record> &data, size_t workers_count)
-      : original_data_ref(data), num_workers_in_farm(workers_count),
-        current_chunk_idx(0) {
-    if (original_data_ref.empty()) {
-      chunk_size_val = 0;
-      total_chunks_to_emit_val = 0;
-    } else {
-      size_t effective_workers = std::max((size_t)1, num_workers_in_farm);
-      chunk_size_val = (original_data_ref.size() + effective_workers - 1) /
-                       effective_workers;
-      chunk_size_val = std::max((size_t)1, chunk_size_val);
-
-      total_chunks_to_emit_val =
-          (original_data_ref.size() + chunk_size_val - 1) / chunk_size_val;
+  SortEmitter(std::vector<Record> &data, size_t workers)
+      : original_data(data), num_chunks(0), chunk_size(0) {
+    if (!original_data.empty() && workers > 0) {
+      // Over-decompose for better load balancing.
+      num_chunks = workers * 4;
+      chunk_size = (original_data.size() + num_chunks - 1) / num_chunks;
     }
-    // std::cerr << "[SortEmitter] Constructor: original_data_ref.size() = " <<
-    // original_data_ref.size()
-    //           << ", workers_count = " << workers_count
-    //           << ", chunk_size_val = " << chunk_size_val
-    //           << ", total_chunks_to_emit_val = " << total_chunks_to_emit_val
-    //           << std::endl;
-
-    prepared_chunks_val.reserve(total_chunks_to_emit_val);
-    for (size_t i = 0; i < total_chunks_to_emit_val; ++i) {
-      size_t start = i * chunk_size_val;
-      size_t end = std::min(start + chunk_size_val, original_data_ref.size());
-      std::vector<Record> chunk_data_segment;
-      if (start < end) {
-        chunk_data_segment.reserve(end - start);
-        for (size_t j = start; j < end; ++j) {
-          chunk_data_segment.emplace_back(std::move(original_data_ref[j]));
-        }
-      }
-      prepared_chunks_val.emplace_back(std::move(chunk_data_segment), i);
-    }
-    if (total_chunks_to_emit_val > 0 && !original_data_ref.empty()) {
-      // std::cerr << "[SortEmitter] Constructor: Clearing original_data_ref
-      // after moving records. Original size before clear: "
-      //         << original_data_ref.size() << std::endl;
-      original_data_ref.clear();
-      // std::cerr << "[SortEmitter] Constructor: original_data_ref size after
-      // clear: "
-      //         << original_data_ref.size() << std::endl;
-    }
-    // else {
-    // std::cerr << "[SortEmitter] Constructor: No chunks to emit or
-    // original_data_ref already empty. Not cleared by emitter. Size: "
-    //         << original_data_ref.size() << std::endl;
-    // }
   }
 
   void *svc(void * /*task*/) override {
-    if (current_chunk_idx >= total_chunks_to_emit_val) {
+    if (chunks_sent >= num_chunks || chunk_size == 0) {
       return EOS;
     }
-    auto *chunk_task =
-        new SortChunk(std::move(prepared_chunks_val[current_chunk_idx].data),
-                      prepared_chunks_val[current_chunk_idx].chunk_id,
-                      prepared_chunks_val[current_chunk_idx].level);
-    current_chunk_idx++;
-    return chunk_task;
-  }
 
-  size_t get_total_chunks() const { return total_chunks_to_emit_val; }
+    size_t start = chunks_sent * chunk_size;
+    if (start >= original_data.size()) {
+      return EOS;
+    }
+    size_t end = std::min(start + chunk_size, original_data.size());
+
+    auto *chunk = new SortChunk();
+    chunk->data.assign(std::make_move_iterator(original_data.begin() + start),
+                       std::make_move_iterator(original_data.begin() + end));
+    chunks_sent++;
+    return chunk;
+  }
 };
 
+/**
+ * @class SortWorker
+ * @brief Worker node for the sorting farm. Sorts individual chunks.
+ */
 class SortWorker : public ff_node_t<SortChunk, SortChunk> {
 public:
   SortChunk *svc(SortChunk *chunk) override {
-    if (chunk == (SortChunk *)EOS) {
-      return (SortChunk *)EOS;
-    }
     std::sort(chunk->data.begin(), chunk->data.end());
     return chunk;
   }
 };
 
-class SortCollector : public ff_node_t<SortChunk, SortChunk> {
-private:
-  std::vector<SortChunk *> collected_chunks_buffer;
-  size_t num_expected_chunks;
-  size_t num_received_data_chunks;
-  size_t num_sent_chunks;
-  bool upstream_farm_eos_received;
-
+/**
+ * @class ForwardingCollector
+ * @brief A minimal collector that provides an output channel for the farm.
+ */
+class ForwardingCollector : public ff_node_t<SortChunk, SortChunk> {
 public:
-  SortCollector(size_t expected_total_chunks)
-      : num_expected_chunks(expected_total_chunks), num_received_data_chunks(0),
-        num_sent_chunks(0), upstream_farm_eos_received(false) {
-    // std::cerr << "[SortCollector] Constructor: expecting " <<
-    // num_expected_chunks << " chunks." << std::endl;
-  }
-
-  SortChunk *svc(SortChunk *chunk) override {
-    bool is_data_signal = (chunk != (SortChunk *)EOS &&
-                           chunk != (SortChunk *)GO_ON && chunk != nullptr);
-
-    if (is_data_signal) {
-      collected_chunks_buffer.push_back(chunk);
-      num_received_data_chunks++;
-    } else if (chunk == (SortChunk *)EOS) {
-      upstream_farm_eos_received = true;
-    }
-
-    if (num_sent_chunks < collected_chunks_buffer.size()) {
-      return collected_chunks_buffer[num_sent_chunks++];
-    }
-
-    if (upstream_farm_eos_received &&
-        num_sent_chunks == collected_chunks_buffer.size() &&
-        num_received_data_chunks >= num_expected_chunks) {
-      return (SortChunk *)EOS;
-    }
-
-    return (SortChunk *)GO_ON;
-  }
+  SortChunk *svc(SortChunk *task) override { return task; }
 };
 
-// ====== SECOND FARM: MERGING ======
-class MergeEmitter : public ff_node_t<SortChunk, MergePair> {
+/**
+ * @class FinalMergeNode
+ * @brief A stateful node that collects all chunks and merges them in svc_end().
+ *
+ * This node's svc() method only buffers incoming chunks. The final, guaranteed-
+ * to-be-correct iterative merge is executed in svc_end(), which FastFlow calls
+ * only after all upstream tasks and EOS signals have been processed.
+ */
+class FinalMergeNode : public ff_node_t<SortChunk, void> {
 private:
-  std::vector<SortChunk *> pending_chunks_to_pair;
-  size_t next_pair_id;
-  bool upstream_eos_received;
+  std::vector<Record> *final_result_ptr;
+  std::deque<SortChunk *> chunks_buffer;
 
-public:
-  MergeEmitter() : next_pair_id(0), upstream_eos_received(false) {
-    // std::cerr << "[MergeEmitter] Constructor." << std::endl;
-  }
-
-  MergePair *svc(SortChunk *chunk) override {
-    if (chunk != (SortChunk *)EOS && chunk != (SortChunk *)GO_ON &&
-        chunk != nullptr) {
-      pending_chunks_to_pair.push_back(chunk);
-    } else if (chunk == (SortChunk *)EOS) {
-      upstream_eos_received = true;
-    }
-
-    return try_create_or_forward_pair();
-  }
-
-private:
-  MergePair *try_create_or_forward_pair() {
-    if (pending_chunks_to_pair.size() >= 2) {
-      SortChunk *left_chunk = pending_chunks_to_pair[0];
-      SortChunk *right_chunk = pending_chunks_to_pair[1];
-
-      pending_chunks_to_pair.erase(pending_chunks_to_pair.begin(),
-                                   pending_chunks_to_pair.begin() + 2);
-
-      auto *pair_task = new MergePair(
-          std::move(left_chunk->data), std::move(right_chunk->data),
-          next_pair_id++, std::max(left_chunk->level, right_chunk->level) + 1);
-      delete left_chunk;
-      delete right_chunk;
-      return pair_task;
-    }
-
-    if (upstream_eos_received) {
-      if (pending_chunks_to_pair.size() == 1) {
-        SortChunk *final_chunk = pending_chunks_to_pair[0];
-        pending_chunks_to_pair.clear();
-
-        auto *pair_task =
-            new MergePair(std::move(final_chunk->data), std::vector<Record>(),
-                          next_pair_id++, final_chunk->level);
-        delete final_chunk;
-        return pair_task;
-      }
-      if (pending_chunks_to_pair.empty()) {
-        return (MergePair *)EOS;
-      }
-    }
-    return (MergePair *)GO_ON;
-  }
-};
-
-class MergeWorker : public ff_node_t<MergePair, SortChunk> {
-public:
-  SortChunk *svc(MergePair *pair) override {
-    if (pair == (MergePair *)EOS) {
-      return (SortChunk *)EOS;
-    }
-
-    std::vector<Record> merged_data;
-    if (pair->right.empty()) {
-      merged_data = std::move(pair->left);
-    } else {
-      merge_two_vectors(pair->left, pair->right, merged_data);
-    }
-
-    auto *result_chunk =
-        new SortChunk(std::move(merged_data), pair->result_id, pair->level);
-    delete pair;
-    return result_chunk;
-  }
-
-private:
   void merge_two_vectors(std::vector<Record> &left, std::vector<Record> &right,
                          std::vector<Record> &result) {
     result.reserve(left.size() + right.size());
-    size_t i = 0, j = 0;
-    while (i < left.size() && j < right.size()) {
-      if (left[i] <= right[j]) {
-        result.push_back(std::move(left[i++]));
+    auto l_it = left.begin(), r_it = right.begin();
+    while (l_it != left.end() && r_it != right.end()) {
+      if (*l_it <= *r_it) {
+        result.push_back(std::move(*l_it++));
       } else {
-        result.push_back(std::move(right[j++]));
+        result.push_back(std::move(*r_it++));
       }
     }
-    while (i < left.size()) {
-      result.push_back(std::move(left[i++]));
-    }
-    while (j < right.size()) {
-      result.push_back(std::move(right[j++]));
-    }
+    result.insert(result.end(), std::make_move_iterator(l_it),
+                  std::make_move_iterator(left.end()));
+    result.insert(result.end(), std::make_move_iterator(r_it),
+                  std::make_move_iterator(right.end()));
   }
-};
-
-class MergeCollector : public ff_node_t<SortChunk, void> {
-private:
-  std::vector<Record> *final_result_ptr;
-  std::vector<SortChunk *> collected_merged_chunks;
-  bool merge_farm_eos_received;
 
 public:
-  MergeCollector(std::vector<Record> *result)
-      : final_result_ptr(result), merge_farm_eos_received(false) {
-    // std::cerr << "[MergeCollector] Constructor." << std::endl;
+  explicit FinalMergeNode(std::vector<Record> *result_vec)
+      : final_result_ptr(result_vec) {}
+
+  ~FinalMergeNode() {
+    for (auto *chunk : chunks_buffer) {
+      delete chunk;
+    }
   }
 
   void *svc(SortChunk *chunk) override {
-    if (chunk != (SortChunk *)EOS && chunk != (SortChunk *)GO_ON &&
-        chunk != nullptr) {
-      collected_merged_chunks.push_back(chunk);
-      return GO_ON;
-    } else if (chunk == (SortChunk *)EOS) {
-      merge_farm_eos_received = true;
+    if (chunk) {
+      chunks_buffer.push_back(chunk);
     }
-
-    if (merge_farm_eos_received) {
-      perform_k_way_merge();
-      for (auto *c : collected_merged_chunks) {
-        if (c)
-          delete c;
-      }
-      collected_merged_chunks.clear();
-      return EOS;
-    }
-
+    // No termination logic here. Just buffer chunks.
     return GO_ON;
   }
 
-private:
-  void perform_k_way_merge() {
-    if (final_result_ptr == nullptr) {
-      for (auto *c : collected_merged_chunks) {
-        if (c)
-          delete c;
-      }
-      collected_merged_chunks.clear();
-      return;
+  void svc_end() override {
+    // This is the safe place for the final merge.
+    while (chunks_buffer.size() > 1) {
+      SortChunk *left = chunks_buffer.front();
+      chunks_buffer.pop_front();
+      SortChunk *right = chunks_buffer.front();
+      chunks_buffer.pop_front();
+
+      auto *merged_chunk = new SortChunk();
+      merge_two_vectors(left->data, right->data, merged_chunk->data);
+      chunks_buffer.push_back(merged_chunk);
+
+      delete left;
+      delete right;
     }
 
-    if (collected_merged_chunks.empty()) {
+    if (chunks_buffer.size() == 1) {
+      if (final_result_ptr) {
+        *final_result_ptr = std::move(chunks_buffer.front()->data);
+      }
+      delete chunks_buffer.front();
+      chunks_buffer.pop_front();
+    } else if (final_result_ptr) {
       final_result_ptr->clear();
-      return;
-    }
-
-    using RecordIterator = std::vector<Record>::iterator;
-    auto compare_iter_pairs =
-        [](const std::pair<RecordIterator, RecordIterator> &a,
-           const std::pair<RecordIterator, RecordIterator> &b) {
-          if (a.first == a.second)
-            return false;
-          if (b.first == b.second)
-            return true;
-          return a.first->key > b.first->key;
-        };
-
-    std::priority_queue<std::pair<RecordIterator, RecordIterator>,
-                        std::vector<std::pair<RecordIterator, RecordIterator>>,
-                        decltype(compare_iter_pairs)>
-        min_priority_queue(compare_iter_pairs);
-
-    size_t total_records = 0;
-    for (const auto &chunk_ptr : collected_merged_chunks) {
-      if (chunk_ptr)
-        total_records += chunk_ptr->data.size();
-    }
-
-    final_result_ptr->clear();
-    final_result_ptr->reserve(total_records);
-
-    for (auto &chunk_ptr : collected_merged_chunks) {
-      if (chunk_ptr && !chunk_ptr->data.empty()) {
-        min_priority_queue.push(
-            {chunk_ptr->data.begin(), chunk_ptr->data.end()});
-      }
-    }
-
-    while (!min_priority_queue.empty()) {
-      std::pair<RecordIterator, RecordIterator> top_pair =
-          min_priority_queue.top();
-      min_priority_queue.pop();
-
-      RecordIterator current_iter = top_pair.first;
-      RecordIterator end_iter = top_pair.second;
-
-      if (current_iter != end_iter) {
-        final_result_ptr->push_back(std::move(*current_iter));
-        ++current_iter;
-        if (current_iter != end_iter) {
-          min_priority_queue.push({current_iter, end_iter});
-        }
-      }
     }
   }
 };
 
-// ====== MAIN PIPELINE FUNCTION ======
+/**
+ * @brief Performs a parallel merge sort using a single farm and a final merge
+ * node.
+ * @param data_ref A reference to the vector of Records to be sorted.
+ * @param num_threads The total number of threads to be used by FastFlow.
+ */
 void ff_pipeline_two_farms_mergesort(std::vector<Record> &data_ref,
                                      size_t num_threads) {
-  if (data_ref.empty() && num_threads > 0) {
-    // std::cerr << "[ff_pipeline_mergesort] Input data is empty. Exiting
-    // early." << std::endl;
+  if (data_ref.size() <= 1) {
     return;
   }
   if (num_threads == 0) {
-    // std::cerr << "[ff_pipeline_mergesort] num_threads is 0. Setting to 1." <<
-    // std::endl;
     num_threads = 1;
   }
 
-  size_t sort_workers_count;
-  size_t merge_workers_count;
+  // The SortEmitter needs a reference to the data, so we can't move it yet.
+  // The original data_ref will be cleared and used for the final result.
+  std::vector<Record> data_to_sort = std::move(data_ref);
+  data_ref.clear();
 
-  if (num_threads == 1) {
-    sort_workers_count = 1;
-    merge_workers_count = 1;
-  } else {
-    sort_workers_count = std::max((size_t)1, num_threads / 2);
-    merge_workers_count = std::max((size_t)1, num_threads - sort_workers_count);
-  }
-  // std::cerr << "[ff_pipeline_mergesort] Using " << sort_workers_count << "
-  // sort workers and " << merge_workers_count << " merge workers." <<
-  // std::endl;
-
+  // ====== 1. Sorting Farm ======
   ff_farm sort_farm;
   std::vector<ff_node *> sort_workers_raw;
-  for (size_t i = 0; i < sort_workers_count; ++i) {
+  sort_workers_raw.reserve(num_threads);
+  for (size_t i = 0; i < num_threads; ++i) {
     sort_workers_raw.push_back(new SortWorker());
   }
   sort_farm.add_workers(sort_workers_raw);
   sort_farm.cleanup_workers(true);
 
-  SortEmitter *se = new SortEmitter(data_ref, sort_workers_count);
+  SortEmitter *se = new SortEmitter(data_to_sort, num_threads);
   sort_farm.add_emitter(se);
   sort_farm.cleanup_emitter(true);
 
-  SortCollector *sc = new SortCollector(se->get_total_chunks());
-  sort_farm.add_collector(sc);
+  ForwardingCollector *fc = new ForwardingCollector();
+  sort_farm.add_collector(fc);
   sort_farm.cleanup_collector(true);
 
-  ff_farm merge_farm;
-  std::vector<ff_node *> merge_workers_raw;
-  for (size_t i = 0; i < merge_workers_count; ++i) {
-    merge_workers_raw.push_back(new MergeWorker());
-  }
-  merge_farm.add_workers(merge_workers_raw);
-  merge_farm.cleanup_workers(true);
+  // Using on-demand scheduling is generally better for load balancing
+  sort_farm.set_scheduling_ondemand();
 
-  MergeEmitter *me = new MergeEmitter();
-  merge_farm.add_emitter(me);
-  merge_farm.cleanup_emitter(true);
+  // ====== 2. Final Merge Node ======
+  FinalMergeNode merge_node(&data_ref);
 
-  MergeCollector *mc = new MergeCollector(&data_ref);
-  merge_farm.add_collector(mc);
-  merge_farm.cleanup_collector(true);
-
+  // ====== Pipeline Execution ======
   ff_pipeline pipeline;
   pipeline.add_stage(&sort_farm);
-  pipeline.add_stage(&merge_farm);
+  pipeline.add_stage(&merge_node);
 
-  // std::cerr << "[ff_pipeline_mergesort] Starting pipeline.run()." <<
-  // std::endl;
-  if (pipeline.run() < 0) {
-    // std::cerr << "[ff_pipeline_mergesort] ERROR: Pipeline run() failed." <<
-    // std::endl;
-    throw std::runtime_error("Pipeline run() failed");
+  if (pipeline.run_and_wait_end() < 0) {
+    throw std::runtime_error("Pipeline execution failed");
   }
-  // std::cerr << "[ff_pipeline_mergesort] Calling pipeline.wait()." <<
-  // std::endl;
-  if (pipeline.wait() < 0) {
-    // std::cerr << "[ff_pipeline_mergesort] ERROR: Pipeline wait() failed." <<
-    // std::endl;
-    throw std::runtime_error("Pipeline wait() failed");
-  }
-  // std::cerr << "[ff_pipeline_mergesort] Pipeline finished." << std::endl;
 }
-
-#ifdef TEST_MAIN
-int main(int argc, char *argv[]) {
-  Config config = parse_args(argc, argv);
-
-  std::cout << "FastFlow Pipeline Two Farms MergeSort (TEST_MAIN)\n";
-  std::cout << "Array size: " << config.array_size << "\n";
-  std::cout << "Payload size: " << config.payload_size << " bytes\n";
-  std::cout << "Threads: " << config.num_threads << "\n\n";
-  if (config.num_threads == 0) {
-    std::cerr
-        << "Warning: Number of threads is 0. Setting to 1 for the pipeline.\n";
-    config.num_threads = 1;
-  }
-
-  auto data_for_run = generate_data_vector(config.array_size,
-                                           config.payload_size, config.pattern);
-
-  size_t original_size_for_check = data_for_run.size();
-
-  if (config.array_size <= 20) {
-    std::vector<Record> data_copy_for_debug = copy_records_vector(data_for_run);
-    std::cout << "\nOriginal data (first few, if small):\n";
-    for (size_t i = 0; i < std::min((size_t)10, data_copy_for_debug.size());
-         ++i) {
-      std::cout << "Index " << i << ": key=" << data_copy_for_debug[i].key
-                << std::endl;
-    }
-  }
-
-  Timer t("FF Pipeline Two Farms MergeSort");
-
-  ff_pipeline_two_farms_mergesort(data_for_run, config.num_threads);
-  double ms = t.elapsed_ms();
-
-  std::cout << "Time: " << ms << " ms\n";
-
-  if (config.array_size <= 20) {
-    std::cout << "\nData after sort (first few, if small):\n";
-    for (size_t i = 0; i < std::min((size_t)10, data_for_run.size()); ++i) {
-      std::cout << "Index " << i << ": key=" << data_for_run[i].key
-                << std::endl;
-    }
-  }
-
-  if (data_for_run.empty() && original_size_for_check > 0) {
-    std::cout << "INFO: Resulting data vector 'data_for_run' is empty."
-              << std::endl;
-  } else if (original_size_for_check > 0 && !data_for_run.empty()) {
-    std::cout << "INFO: Resulting data vector 'data_for_run' size: "
-              << data_for_run.size() << std::endl;
-  } else if (original_size_for_check == 0 && data_for_run.empty()) {
-    std::cout << "INFO: Original data vector 'data_for_run' was and is empty."
-              << std::endl;
-  }
-
-  if (config.validate) {
-    if (!is_sorted_vector(data_for_run)) {
-      std::cerr << "ERROR: Sort validation failed!\n";
-      if (data_for_run.size() < 200 && data_for_run.size() > 0) {
-        std::cerr << "First few elements of failed sort ("
-                  << data_for_run.size() << " total): ";
-        for (size_t i = 0; i < std::min((size_t)20, data_for_run.size()); ++i)
-          std::cerr << data_for_run[i].key << " ";
-        std::cerr << std::endl;
-      } else if (data_for_run.empty() && config.array_size > 0) {
-        std::cerr << "Resulting vector is empty, but original size was "
-                  << config.array_size << "." << std::endl;
-      }
-      return 1;
-    } else {
-      std::cout << "Validation successful.\n";
-    }
-  }
-  return 0;
-}
-#endif

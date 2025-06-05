@@ -3,83 +3,64 @@
 #include <vector>
 
 /**
- * @brief Merge two sorted subarrays
+ * @brief Merges two sorted sub-arrays into a single sorted array.
+ * @param data The main vector containing the sub-arrays.
+ * @param temp A temporary vector used for storing the merged result.
+ * @param left The starting index of the first sub-array.
+ * @param mid The ending index of the first sub-array.
+ * @param right The ending index of the second sub-array.
  */
-static void merge(std::vector<std::unique_ptr<Record>> &data, size_t left,
-                  size_t mid, size_t right) {
-  size_t n1 = mid - left + 1;
-  size_t n2 = right - mid;
+static void merge(std::vector<Record> &data, std::vector<Record> &temp,
+                  size_t left, size_t mid, size_t right) {
+  size_t i = left, j = mid + 1, k = left;
 
-  // Temporary storage for pointers only
-  std::vector<std::unique_ptr<Record>> temp;
-  temp.reserve(n1 + n2);
-
-  // Move elements to temp
-  for (size_t i = left; i <= right; ++i) {
-    temp.push_back(std::move(data[i]));
-  }
-
-  // Merge back
-  size_t i = 0, j = n1, k = left;
-
-  while (i < n1 && j < n1 + n2) {
-    if (temp[i]->key <= temp[j]->key) {
-      data[k++] = std::move(temp[i++]);
+  // Merge the two parts into the temporary vector
+  while (i <= mid && j <= right) {
+    if (data[i] <= data[j]) {
+      temp[k++] = std::move(data[i++]);
     } else {
-      data[k++] = std::move(temp[j++]);
+      temp[k++] = std::move(data[j++]);
     }
   }
 
-  // Copy remaining elements
-  while (i < n1) {
-    data[k++] = std::move(temp[i++]);
+  // Copy remaining elements of the left half
+  while (i <= mid) {
+    temp[k++] = std::move(data[i++]);
   }
 
-  while (j < n1 + n2) {
-    data[k++] = std::move(temp[j++]);
-  }
-}
-
-void sequential_mergesort(std::vector<std::unique_ptr<Record>> &data,
-                          size_t left, size_t right) {
-  if (left >= right)
-    return;
-
-  // Use insertion sort for small subarrays
-  if (right - left < 32) {
-    for (size_t i = left + 1; i <= right; ++i) {
-      auto key = data[i]->key;
-      size_t j = i;
-
-      while (j > left && data[j - 1]->key > key) {
-        std::swap(data[j], data[j - 1]);
-        j--;
-      }
-    }
-    return;
+  // Copy remaining elements of the right half
+  while (j <= right) {
+    temp[k++] = std::move(data[j++]);
   }
 
-  size_t mid = left + (right - left) / 2;
-
-  sequential_mergesort(data, left, mid);
-  sequential_mergesort(data, mid + 1, right);
-
-  // Skip merge if already sorted
-  if (data[mid]->key <= data[mid + 1]->key) {
-    return;
-  }
-
-  merge(data, left, mid, right);
-}
-
-void sequential_mergesort(std::vector<std::unique_ptr<Record>> &data) {
-  if (data.size() > 1) {
-    sequential_mergesort(data, 0, data.size() - 1);
+  // Move the sorted elements from temp back to the original vector
+  for (i = left; i <= right; ++i) {
+    data[i] = std::move(temp[i]);
   }
 }
 
-void stl_sort(std::vector<std::unique_ptr<Record>> &data) {
-  std::sort(data.begin(), data.end(),
-            [](const std::unique_ptr<Record> &a,
-               const std::unique_ptr<Record> &b) { return a->key < b->key; });
+/**
+ * @brief The recursive core of the merge sort algorithm.
+ * @param data The vector to sort.
+ * @param temp A temporary buffer for merging.
+ * @param left The starting index of the segment to sort.
+ * @param right The ending index of the segment to sort.
+ */
+static void mergesort_recursive(std::vector<Record> &data,
+                                std::vector<Record> &temp, size_t left,
+                                size_t right) {
+  if (left < right) {
+    size_t mid = left + (right - left) / 2;
+    mergesort_recursive(data, temp, left, mid);
+    mergesort_recursive(data, temp, mid + 1, right);
+    merge(data, temp, left, mid, right);
+  }
+}
+
+void sequential_mergesort(std::vector<Record> &data) {
+  if (data.size() <= 1) {
+    return;
+  }
+  std::vector<Record> temp(data.size());
+  mergesort_recursive(data, temp, 0, data.size() - 1);
 }
