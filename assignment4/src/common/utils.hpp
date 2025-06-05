@@ -55,4 +55,22 @@ Config parse_args(int argc, char *argv[]);
  */
 std::string format_bytes(size_t bytes);
 
+/**
+ * @brief Generate array of records as direct vectors (not unique_ptr)
+ */
+std::vector<Record>
+generate_data_vector(size_t n, size_t payload_size,
+                     DataPattern pattern = DataPattern::RANDOM,
+                     unsigned seed = std::random_device{}());
+
+/**
+ * @brief Verify array is sorted correctly (direct vector version)
+ */
+bool is_sorted_vector(const std::vector<Record> &data);
+
+/**
+ * @brief Deep copy of record array (direct vector version)
+ */
+std::vector<Record> copy_records_vector(const std::vector<Record> &original);
+
 #endif // UTILS_HPP

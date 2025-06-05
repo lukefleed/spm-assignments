@@ -5,11 +5,9 @@
 #include <iomanip>
 #include <iostream>
 
-// External functions
-void ff_pipeline_mergesort(std::vector<std::unique_ptr<Record>> &data,
-                           size_t nworkers);
-void ff_farm_mergesort(std::vector<std::unique_ptr<Record>> &data,
-                       size_t nworkers);
+// External functions - only the two farms implementation
+void ff_pipeline_two_farms_mergesort(std::vector<Record> &data,
+                                     size_t num_threads);
 
 int main(int argc, char *argv[]) {
   Config config = parse_args(argc, argv);
@@ -77,29 +75,18 @@ int main(int argc, char *argv[]) {
               << std::setw(15) << (valid ? "✓" : "✗") << "\n";
   }
 
-  // Test FastFlow pipeline
+  // Test FastFlow pipeline with two farms
   {
-    auto data = copy_records(original_data, config.payload_size);
+    // Convert data to vector format
+    auto original_vector = generate_data_vector(
+        config.array_size, config.payload_size, config.pattern);
+    auto data = copy_records_vector(original_vector);
     Timer t;
-    ff_pipeline_mergesort(data, config.num_threads);
+    ff_pipeline_two_farms_mergesort(data, config.num_threads);
     double ms = t.elapsed_ms();
 
-    bool valid = config.validate ? is_sorted(data) : true;
-    std::cout << std::setw(25) << "FF Pipeline+Farm" << std::setw(15)
-              << std::fixed << std::setprecision(2) << ms << std::setw(15)
-              << std::fixed << std::setprecision(2) << baseline_time / ms << "x"
-              << std::setw(15) << (valid ? "✓" : "✗") << "\n";
-  }
-
-  // Test FastFlow farm with feedback
-  if (config.array_size < 10000000) { // Limit for recursive approach
-    auto data = copy_records(original_data, config.payload_size);
-    Timer t;
-    ff_farm_mergesort(data, config.num_threads);
-    double ms = t.elapsed_ms();
-
-    bool valid = config.validate ? is_sorted(data) : true;
-    std::cout << std::setw(25) << "FF Farm+Feedback" << std::setw(15)
+    bool valid = config.validate ? is_sorted_vector(data) : true;
+    std::cout << std::setw(25) << "FF Pipeline Two Farms" << std::setw(15)
               << std::fixed << std::setprecision(2) << ms << std::setw(15)
               << std::fixed << std::setprecision(2) << baseline_time / ms << "x"
               << std::setw(15) << (valid ? "✓" : "✗") << "\n";
