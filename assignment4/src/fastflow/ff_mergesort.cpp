@@ -125,31 +125,34 @@ class MergeEmitter : public ff_node_t<SortChunk, MergePair> {
 private:
   std::vector<SortChunk *> pending_chunks;
   size_t pair_id;
+  bool eos_received;
+  size_t expected_chunks;
+  size_t received_chunks;
 
 public:
-  MergeEmitter() : pair_id(0) {}
+  MergeEmitter()
+      : pair_id(0), eos_received(false), expected_chunks(0),
+        received_chunks(0) {}
+
+  void set_expected_chunks(size_t expected) { expected_chunks = expected; }
 
   MergePair *svc(SortChunk *chunk) override {
     if (chunk == nullptr) {
-      // Process remaining chunks
-      if (pending_chunks.size() == 1) {
-        // Single chunk left, send as final result
-        auto *final_chunk = pending_chunks[0];
-        pending_chunks.clear();
-
-        // Convert to MergePair with empty right side
-        auto pair =
-            new MergePair(std::move(final_chunk->data), std::vector<Record>(),
-                          pair_id++, final_chunk->level);
-        delete final_chunk;
-        return pair;
-      }
-      return EOS;
+      eos_received = true;
+      // Process all remaining chunks
+      return process_remaining_chunks();
     }
 
     pending_chunks.push_back(chunk);
+    received_chunks++;
 
-    // When we have a pair, send for merging
+    // Try to create pairs from available chunks
+    return try_create_pair();
+  }
+
+private:
+  MergePair *try_create_pair() {
+    // If we have at least 2 chunks, create a pair
     if (pending_chunks.size() >= 2) {
       auto *left = pending_chunks[0];
       auto *right = pending_chunks[1];
@@ -164,7 +167,35 @@ public:
       return pair;
     }
 
+    // If we've received all expected chunks and have exactly one left, handle
+    // it
+    if (eos_received && pending_chunks.size() == 1) {
+      return process_remaining_chunks();
+    }
+
     return GO_ON;
+  }
+
+  MergePair *process_remaining_chunks() {
+    if (pending_chunks.size() == 1) {
+      // Single chunk left, send as final result
+      auto *final_chunk = pending_chunks[0];
+      pending_chunks.clear();
+
+      // Convert to MergePair with empty right side
+      auto pair =
+          new MergePair(std::move(final_chunk->data), std::vector<Record>(),
+                        pair_id++, final_chunk->level);
+      delete final_chunk;
+      return pair;
+    }
+
+    // If we have more chunks, continue pairing
+    if (pending_chunks.size() >= 2) {
+      return try_create_pair();
+    }
+
+    return EOS;
   }
 };
 
@@ -218,28 +249,25 @@ class MergeCollector : public ff_node_t<SortChunk, void> {
 private:
   std::vector<Record> *final_result;
   std::vector<SortChunk *> collected_chunks;
-  size_t expected_chunks;
 
 public:
-  MergeCollector(std::vector<Record> *result, size_t expected)
-      : final_result(result), expected_chunks(expected) {}
+  MergeCollector(std::vector<Record> *result) : final_result(result) {}
 
   void *svc(SortChunk *chunk) override {
-    if (chunk == nullptr)
-      return EOS;
+    if (chunk == nullptr) {
+      // End of stream - perform final merge with all collected chunks
+      if (!collected_chunks.empty()) {
+        k_way_merge();
 
-    collected_chunks.push_back(chunk);
-
-    // When all chunks are collected, do k-way merge
-    if (collected_chunks.size() == expected_chunks) {
-      k_way_merge();
-
-      // Cleanup chunks
-      for (auto *c : collected_chunks) {
-        delete c;
+        // Cleanup chunks
+        for (auto *c : collected_chunks) {
+          delete c;
+        }
       }
+      return EOS;
     }
 
+    collected_chunks.push_back(chunk);
     return GO_ON;
   }
 
@@ -296,6 +324,13 @@ void ff_pipeline_two_farms_mergesort(std::vector<Record> &data,
   if (data.empty())
     return;
 
+  // Create a working copy of the data since we'll be moving from the original
+  std::vector<Record> working_data;
+  working_data.reserve(data.size());
+  for (size_t i = 0; i < data.size(); ++i) {
+    working_data.push_back(std::move(data[i]));
+  }
+
   size_t sort_workers = num_threads / 2;
   size_t merge_workers = num_threads - sort_workers;
   if (sort_workers == 0)
@@ -310,7 +345,7 @@ void ff_pipeline_two_farms_mergesort(std::vector<Record> &data,
   }
 
   ff_farm sort_farm;
-  auto sort_emitter = new SortEmitter(data, sort_workers);
+  auto sort_emitter = new SortEmitter(working_data, sort_workers);
 
   sort_farm.add_emitter(sort_emitter);
   sort_farm.add_workers(sort_workers_vec);
@@ -324,8 +359,7 @@ void ff_pipeline_two_farms_mergesort(std::vector<Record> &data,
 
   ff_farm merge_farm;
   auto merge_emitter = new MergeEmitter();
-  auto merge_collector =
-      new MergeCollector(&data, sort_workers); // Pass expected chunks
+  auto merge_collector = new MergeCollector(&data);
 
   merge_farm.add_emitter(merge_emitter);
   merge_farm.add_workers(merge_workers_vec);
