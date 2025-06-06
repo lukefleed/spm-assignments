@@ -68,4 +68,22 @@ Config parse_args(int argc, char *argv[]);
  */
 std::string format_bytes(size_t bytes);
 
+/**
+ * @brief Parse size string with optional suffixes (K, M, G)
+ * @param size_str String representation of size (e.g., "1M", "512K")
+ * @return Parsed size value
+ */
+size_t parse_size(const std::string &size_str);
+
+/**
+ * @brief Generate records (alias for generate_data for compatibility)
+ * @param n Number of records to generate
+ * @param payload_size Size of payload in bytes
+ * @param pattern Data distribution pattern
+ * @param seed Random seed for reproducibility
+ */
+std::vector<Record> generate_records(size_t n, size_t payload_size,
+                                     DataPattern pattern = DataPattern::RANDOM,
+                                     unsigned seed = std::random_device{}());
+
 #endif // UTILS_HPP

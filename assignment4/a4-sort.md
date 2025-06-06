@@ -39,8 +39,4 @@ All parallel versions developed should aim to minimize the overhead.
 ## Deliverables
 
 Provide all source files, scripts to compile and execute your code on the cluster nodes, and a PDF report (max 5-6 pages) including a brief description of your implementations and the performance analysis conducted. Mention the challenges encountered and the solutions adopted. Submit by email your source code and PDF report in a single zip file named 'sort_parallel\_\<YourName\>.zip' by June 1 EOB. Please use the email subject "SPM Assignment 4".
-
-```
-
-```
 ````

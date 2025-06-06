@@ -1,4 +1,5 @@
 #include "utils.hpp"
+#include <cctype>
 #include <climits>
 #include <cstring>
 #include <sstream>
@@ -150,4 +151,41 @@ std::string format_bytes(size_t bytes) {
   std::ostringstream oss;
   oss << std::fixed << std::setprecision(2) << size << " " << units[unit];
   return oss.str();
+}
+
+size_t parse_size(const std::string &size_str) {
+  if (size_str.empty()) {
+    throw std::invalid_argument("Empty size string");
+  }
+
+  std::string str = size_str;
+  size_t multiplier = 1;
+
+  // Check for suffix
+  char last_char = std::toupper(str.back());
+  if (last_char == 'K') {
+    multiplier = 1024;
+    str.pop_back();
+  } else if (last_char == 'M') {
+    multiplier = 1024 * 1024;
+    str.pop_back();
+  } else if (last_char == 'G') {
+    multiplier = 1024 * 1024 * 1024;
+    str.pop_back();
+  } else if (!std::isdigit(last_char)) {
+    throw std::invalid_argument("Invalid size suffix: " +
+                                std::string(1, last_char));
+  }
+
+  try {
+    size_t base = std::stoull(str);
+    return base * multiplier;
+  } catch (const std::exception &e) {
+    throw std::invalid_argument("Invalid size format: " + size_str);
+  }
+}
+
+std::vector<Record> generate_records(size_t n, size_t payload_size,
+                                     DataPattern pattern, unsigned seed) {
+  return generate_data(n, payload_size, pattern, seed);
 }

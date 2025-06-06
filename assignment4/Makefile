@@ -32,7 +32,7 @@ TEST_SRCS = $(wildcard $(TESTS_DIR)/*.cpp)
 TEST_BINS = $(patsubst $(TESTS_DIR)/%.cpp,$(BUILD_DIR)/test_%,$(TEST_SRCS))
 
 # Main targets
-.PHONY: all clean test install single_node multi_node test_correctness_single_node test_perf_single_node
+.PHONY: all clean test install single_node multi_node test_correctness_single_node test_perf_single_node debug_mpi debug_deep
 
 all: single_node multi_node
 
@@ -58,6 +58,10 @@ $(BUILD_DIR)/multi_node_sort: $(BUILD_DIR) $(OBJ_DIR) $(COMMON_OBJS) $(SEQ_OBJS)
 # Object file compilation rules
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+# Special rule for hybrid (MPI) source files
+$(OBJ_DIR)/hybrid/%.o: $(SRC_DIR)/hybrid/%.cpp
+	$(MPICXX) $(CXXFLAGS) -c $< -o $@
 
 # Test target for the main implementation
 $(BUILD_DIR)/ff_test: $(BUILD_DIR) $(OBJ_DIR) $(COMMON_OBJS) $(FF_MERGESORT_OBJ)
@@ -89,10 +93,49 @@ test_perf_single_node: $(BUILD_DIR)/test_performance
 	@echo "This may take several minutes to complete..."
 	$(BUILD_DIR)/test_performance
 
+# Hybrid correctness test
+test_correctness_hybrid: $(BUILD_DIR)/test_hybrid_correctness
+	@echo "Running hybrid MPI+FastFlow correctness tests..."
+	mpirun -np 2 $(BUILD_DIR)/test_hybrid_correctness
+
+# Hybrid performance test - Scientific MPI scaling analysis
+test_perf_hybrid: $(BUILD_DIR)/test_hybrid_performance
+	@echo "================================================================"
+	@echo "Scientific MPI Scaling Analysis - Hybrid MPI+FastFlow Mergesort"
+	@echo "Fixed: 10M records, 64B payload, 4 FastFlow threads/process"
+	@echo "================================================================"
+	@echo ""
+	@echo "Testing with 1 MPI process (baseline)..."
+	@echo "----------------------------------------"
+	mpirun -np 1 $(BUILD_DIR)/test_hybrid_performance
+	@echo ""
+	@echo "Testing with 2 MPI processes..."
+	@echo "-------------------------------"
+	mpirun -np 2 $(BUILD_DIR)/test_hybrid_performance
+	@echo ""
+	@echo "Testing with 3 MPI processes..."
+	@echo "-------------------------------"
+	mpirun -np 3 $(BUILD_DIR)/test_hybrid_performance
+	@echo ""
+	@echo "================================================================"
+	@echo "MPI Scaling Analysis Complete"
+	@echo "================================================================"
+
 # Install (copy to root)
 install: all
 	cp $(BUILD_DIR)/single_node_sort ./
 	cp $(BUILD_DIR)/multi_node_sort ./
+
+# Debug targets
+debug_mpi: $(BUILD_DIR)/debug_mpi
+
+$(BUILD_DIR)/debug_mpi: $(BUILD_DIR) $(OBJ_DIR) $(COMMON_OBJS) $(SEQ_OBJS) $(FF_MERGESORT_OBJ) $(HYBRID_OBJS)
+	$(MPICXX) $(CXXFLAGS) -o $@ $(SRC_DIR)/main/debug_mpi.cpp $(COMMON_OBJS) $(SEQ_OBJS) $(FF_MERGESORT_OBJ) $(HYBRID_OBJS) $(LDFLAGS) $(LIBS)
+
+debug_deep: $(BUILD_DIR)/debug_deep
+
+$(BUILD_DIR)/debug_deep: $(BUILD_DIR) $(OBJ_DIR) $(COMMON_OBJS) $(SEQ_OBJS) $(FF_MERGESORT_OBJ) $(HYBRID_OBJS)
+	$(MPICXX) $(CXXFLAGS) -o $@ $(SRC_DIR)/main/debug_deep.cpp $(COMMON_OBJS) $(SEQ_OBJS) $(FF_MERGESORT_OBJ) $(HYBRID_OBJS) $(LDFLAGS) $(LIBS)
 
 # Clean
 clean:
@@ -105,9 +148,39 @@ help:
 	@echo "  all                          - Build all executables"
 	@echo "  single_node                  - Build single node version"
 	@echo "  multi_node                   - Build multi node version"
-	@echo "  test                         - Build test executables"
-	@echo "  test_correctness_single_node - Run comprehensive correctness tests"
-	@echo "  test_perf_single_node        - Run HPC performance benchmarks (saves CSV)"
+	@echo ""
+	@echo "Testing targets:"
+	@echo "  test_correctness_single_node - Run single node correctness tests"
+	@echo "  test_perf_single_node        - Run single node performance benchmarks"
+	@echo "  test_correctness_hybrid      - Run hybrid MPI+FastFlow correctness tests"
+	@echo "  test_perf_hybrid             - Scientific MPI scaling analysis (1,2,3 processes)"
+	@echo ""
+	@echo "Scientific Analysis:"
+	@echo "  test_perf_hybrid             - Complete MPI scaling study with fixed parameters"
+	@echo "                                 (10M records, 64B payload, 4 FF threads/process)"
+	@echo ""
+	@echo "Utility targets:"
 	@echo "  install                      - Copy executables to project root"
 	@echo "  clean                        - Remove build artifacts"
 	@echo "  help                         - Show this help message"
+
+# MPI Direct test target
+test_mpi_direct: $(BUILD_DIR)/test_mpi_direct
+
+$(BUILD_DIR)/test_mpi_direct: $(BUILD_DIR) $(OBJ_DIR) $(COMMON_OBJS) $(SEQ_OBJS) $(FF_MERGESORT_OBJ) $(HYBRID_OBJS)
+	$(MPICXX) $(CXXFLAGS) -o $@ $(SRC_DIR)/main/test_mpi_direct.cpp $(COMMON_OBJS) $(SEQ_OBJS) $(FF_MERGESORT_OBJ) $(HYBRID_OBJS) $(LDFLAGS) $(LIBS)
+
+# Debug deadlock target
+debug_deadlock: $(COMMON_OBJS) $(SEQ_OBJS) $(FF_MERGESORT_OBJ) $(HYBRID_OBJS)
+	$(MPICXX) $(CXXFLAGS) -o $@ debug_deadlock.cpp $(COMMON_OBJS) $(SEQ_OBJS) $(FF_MERGESORT_OBJ) $(HYBRID_OBJS) $(LDFLAGS) $(LIBS)
+
+# Hybrid test targets
+test_hybrid_correctness: $(BUILD_DIR)/test_hybrid_correctness
+
+$(BUILD_DIR)/test_hybrid_correctness: $(BUILD_DIR) $(OBJ_DIR) $(COMMON_OBJS) $(SEQ_OBJS) $(FF_MERGESORT_OBJ) $(HYBRID_OBJS)
+	$(MPICXX) $(CXXFLAGS) -o $@ $(TESTS_DIR)/test_hybrid_correctness.cpp $(COMMON_OBJS) $(SEQ_OBJS) $(FF_MERGESORT_OBJ) $(HYBRID_OBJS) $(LDFLAGS) $(LIBS)
+
+test_hybrid_performance: $(BUILD_DIR)/test_hybrid_performance
+
+$(BUILD_DIR)/test_hybrid_performance: $(BUILD_DIR) $(OBJ_DIR) $(COMMON_OBJS) $(SEQ_OBJS) $(FF_MERGESORT_OBJ) $(HYBRID_OBJS)
+	$(MPICXX) $(CXXFLAGS) -o $@ $(TESTS_DIR)/test_hybrid_performance.cpp $(COMMON_OBJS) $(SEQ_OBJS) $(FF_MERGESORT_OBJ) $(HYBRID_OBJS) $(LDFLAGS) $(LIBS)
