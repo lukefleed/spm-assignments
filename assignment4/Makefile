@@ -16,7 +16,9 @@ FF_DIR = fastflow
 COMMON_SRCS = $(SRC_DIR)/common/utils.cpp
 SEQ_SRCS = $(SRC_DIR)/sequential/sequential_mergesort.cpp
 FF_MERGESORT_SRC = $(SRC_DIR)/fastflow/ff_mergesort.cpp
-HYBRID_SRCS = $(SRC_DIR)/hybrid/mpi_communication.cpp $(SRC_DIR)/hybrid/mpi_ff_mergesort.cpp
+# MODIFIED: Removed mpi_communication.cpp as its logic is now integrated
+#           into mpi_ff_mergesort.cpp for safety and efficiency.
+HYBRID_SRCS = $(SRC_DIR)/hybrid/mpi_ff_mergesort.cpp
 SINGLE_NODE_MAIN = $(SRC_DIR)/main/single_node_main.cpp
 MULTI_NODE_MAIN = $(SRC_DIR)/main/multi_node_main.cpp
 
@@ -81,7 +83,6 @@ $(BUILD_DIR)/test_correctness: $(TESTS_DIR)/test_correctness.cpp $(BUILD_DIR) $(
 $(BUILD_DIR)/test_performance: $(TESTS_DIR)/test_performance.cpp $(BUILD_DIR) $(OBJ_DIR) $(COMMON_OBJS) $(SEQ_OBJS) $(FF_MERGESORT_OBJ)
 	$(CXX) $(CXXFLAGS) -o $@ $< $(COMMON_OBJS) $(SEQ_OBJS) $(FF_MERGESORT_OBJ) $(LDFLAGS) $(LIBS)
 
-# Single node correctness test
 # Single node correctness test
 test_correctness_single_node: $(BUILD_DIR)/test_correctness
 	@echo "Running single node correctness tests..."
