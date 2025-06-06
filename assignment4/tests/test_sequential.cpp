@@ -2,7 +2,15 @@
 #include "../src/common/timer.hpp"
 #include "../src/common/utils.hpp"
 #include "../src/sequential/sequential_mergesort.hpp"
+#include <algorithm>
 #include <iostream>
+
+/**
+ * @brief Wrapper for std::sort to maintain consistent interface
+ */
+void stl_sort(std::vector<Record> &data) {
+  std::sort(data.begin(), data.end());
+}
 
 int main(int argc, char *argv[]) {
   Config config = parse_args(argc, argv);
@@ -17,7 +25,7 @@ int main(int argc, char *argv[]) {
 
   // Test custom mergesort
   {
-    auto data_copy = copy_records(data, config.payload_size);
+    auto data_copy = copy_records(data);
     Timer t("Sequential MergeSort");
     sequential_mergesort(data_copy);
     double ms = t.elapsed_ms();
@@ -31,7 +39,7 @@ int main(int argc, char *argv[]) {
 
   // Test std::sort
   {
-    auto data_copy = copy_records(data, config.payload_size);
+    auto data_copy = copy_records(data);
     Timer t("std::sort");
     stl_sort(data_copy);
     double ms = t.elapsed_ms();

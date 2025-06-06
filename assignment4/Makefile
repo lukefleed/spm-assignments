@@ -32,7 +32,7 @@ TEST_SRCS = $(wildcard $(TESTS_DIR)/*.cpp)
 TEST_BINS = $(patsubst $(TESTS_DIR)/%.cpp,$(BUILD_DIR)/test_%,$(TEST_SRCS))
 
 # Main targets
-.PHONY: all clean test install single_node multi_node
+.PHONY: all clean test install single_node multi_node test_correctness_single_node test_perf_single_node
 
 all: single_node multi_node
 
@@ -69,6 +69,26 @@ test: $(TEST_BINS)
 $(BUILD_DIR)/test_%: $(TESTS_DIR)/%.cpp $(BUILD_DIR) $(OBJ_DIR) $(COMMON_OBJS) $(SEQ_OBJS) $(FF_MERGESORT_OBJ)
 	$(CXX) $(CXXFLAGS) -o $@ $< $(COMMON_OBJS) $(SEQ_OBJS) $(FF_MERGESORT_OBJ) $(LDFLAGS) $(LIBS)
 
+# Specific rule for correctness test
+$(BUILD_DIR)/test_correctness: $(TESTS_DIR)/test_correctness.cpp $(BUILD_DIR) $(OBJ_DIR) $(COMMON_OBJS) $(SEQ_OBJS) $(FF_MERGESORT_OBJ)
+	$(CXX) $(CXXFLAGS) -o $@ $< $(COMMON_OBJS) $(SEQ_OBJS) $(FF_MERGESORT_OBJ) $(LDFLAGS) $(LIBS)
+
+# Specific rule for performance test
+$(BUILD_DIR)/test_performance: $(TESTS_DIR)/test_performance.cpp $(BUILD_DIR) $(OBJ_DIR) $(COMMON_OBJS) $(SEQ_OBJS) $(FF_MERGESORT_OBJ)
+	$(CXX) $(CXXFLAGS) -o $@ $< $(COMMON_OBJS) $(SEQ_OBJS) $(FF_MERGESORT_OBJ) $(LDFLAGS) $(LIBS)
+
+# Single node correctness test
+# Single node correctness test
+test_correctness_single_node: $(BUILD_DIR)/test_correctness
+	@echo "Running single node correctness tests..."
+	$(BUILD_DIR)/test_correctness
+
+# Single node performance test
+test_perf_single_node: $(BUILD_DIR)/test_performance
+	@echo "Running single node performance benchmarks..."
+	@echo "This may take several minutes to complete..."
+	$(BUILD_DIR)/test_performance
+
 # Install (copy to root)
 install: all
 	cp $(BUILD_DIR)/single_node_sort ./
@@ -82,10 +102,12 @@ clean:
 # Help
 help:
 	@echo "Available targets:"
-	@echo "  all         - Build all executables"
-	@echo "  single_node - Build single node version"
-	@echo "  multi_node  - Build multi node version"
-	@echo "  test        - Build test executables"
-	@echo "  install     - Copy executables to project root"
-	@echo "  clean       - Remove build artifacts"
-	@echo "  help        - Show this help message"
+	@echo "  all                          - Build all executables"
+	@echo "  single_node                  - Build single node version"
+	@echo "  multi_node                   - Build multi node version"
+	@echo "  test                         - Build test executables"
+	@echo "  test_correctness_single_node - Run comprehensive correctness tests"
+	@echo "  test_perf_single_node        - Run HPC performance benchmarks (saves CSV)"
+	@echo "  install                      - Copy executables to project root"
+	@echo "  clean                        - Remove build artifacts"
+	@echo "  help                         - Show this help message"

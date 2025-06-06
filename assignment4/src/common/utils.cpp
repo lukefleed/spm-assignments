@@ -4,57 +4,8 @@
 #include <sstream>
 #include <stdexcept>
 
-std::vector<std::unique_ptr<Record>> generate_data(size_t n,
-                                                   size_t payload_size,
-                                                   DataPattern pattern,
-                                                   unsigned seed) {
-
-  std::vector<std::unique_ptr<Record>> data;
-  data.reserve(n);
-
-  std::mt19937_64 gen(seed);
-  std::uniform_int_distribution<unsigned long> dist(0, ULONG_MAX);
-
-  // Generate records
-  for (size_t i = 0; i < n; ++i) {
-    auto rec = std::make_unique<Record>(payload_size);
-
-    switch (pattern) {
-    case DataPattern::RANDOM:
-      rec->key = dist(gen);
-      break;
-    case DataPattern::SORTED:
-      rec->key = i;
-      break;
-    case DataPattern::REVERSE_SORTED:
-      rec->key = n - i - 1;
-      break;
-    case DataPattern::NEARLY_SORTED:
-      rec->key = i;
-      // Swap ~1% of elements
-      if (dist(gen) % 100 == 0 && i > 0) {
-        std::swap(rec->key, data[i - 1]->key);
-      }
-      break;
-    }
-
-    // Fill payload with pseudo-random data
-    if (payload_size > 0) {
-      std::uniform_int_distribution<char> char_dist(0, 127);
-      for (size_t j = 0; j < payload_size; ++j) {
-        rec->payload[j] = char_dist(gen);
-      }
-    }
-
-    data.push_back(std::move(rec));
-  }
-
-  return data;
-}
-
-// Functions for working with Record vectors directly
-std::vector<Record> generate_data_vector(size_t n, size_t payload_size,
-                                         DataPattern pattern, unsigned seed) {
+std::vector<Record> generate_data(size_t n, size_t payload_size,
+                                  DataPattern pattern, unsigned seed) {
   std::vector<Record> data;
   data.reserve(n);
 
@@ -77,14 +28,14 @@ std::vector<Record> generate_data_vector(size_t n, size_t payload_size,
       break;
     case DataPattern::NEARLY_SORTED:
       rec.key = i;
-      // Swap ~1% of elements
+      // Swap ~1% of elements for realistic near-sorted data
       if (dist(gen) % 100 == 0 && i > 0) {
         std::swap(rec.key, data[i - 1].key);
       }
       break;
     }
 
-    // Fill payload with pseudo-random data
+    // Fill payload with pseudo-random data if needed
     if (payload_size > 0) {
       std::uniform_int_distribution<char> char_dist(0, 127);
       for (size_t j = 0; j < payload_size; ++j) {
@@ -98,16 +49,7 @@ std::vector<Record> generate_data_vector(size_t n, size_t payload_size,
   return data;
 }
 
-bool is_sorted(const std::vector<std::unique_ptr<Record>> &data) {
-  for (size_t i = 1; i < data.size(); ++i) {
-    if (data[i - 1]->key > data[i]->key) {
-      return false;
-    }
-  }
-  return true;
-}
-
-bool is_sorted_vector(const std::vector<Record> &data) {
+bool is_sorted(const std::vector<Record> &data) {
   for (size_t i = 1; i < data.size(); ++i) {
     if (data[i - 1].key > data[i].key) {
       return false;
@@ -116,52 +58,47 @@ bool is_sorted_vector(const std::vector<Record> &data) {
   return true;
 }
 
-void print_stats(const std::vector<std::unique_ptr<Record>> &data) {
-  if (data.empty())
+void print_stats(const std::vector<Record> &data) {
+  if (data.empty()) {
+    std::cout << "Empty dataset\n";
     return;
+  }
 
   std::cout << "Array size: " << data.size() << " records\n";
+  std::cout << "Payload size: " << data[0].payload_size << " bytes\n";
+  std::cout << "Total memory: "
+            << format_bytes(data.size() *
+                            (sizeof(Record) + data[0].payload_size))
+            << "\n";
+
   std::cout << "First 5 keys: ";
   for (size_t i = 0; i < std::min(size_t(5), data.size()); ++i) {
-    std::cout << data[i]->key << " ";
+    std::cout << data[i].key << " ";
   }
+
   std::cout << "\nLast 5 keys: ";
-  for (size_t i = std::max(size_t(5), data.size()) - 5; i < data.size(); ++i) {
-    std::cout << data[i]->key << " ";
+  size_t start = data.size() >= 5 ? data.size() - 5 : 0;
+  for (size_t i = start; i < data.size(); ++i) {
+    std::cout << data[i].key << " ";
   }
+
   std::cout << "\nSorted: " << (is_sorted(data) ? "YES" : "NO") << "\n";
 }
 
-std::vector<std::unique_ptr<Record>>
-copy_records(const std::vector<std::unique_ptr<Record>> &source,
-             size_t payload_size) {
-
-  std::vector<std::unique_ptr<Record>> copy;
-  copy.reserve(source.size());
-
-  for (const auto &rec : source) {
-    auto new_rec = std::make_unique<Record>(payload_size);
-    new_rec->key = rec->key;
-    if (payload_size > 0 && rec->payload) {
-      std::memcpy(new_rec->payload, rec->payload, payload_size);
-    }
-    copy.push_back(std::move(new_rec));
-  }
-
-  return copy;
-}
-
-std::vector<Record> copy_records_vector(const std::vector<Record> &original) {
+std::vector<Record> copy_records(const std::vector<Record> &original) {
   std::vector<Record> copy;
   copy.reserve(original.size());
 
   for (const auto &rec : original) {
-    // Create a new record with the same data
+    // Create new record with same data
     Record new_rec(rec.payload_size);
     new_rec.key = rec.key;
+
+    // Deep copy payload if present
     if (rec.payload && new_rec.payload && rec.payload_size > 0) {
       std::memcpy(new_rec.payload, rec.payload, rec.payload_size);
     }
+
     copy.push_back(std::move(new_rec));
   }
 

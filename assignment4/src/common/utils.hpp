@@ -5,7 +5,6 @@
 #include <algorithm>
 #include <iomanip>
 #include <iostream>
-#include <memory>
 #include <random>
 #include <vector>
 
@@ -13,31 +12,37 @@ enum class DataPattern { RANDOM, SORTED, REVERSE_SORTED, NEARLY_SORTED };
 
 /**
  * @brief Generate array of records with specified pattern
+ * @param n Number of records to generate
+ * @param payload_size Size of payload in bytes
+ * @param pattern Data distribution pattern
+ * @param seed Random seed for reproducibility
  */
-std::vector<std::unique_ptr<Record>>
-generate_data(size_t n, size_t payload_size,
-              DataPattern pattern = DataPattern::RANDOM,
-              unsigned seed = std::random_device{}());
+std::vector<Record> generate_data(size_t n, size_t payload_size,
+                                  DataPattern pattern = DataPattern::RANDOM,
+                                  unsigned seed = std::random_device{}());
 
 /**
- * @brief Verify array is sorted correctly
+ * @brief Verify array is sorted correctly by key
+ * @param data Vector of records to check
+ * @return true if sorted in ascending order by key
  */
-bool is_sorted(const std::vector<std::unique_ptr<Record>> &data);
+bool is_sorted(const std::vector<Record> &data);
 
 /**
- * @brief Print statistics about the dataset
+ * @brief Print dataset statistics and verification results
+ * @param data Vector of records to analyze
  */
-void print_stats(const std::vector<std::unique_ptr<Record>> &data);
+void print_stats(const std::vector<Record> &data);
 
 /**
- * @brief Deep copy of record array (for testing)
+ * @brief Create deep copy of record vector for testing
+ * @param original Source vector to copy
+ * @return Independent copy with same data
  */
-std::vector<std::unique_ptr<Record>>
-copy_records(const std::vector<std::unique_ptr<Record>> &source,
-             size_t payload_size);
+std::vector<Record> copy_records(const std::vector<Record> &original);
 
 /**
- * @brief Parse command line arguments
+ * @brief Command line configuration structure
  */
 struct Config {
   size_t array_size = 1000000; // -s
@@ -48,29 +53,19 @@ struct Config {
   bool verbose = false;
 };
 
+/**
+ * @brief Parse command line arguments into configuration
+ * @param argc Argument count
+ * @param argv Argument values
+ * @return Parsed configuration structure
+ */
 Config parse_args(int argc, char *argv[]);
 
 /**
- * @brief Format bytes for human reading
+ * @brief Format byte count for human-readable display
+ * @param bytes Number of bytes
+ * @return Formatted string with appropriate units
  */
 std::string format_bytes(size_t bytes);
-
-/**
- * @brief Generate array of records as direct vectors (not unique_ptr)
- */
-std::vector<Record>
-generate_data_vector(size_t n, size_t payload_size,
-                     DataPattern pattern = DataPattern::RANDOM,
-                     unsigned seed = std::random_device{}());
-
-/**
- * @brief Verify array is sorted correctly (direct vector version)
- */
-bool is_sorted_vector(const std::vector<Record> &data);
-
-/**
- * @brief Deep copy of record array (direct vector version)
- */
-std::vector<Record> copy_records_vector(const std::vector<Record> &original);
 
 #endif // UTILS_HPP

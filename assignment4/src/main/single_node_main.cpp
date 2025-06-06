@@ -32,7 +32,7 @@ bool validate_result(const std::vector<Record> &sorted_data,
     return false;
   }
 
-  if (!is_sorted_vector(sorted_data)) {
+  if (!is_sorted(sorted_data)) {
     std::cerr << "\n  [!] Validation Error: Output is not sorted.\n";
     return false;
   }
@@ -85,8 +85,8 @@ int main(int argc, char *argv[]) {
   std::cout << "\n";
 
   // Generate a single, canonical dataset for all tests to use
-  auto original_data = generate_data_vector(
-      config.array_size, config.payload_size, config.pattern);
+  auto original_data =
+      generate_data(config.array_size, config.payload_size, config.pattern);
 
   // Results table
   std::cout << std::left << std::setw(25) << "Implementation" << std::right
@@ -98,7 +98,7 @@ int main(int argc, char *argv[]) {
 
   // Test std::sort (baseline)
   {
-    auto data = copy_records_vector(original_data);
+    auto data = copy_records(original_data);
     Timer t;
     std::sort(data.begin(), data.end());
     double ms = t.elapsed_ms();
@@ -113,7 +113,7 @@ int main(int argc, char *argv[]) {
 
   // Test sequential mergesort
   {
-    auto data = copy_records_vector(original_data);
+    auto data = copy_records(original_data);
     Timer t;
     sequential_mergesort(data);
     double ms = t.elapsed_ms();
@@ -128,7 +128,7 @@ int main(int argc, char *argv[]) {
 
   // Test FastFlow pipeline with two farms
   {
-    auto data = copy_records_vector(original_data);
+    auto data = copy_records(original_data);
     Timer t;
     ff_pipeline_two_farms_mergesort(data, config.num_threads);
     double ms = t.elapsed_ms();
