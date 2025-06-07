@@ -116,8 +116,8 @@ void run_thread_scaling_test(std::ofstream &csv_file) {
   std::cout << "\n=== Thread Scaling Test (10M records, 64B payload) ==="
             << std::endl;
 
-  const size_t array_size = 10000000; // 10M records
-  const size_t payload_size = 64;     // 64 bytes payload
+  const size_t array_size = 100000000; // 10M records
+  const size_t payload_size = 64;      // 64 bytes payload
 
   std::vector<size_t> thread_counts = {2, 4, 6, 8, 10, 12};
 

@@ -1,187 +1,179 @@
-# Compiler and flags
+# CXX and MPI Compilers
 CXX = g++
 MPICXX = mpic++
-CXXFLAGS = -std=c++17 -O3 -Wall -Wextra -pthread -I$(INCLUDE_DIR) -I$(FF_DIR)
+
+# Compiler and Linker Flags
+# Added -pthread for FastFlow, ensure other necessary flags are present
+# Common flags for all compilations
+COMMON_FLAGS = -std=c++17 -Wall -Wextra -O3 -I./include -I./fastflow -pthread
+# Specific CXXFLAGS for non-MPI compilation
+CXXFLAGS = $(COMMON_FLAGS)
+# Specific MPICXXFLAGS for MPI compilation
+MPICXXFLAGS = $(COMMON_FLAGS)
+
+# Linker flags - ensure pthreads is linked for FastFlow
 LDFLAGS = -pthread
-LIBS =
 
 # Directories
 SRC_DIR = src
-BUILD_DIR = bin
 OBJ_DIR = obj
-INCLUDE_DIR = include
-FF_DIR = fastflow
+BIN_DIR = bin
+TEST_DIR = tests
 
-# Source files
-COMMON_SRCS = $(SRC_DIR)/common/utils.cpp
-SEQ_SRCS = $(SRC_DIR)/sequential/sequential_mergesort.cpp
-FF_MERGESORT_SRC = $(SRC_DIR)/fastflow/ff_mergesort.cpp
-# MODIFIED: Removed mpi_communication.cpp as its logic is now integrated
-#           into mpi_ff_mergesort.cpp for safety and efficiency.
-HYBRID_SRCS = $(SRC_DIR)/hybrid/mpi_ff_mergesort.cpp
-SINGLE_NODE_MAIN = $(SRC_DIR)/main/single_node_main.cpp
-MULTI_NODE_MAIN = $(SRC_DIR)/main/multi_node_main.cpp
+# Common source files (adjust as needed)
+COMMON_SRC = $(wildcard $(SRC_DIR)/common/*.cpp)
+COMMON_OBJ = $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(COMMON_SRC))
 
-# Object files
-COMMON_OBJS = $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(COMMON_SRCS))
-SEQ_OBJS = $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(SEQ_SRCS))
-FF_MERGESORT_OBJ = $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(FF_MERGESORT_SRC))
-HYBRID_OBJS = $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(HYBRID_SRCS))
+# Sequential Mergesort sources and objects
+SEQ_SRC = $(wildcard $(SRC_DIR)/sequential/*.cpp)
+SEQ_OBJ = $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(SEQ_SRC))
 
-# Test files
-TESTS_DIR = tests
-TEST_SRCS = $(wildcard $(TESTS_DIR)/*.cpp)
-TEST_BINS = $(patsubst $(TESTS_DIR)/%.cpp,$(BUILD_DIR)/test_%,$(TEST_SRCS))
+# Hybrid Mergesort sources and objects
+HYBRID_SRC = $(wildcard $(SRC_DIR)/hybrid/*.cpp)
+HYBRID_OBJ = $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(HYBRID_SRC))
 
-# Main targets
-.PHONY: all clean test install single_node multi_node test_correctness_single_node test_perf_single_node debug_mpi debug_deep
+# FastFlow Mergesort sources and objects (Added)
+FF_SRC = $(wildcard $(SRC_DIR)/fastflow/*.cpp)
+FF_OBJ = $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(FF_SRC))
 
-all: single_node multi_node
+# Main application sources and objects (if any, e.g., main.cpp)
+MAIN_SRC = $(wildcard $(SRC_DIR)/main/*.cpp)
+MAIN_OBJ = $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(MAIN_SRC))
 
-# Create directories
-$(BUILD_DIR):
-	mkdir -p $(BUILD_DIR)
+# Test sources
+TEST_SEQ_SRC = $(TEST_DIR)/test_sequential.cpp
+TEST_PERF_SRC = $(TEST_DIR)/test_performance.cpp
+TEST_CORRECT_SRC = $(TEST_DIR)/test_correctness.cpp
+TEST_HYBRID_CORRECT_SRC = $(TEST_DIR)/test_hybrid_correctness.cpp
+TEST_HYBRID_PERF_SRC = $(TEST_DIR)/test_hybrid_performance.cpp
 
-$(OBJ_DIR):
-	mkdir -p $(OBJ_DIR)/common $(OBJ_DIR)/sequential $(OBJ_DIR)/fastflow $(OBJ_DIR)/hybrid $(OBJ_DIR)/main
+# Test executables
+TARGET_SEQ = $(BIN_DIR)/test_sequential
+TARGET_PERF = $(BIN_DIR)/test_performance
+TARGET_CORRECT = $(BIN_DIR)/test_correctness
+TARGET_HYBRID_CORRECT = $(BIN_DIR)/test_hybrid_correctness
+TARGET_HYBRID_PERF = $(BIN_DIR)/test_hybrid_performance
 
-# Single node executable
-single_node: $(BUILD_DIR)/single_node_sort
+# Default target
+all: $(TARGET_SEQ) $(TARGET_PERF) $(TARGET_CORRECT) $(TARGET_HYBRID_CORRECT) $(TARGET_HYBRID_PERF)
 
-$(BUILD_DIR)/single_node_sort: $(BUILD_DIR) $(OBJ_DIR) $(COMMON_OBJS) $(SEQ_OBJS) $(FF_MERGESORT_OBJ) $(SINGLE_NODE_MAIN)
-	$(CXX) $(CXXFLAGS) -o $@ $(SINGLE_NODE_MAIN) $(COMMON_OBJS) $(SEQ_OBJS) $(FF_MERGESORT_OBJ) $(LDFLAGS) $(LIBS)
-
-# Multi node executable
-multi_node: $(BUILD_DIR)/multi_node_sort
-
-$(BUILD_DIR)/multi_node_sort: $(BUILD_DIR) $(OBJ_DIR) $(COMMON_OBJS) $(SEQ_OBJS) $(FF_MERGESORT_OBJ) $(HYBRID_OBJS) $(MULTI_NODE_MAIN)
-	$(MPICXX) $(CXXFLAGS) -o $@ $(MULTI_NODE_MAIN) $(COMMON_OBJS) $(SEQ_OBJS) $(FF_MERGESORT_OBJ) $(HYBRID_OBJS) $(LDFLAGS) $(LIBS)
-
-# Object file compilation rules
-$(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp
+# Rule to create object files
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp | $(OBJ_DIR)
+	@mkdir -p $(dir $@) # Ensure the target directory for the object file exists
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-# Special rule for hybrid (MPI) source files
-$(OBJ_DIR)/hybrid/%.o: $(SRC_DIR)/hybrid/%.cpp
-	$(MPICXX) $(CXXFLAGS) -c $< -o $@
+# Rule to create object files from test directory (if any are compiled directly, usually not needed)
+# $(OBJ_DIR)/%.o: $(TEST_DIR)/%.cpp | $(OBJ_DIR)
+# 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-# Test target for the main implementation
-$(BUILD_DIR)/ff_test: $(BUILD_DIR) $(OBJ_DIR) $(COMMON_OBJS) $(FF_MERGESORT_OBJ)
-	$(CXX) $(CXXFLAGS) -DTEST_MAIN -o $@ $(FF_MERGESORT_SRC) $(COMMON_OBJS) $(LDFLAGS) $(LIBS)
+# Create directories if they don't exist
+$(OBJ_DIR) $(BIN_DIR):
+	@mkdir -p $@
 
-# Test targets
-test: $(TEST_BINS)
+# Ensure subdirectories for objects are also created
+$(OBJ_DIR)/common $(OBJ_DIR)/sequential $(OBJ_DIR)/hybrid $(OBJ_DIR)/main $(OBJ_DIR)/fastflow:
+	@mkdir -p $@
 
-$(BUILD_DIR)/test_%: $(TESTS_DIR)/%.cpp $(BUILD_DIR) $(OBJ_DIR) $(COMMON_OBJS) $(SEQ_OBJS) $(FF_MERGESORT_OBJ)
-	$(CXX) $(CXXFLAGS) -o $@ $< $(COMMON_OBJS) $(SEQ_OBJS) $(FF_MERGESORT_OBJ) $(LDFLAGS) $(LIBS)
+# Link test_sequential
+$(TARGET_SEQ): $(OBJ_DIR) $(BIN_DIR) $(COMMON_OBJ) $(SEQ_OBJ) $(TEST_SEQ_SRC)
+	$(CXX) $(CXXFLAGS) $(TEST_SEQ_SRC) $(COMMON_OBJ) $(SEQ_OBJ) -o $@ $(LDFLAGS)
 
-# Specific rule for correctness test
-$(BUILD_DIR)/test_correctness: $(TESTS_DIR)/test_correctness.cpp $(BUILD_DIR) $(OBJ_DIR) $(COMMON_OBJS) $(SEQ_OBJS) $(FF_MERGESORT_OBJ)
-	$(CXX) $(CXXFLAGS) -o $@ $< $(COMMON_OBJS) $(SEQ_OBJS) $(FF_MERGESORT_OBJ) $(LDFLAGS) $(LIBS)
+# Link test_performance (assuming it might use MPI, adjust if not)
+# Added $(FF_OBJ) to the dependencies and linking command
+$(TARGET_PERF): $(OBJ_DIR) $(BIN_DIR) $(COMMON_OBJ) $(SEQ_OBJ) $(FF_OBJ) $(TEST_PERF_SRC)
+	$(MPICXX) $(MPICXXFLAGS) $(TEST_PERF_SRC) $(COMMON_OBJ) $(SEQ_OBJ) $(FF_OBJ) -o $@ $(LDFLAGS)
 
-# Specific rule for performance test
-$(BUILD_DIR)/test_performance: $(TESTS_DIR)/test_performance.cpp $(BUILD_DIR) $(OBJ_DIR) $(COMMON_OBJS) $(SEQ_OBJS) $(FF_MERGESORT_OBJ)
-	$(CXX) $(CXXFLAGS) -o $@ $< $(COMMON_OBJS) $(SEQ_OBJS) $(FF_MERGESORT_OBJ) $(LDFLAGS) $(LIBS)
+# Link test_correctness (assuming it might use MPI)
+# Added $(FF_OBJ) to the dependencies and linking command
+$(TARGET_CORRECT): $(OBJ_DIR) $(BIN_DIR) $(COMMON_OBJ) $(SEQ_OBJ) $(HYBRID_OBJ) $(FF_OBJ) $(TEST_CORRECT_SRC)
+	$(MPICXX) $(MPICXXFLAGS) $(TEST_CORRECT_SRC) $(COMMON_OBJ) $(SEQ_OBJ) $(HYBRID_OBJ) $(FF_OBJ) -o $@ $(LDFLAGS)
+
+# Link test_hybrid_correctness
+# Added $(FF_OBJ) to the dependencies and linking command (HYBRID_OBJ likely includes ff_mergesort from its own cpp, but good to be explicit if it might be separate)
+$(TARGET_HYBRID_CORRECT): $(OBJ_DIR) $(BIN_DIR) $(COMMON_OBJ) $(HYBRID_OBJ) $(FF_OBJ) $(TEST_HYBRID_CORRECT_SRC)
+	$(MPICXX) $(MPICXXFLAGS) $(TEST_HYBRID_CORRECT_SRC) $(COMMON_OBJ) $(HYBRID_OBJ) $(FF_OBJ) -o $@ $(LDFLAGS)
+
+# Link test_hybrid_performance
+# Added $(FF_OBJ) to the dependencies and linking command
+$(TARGET_HYBRID_PERF): $(OBJ_DIR) $(BIN_DIR) $(COMMON_OBJ) $(HYBRID_OBJ) $(FF_OBJ) $(TEST_HYBRID_PERF_SRC)
+	$(MPICXX) $(MPICXXFLAGS) $(TEST_HYBRID_PERF_SRC) $(COMMON_OBJ) $(HYBRID_OBJ) $(FF_OBJ) -o $@ $(LDFLAGS)
+
+# Clean rule
+clean:
+	@echo "Cleaning up object and binary files..."
+	@rm -rf $(OBJ_DIR) $(BIN_DIR)
+	@rm -f .baseline_time_hybrid_*.tmp
+
+# Phony targets
+.PHONY: all clean test_perf_hybrid test_correctness_single_node test_perf_single_node test_correctness_hybrid help
 
 # Single node correctness test
-test_correctness_single_node: $(BUILD_DIR)/test_correctness
+test_correctness_single_node: $(TARGET_CORRECT)
 	@echo "Running single node correctness tests..."
-	$(BUILD_DIR)/test_correctness
+	$(TARGET_CORRECT)
 
 # Single node performance test
-test_perf_single_node: $(BUILD_DIR)/test_performance
+test_perf_single_node: $(TARGET_PERF)
 	@echo "Running single node performance benchmarks..."
 	@echo "This may take several minutes to complete..."
-	$(BUILD_DIR)/test_performance
+	$(TARGET_PERF)
 
 # Hybrid correctness test
-test_correctness_hybrid: $(BUILD_DIR)/test_hybrid_correctness
+test_correctness_hybrid: $(TARGET_HYBRID_CORRECT)
 	@echo "Running hybrid MPI+FastFlow correctness tests..."
-	mpirun -np 2 $(BUILD_DIR)/test_hybrid_correctness
+	mpirun --oversubscribe -np 2 $(TARGET_HYBRID_CORRECT)
 
-# Hybrid performance test - Scientific MPI scaling analysis
-test_perf_hybrid: $(BUILD_DIR)/test_hybrid_performance
-	@echo "================================================================"
-	@echo "Scientific MPI Scaling Analysis - Hybrid MPI+FastFlow Mergesort"
-	@echo "Fixed: 10M records, 64B payload, 4 FastFlow threads/process"
-	@echo "================================================================"
-	@echo ""
-	@echo "Testing with 1 MPI process (baseline)..."
-	@echo "----------------------------------------"
-	mpirun -np 1 $(BUILD_DIR)/test_hybrid_performance
-	@echo ""
-	@echo "Testing with 2 MPI processes..."
-	@echo "-------------------------------"
-	mpirun -np 2 $(BUILD_DIR)/test_hybrid_performance
-	@echo ""
-	@echo "Testing with 3 MPI processes..."
-	@echo "-------------------------------"
-	mpirun -np 3 $(BUILD_DIR)/test_hybrid_performance
-	@echo ""
-	@echo "================================================================"
-	@echo "MPI Scaling Analysis Complete"
-	@echo "================================================================"
-
-# Install (copy to root)
-install: all
-	cp $(BUILD_DIR)/single_node_sort ./
-	cp $(BUILD_DIR)/multi_node_sort ./
-
-# Debug targets
-debug_mpi: $(BUILD_DIR)/debug_mpi
-
-$(BUILD_DIR)/debug_mpi: $(BUILD_DIR) $(OBJ_DIR) $(COMMON_OBJS) $(SEQ_OBJS) $(FF_MERGESORT_OBJ) $(HYBRID_OBJS)
-	$(MPICXX) $(CXXFLAGS) -o $@ $(SRC_DIR)/main/debug_mpi.cpp $(COMMON_OBJS) $(SEQ_OBJS) $(FF_MERGESORT_OBJ) $(HYBRID_OBJS) $(LDFLAGS) $(LIBS)
-
-debug_deep: $(BUILD_DIR)/debug_deep
-
-$(BUILD_DIR)/debug_deep: $(BUILD_DIR) $(OBJ_DIR) $(COMMON_OBJS) $(SEQ_OBJS) $(FF_MERGESORT_OBJ) $(HYBRID_OBJS)
-	$(MPICXX) $(CXXFLAGS) -o $@ $(SRC_DIR)/main/debug_deep.cpp $(COMMON_OBJS) $(SEQ_OBJS) $(FF_MERGESORT_OBJ) $(HYBRID_OBJS) $(LDFLAGS) $(LIBS)
-
-# Clean
-clean:
-	rm -rf $(BUILD_DIR) $(OBJ_DIR)
-	rm -f single_node_sort multi_node_sort
-
-# Help
+# Help target
 help:
 	@echo "Available targets:"
-	@echo "  all                          - Build all executables"
-	@echo "  single_node                  - Build single node version"
-	@echo "  multi_node                   - Build multi node version"
+	@echo "  all                          - Build all test executables"
+	@echo "  clean                        - Remove all build artifacts"
 	@echo ""
-	@echo "Testing targets:"
-	@echo "  test_correctness_single_node - Run single node correctness tests"
-	@echo "  test_perf_single_node        - Run single node performance benchmarks"
-	@echo "  test_correctness_hybrid      - Run hybrid MPI+FastFlow correctness tests"
-	@echo "  test_perf_hybrid             - Scientific MPI scaling analysis (1,2,3 processes)"
+	@echo "Single Node Tests (FastFlow only):"
+	@echo "  test_correctness_single_node - Run correctness tests for single node"
+	@echo "  test_perf_single_node        - Run performance benchmarks for single node"
 	@echo ""
-	@echo "Scientific Analysis:"
-	@echo "  test_perf_hybrid             - Complete MPI scaling study with fixed parameters"
-	@echo "                                 (10M records, 64B payload, 4 FF threads/process)"
+	@echo "Hybrid Tests (MPI + FastFlow):"
+	@echo "  test_correctness_hybrid      - Run correctness tests for hybrid MPI+FastFlow"
+	@echo "  test_perf_hybrid             - Run hybrid MPI+FastFlow performance analysis"
 	@echo ""
-	@echo "Utility targets:"
-	@echo "  install                      - Copy executables to project root"
-	@echo "  clean                        - Remove build artifacts"
-	@echo "  help                         - Show this help message"
+	@echo "Customizable variables for test_perf_hybrid:"
+	@echo "  MPI_NODES_LIST=\"1 2 4 8\"     - List of MPI process counts to test"
+	@echo "  FF_THREADS=4                 - Number of FastFlow threads per process"
+	@echo "  RECORDS_SIZE_M=100           - Number of records in millions"
+	@echo "  PAYLOAD_SIZE_B=64            - Payload size in bytes"
+	@echo ""
+	@echo "Examples:"
+	@echo "  make test_perf_hybrid MPI_NODES_LIST=\"1 2 3 4\" FF_THREADS=8"
+	@echo "  make test_perf_hybrid FF_THREADS=2"
+	@echo "  make help"
 
-# MPI Direct test target
-test_mpi_direct: $(BUILD_DIR)/test_mpi_direct
+# Default values for MPI nodes and FF threads for test_perf_hybrid
+MPI_NODES_LIST ?= 1 2 4 8
+FF_THREADS ?= 4
+RECORDS_SIZE_M ?= 100
+PAYLOAD_SIZE_B ?= 64
 
-$(BUILD_DIR)/test_mpi_direct: $(BUILD_DIR) $(OBJ_DIR) $(COMMON_OBJS) $(SEQ_OBJS) $(FF_MERGESORT_OBJ) $(HYBRID_OBJS)
-	$(MPICXX) $(CXXFLAGS) -o $@ $(SRC_DIR)/main/test_mpi_direct.cpp $(COMMON_OBJS) $(SEQ_OBJS) $(FF_MERGESORT_OBJ) $(HYBRID_OBJS) $(LDFLAGS) $(LIBS)
+# Target to run hybrid performance tests with specified MPI nodes and FF threads
+# This target will now manage the header and footer for the output table.
+# Ensure the target executable is built before running.
+test_perf_hybrid: $(TARGET_HYBRID_PERF)
+	@echo "=============================================================================="
+	@echo "           Scientific MPI Scaling Analysis - Hybrid MergeSort                 "
+	@echo "------------------------------------------------------------------------------"
+	@echo " Config: $(RECORDS_SIZE_M)M records, $(PAYLOAD_SIZE_B)B payload, $(FF_THREADS) FastFlow threads/process"
+	@echo "=============================================================================="
+	@echo "MPI Procs   Time (ms)      Throughput (MRec/s)   Speedup      Efficiency (%)"
+	@echo "----------- -------------- ------------------- ------------ ---------------"
+	@$(foreach N,$(MPI_NODES_LIST), \
+	    mpirun --oversubscribe -np $(N) $(TARGET_HYBRID_PERF) $(FF_THREADS) .baseline_time_hybrid_$(FF_THREADS).tmp; \
+	)
+	@echo "------------------------------------------------------------------------------"
+	@echo " Analysis Complete. Note: Speedup and Efficiency are relative to 1 MPI process."
+	@echo "=============================================================================="
+	@rm -f .baseline_time_hybrid_$(FF_THREADS).tmp # Clean up the temporary baseline file
 
-# Debug deadlock target
-debug_deadlock: $(COMMON_OBJS) $(SEQ_OBJS) $(FF_MERGESORT_OBJ) $(HYBRID_OBJS)
-	$(MPICXX) $(CXXFLAGS) -o $@ debug_deadlock.cpp $(COMMON_OBJS) $(SEQ_OBJS) $(FF_MERGESORT_OBJ) $(HYBRID_OBJS) $(LDFLAGS) $(LIBS)
-
-# Hybrid test targets
-test_hybrid_correctness: $(BUILD_DIR)/test_hybrid_correctness
-
-$(BUILD_DIR)/test_hybrid_correctness: $(BUILD_DIR) $(OBJ_DIR) $(COMMON_OBJS) $(SEQ_OBJS) $(FF_MERGESORT_OBJ) $(HYBRID_OBJS)
-	$(MPICXX) $(CXXFLAGS) -o $@ $(TESTS_DIR)/test_hybrid_correctness.cpp $(COMMON_OBJS) $(SEQ_OBJS) $(FF_MERGESORT_OBJ) $(HYBRID_OBJS) $(LDFLAGS) $(LIBS)
-
-test_hybrid_performance: $(BUILD_DIR)/test_hybrid_performance
-
-$(BUILD_DIR)/test_hybrid_performance: $(BUILD_DIR) $(OBJ_DIR) $(COMMON_OBJS) $(SEQ_OBJS) $(FF_MERGESORT_OBJ) $(HYBRID_OBJS)
-	$(MPICXX) $(CXXFLAGS) -o $@ $(TESTS_DIR)/test_hybrid_performance.cpp $(COMMON_OBJS) $(SEQ_OBJS) $(FF_MERGESORT_OBJ) $(HYBRID_OBJS) $(LDFLAGS) $(LIBS)
+# Example of how to run with different parameters:
+# make test_perf_hybrid MPI_NODES_LIST="1 2 3" FF_THREADS=2
+# make test_perf_hybrid FF_THREADS=8
+# make test_perf_hybrid MPI_NODES_LIST="1"

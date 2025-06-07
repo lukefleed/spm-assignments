@@ -110,14 +110,14 @@ void ff_pipeline_two_farms_mergesort(std::vector<Record> &data,
 
   const size_t effective_threads = (num_threads == 0) ? 1 : num_threads;
 
-  if (n < effective_threads * 4096) {
+  if (n < effective_threads * 1024) {
     std::sort(data.begin(), data.end());
     return;
   }
 
   // --- Fase 1: Sort Parallelo In-place dei Chunk Iniziali ---
   const size_t chunk_size =
-      std::max(static_cast<size_t>(4096), n / (effective_threads * 4));
+      std::max(static_cast<size_t>(1024), n / (effective_threads * 4));
 
   ff_farm sort_farm;
   sort_farm.add_emitter(new Emitter(n, chunk_size, data.data()));

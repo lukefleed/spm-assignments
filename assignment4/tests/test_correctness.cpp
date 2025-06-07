@@ -70,7 +70,7 @@ bool run_test_case(const TestCase &test) {
 
   // Generate test data
   auto original_data =
-      orna generate_data(test.size, test.payload_size, test.pattern);
+      generate_data(test.size, test.payload_size, test.pattern);
 
   // Test sequential mergesort
   auto seq_data = copy_records(original_data);
