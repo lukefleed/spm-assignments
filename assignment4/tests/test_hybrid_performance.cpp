@@ -75,16 +75,70 @@ void write_hybrid_csv_row(std::ofstream &file, const HybridTestResult &result) {
 }
 
 /**
+ * @brief Read baseline time from CSV file
+ * @param csv_filename Path to the CSV file
+ * @param parallel_threads Number of parallel threads to match
+ * @param data_size Data size to match
+ * @param payload_size Payload size to match
+ * @return Baseline time in milliseconds, or 0.0 if not found
+ */
+double read_baseline_from_csv(const std::string &csv_filename,
+                              int parallel_threads, size_t data_size,
+                              size_t payload_size) {
+  std::ifstream file(csv_filename);
+  if (!file.is_open()) {
+    return 0.0;
+  }
+
+  std::string line;
+  std::getline(file, line); // Skip header
+
+  double baseline_time = 0.0;
+  while (std::getline(file, line)) {
+    std::istringstream ss(line);
+    std::string token;
+    std::vector<std::string> tokens;
+
+    while (std::getline(ss, token, ',')) {
+      tokens.push_back(token);
+    }
+
+    if (tokens.size() >= 9) {
+      // Parse:
+      // Test_Name,Data_Size,Payload_Size,MPI_Processes,Parallel_Threads,Total_Time_ms,Throughput_MRec_per_sec,Speedup,Efficiency_Percent
+      try {
+        size_t csv_data_size = std::stoul(tokens[1]);
+        size_t csv_payload_size = std::stoul(tokens[2]);
+        int csv_mpi_processes = std::stoi(tokens[3]);
+        int csv_parallel_threads = std::stoi(tokens[4]);
+        double csv_time = std::stod(tokens[5]);
+
+        if (csv_mpi_processes == 1 &&
+            csv_parallel_threads == parallel_threads &&
+            csv_data_size == data_size && csv_payload_size == payload_size) {
+          baseline_time = csv_time;
+        }
+      } catch (const std::exception &) {
+        // Skip malformed lines
+        continue;
+      }
+    }
+  }
+
+  return baseline_time;
+}
+
+/**
  * @brief Run performance benchmark for hybrid implementation
  * @param config The performance test configuration.
  * @param rank The MPI rank of the current process.
  * @param mpi_world_size The total number of MPI processes.
- * @param baseline_file_path Path to the file for storing/reading baseline time.
+ * @param baseline_time_ms Baseline time in milliseconds for speedup
+ * calculation.
  * @param csv_file Pointer to CSV output file (nullptr if not saving to CSV).
  */
 void run_hybrid_benchmark(const PerfTestConfig &config, int rank,
-                          int mpi_world_size,
-                          const std::string &baseline_file_path,
+                          int mpi_world_size, double baseline_time_ms,
                           std::ofstream *csv_file = nullptr) {
   MPI_Barrier(MPI_COMM_WORLD);
 
@@ -120,37 +174,6 @@ void run_hybrid_benchmark(const PerfTestConfig &config, int rank,
       return;
     }
 
-    double baseline_time_for_calc = 0.0;
-
-    if (mpi_world_size == 1) {
-      baseline_time_for_calc = elapsed;
-      std::ofstream baseline_out_file(baseline_file_path);
-      if (baseline_out_file.is_open()) {
-        baseline_out_file << std::fixed << std::setprecision(10) << elapsed;
-        baseline_out_file.close();
-      } else {
-        std::cerr << "Error: Could not write to baseline file: "
-                  << baseline_file_path << std::endl;
-        // Proceed without saving baseline, speedup will be N/A for others
-      }
-    } else {
-      std::ifstream baseline_in_file(baseline_file_path);
-      if (baseline_in_file.is_open()) {
-        baseline_in_file >> baseline_time_for_calc;
-        baseline_in_file.close();
-        if (baseline_time_for_calc <= 0.0) {
-          std::cerr << "Warning: Invalid baseline time read from "
-                    << baseline_file_path << std::endl;
-          baseline_time_for_calc = 0.0; // Mark as unavailable
-        }
-      } else {
-        std::cerr << "Warning: Could not read baseline file: "
-                  << baseline_file_path << ". Speedup/Efficiency will be N/A."
-                  << std::endl;
-        // baseline_time_for_calc remains 0.0
-      }
-    }
-
     // Calculate throughput (MRec/s)
     double throughput_mrecs =
         (static_cast<double>(config.data_size) / 1000000.0) /
@@ -160,8 +183,8 @@ void run_hybrid_benchmark(const PerfTestConfig &config, int rank,
     double speedup = 1.0;
     double efficiency_percent = 100.0;
 
-    if (mpi_world_size > 1 && baseline_time_for_calc > 0.0) {
-      speedup = baseline_time_for_calc / elapsed;
+    if (mpi_world_size > 1 && baseline_time_ms > 0.0) {
+      speedup = baseline_time_ms / elapsed;
       efficiency_percent = (speedup / mpi_world_size) * 100.0;
     }
 
@@ -175,7 +198,7 @@ void run_hybrid_benchmark(const PerfTestConfig &config, int rank,
       std::cout << std::right << std::setw(12) << std::fixed
                 << std::setprecision(2) << 1.00 << std::right << std::setw(15)
                 << std::fixed << std::setprecision(1) << 100.0;
-    } else if (baseline_time_for_calc > 0.0) {
+    } else if (baseline_time_ms > 0.0) {
       std::cout << std::right << std::setw(12) << std::fixed
                 << std::setprecision(2) << speedup << std::right
                 << std::setw(15) << std::fixed << std::setprecision(1)
@@ -215,11 +238,11 @@ int main(int argc, char *argv[]) {
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
   MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-  if (argc < 3) {
+  if (argc < 2) {
     if (rank == 0) {
       std::cerr << "Usage: " << argv[0]
-                << " <parallel_threads> <baseline_file_path> "
-                   "[data_size_millions] [payload_size] [csv_filename]"
+                << " <parallel_threads> [data_size_millions] [payload_size] "
+                   "[csv_filename] [--quiet]"
                 << std::endl;
     }
     MPI_Finalize();
@@ -227,31 +250,33 @@ int main(int argc, char *argv[]) {
   }
 
   size_t parallel_threads_arg;
-  std::string baseline_file_path_arg;
   size_t data_size_millions = 10; // Default 10M
   size_t payload_size_bytes = 64; // Default 64B
   std::string csv_filename = "";  // Empty means no CSV
+  bool quiet_mode = false;        // Suppress headers and info messages
 
   try {
     parallel_threads_arg = std::stoul(argv[1]);
-    baseline_file_path_arg = argv[2];
 
     // Optional parameters
+    if (argc > 2) {
+      data_size_millions = std::stoul(argv[2]);
+    }
     if (argc > 3) {
-      data_size_millions = std::stoul(argv[3]);
+      payload_size_bytes = std::stoul(argv[3]);
     }
     if (argc > 4) {
-      payload_size_bytes = std::stoul(argv[4]);
+      csv_filename = argv[4];
     }
-    if (argc > 5) {
-      csv_filename = argv[5];
+    if (argc > 5 && std::string(argv[5]) == "--quiet") {
+      quiet_mode = true;
     }
   } catch (const std::invalid_argument &ia) {
     if (rank == 0) {
       std::cerr << "Invalid argument: " << ia.what() << std::endl;
       std::cerr << "Usage: " << argv[0]
-                << " <parallel_threads> <baseline_file_path> "
-                   "[data_size_millions] [payload_size] [csv_filename]"
+                << " <parallel_threads> [data_size_millions] [payload_size] "
+                   "[csv_filename] [--quiet]"
                 << std::endl;
     }
     MPI_Finalize();
@@ -260,8 +285,8 @@ int main(int argc, char *argv[]) {
     if (rank == 0) {
       std::cerr << "Argument out of range: " << oor.what() << std::endl;
       std::cerr << "Usage: " << argv[0]
-                << " <parallel_threads> <baseline_file_path> "
-                   "[data_size_millions] [payload_size] [csv_filename]"
+                << " <parallel_threads> [data_size_millions] [payload_size] "
+                   "[csv_filename] [--quiet]"
                 << std::endl;
     }
     MPI_Finalize();
@@ -293,8 +318,58 @@ int main(int argc, char *argv[]) {
     }
   }
 
+  if (rank == 0 && !quiet_mode) {
+    std::cout << "\n=== Hybrid MPI+Parallel Performance Test ===\n";
+    std::cout << "Data Size: " << data_size_millions
+              << "M records, Payload: " << payload_size_bytes
+              << " bytes, FF Threads: " << parallel_threads_arg << "\n\n";
+
+    if (size == 1) {
+      std::cout << "Running baseline measurement with 1 MPI process...\n";
+    }
+
+    std::cout << std::left << std::setw(11) << "MPI Procs" << std::right
+              << std::setw(14) << "Time (ms)" << std::right << std::setw(19)
+              << "Throughput (MRec/s)" << std::right << std::setw(12)
+              << "Speedup" << std::right << std::setw(15) << "Efficiency (%)"
+              << std::endl;
+    std::cout << std::string(71, '-') << std::endl;
+  }
+
   try {
-    run_hybrid_benchmark(config, rank, size, baseline_file_path_arg, csv_ptr);
+    if (size == 1) {
+      // Single process - establish baseline and save to CSV
+      run_hybrid_benchmark(config, rank, size, 0.0, csv_ptr);
+
+    } else {
+      // Multi-process - read baseline from CSV if available
+      double baseline_time_ms = 0.0;
+
+      if (rank == 0 && !csv_filename.empty()) {
+        baseline_time_ms = read_baseline_from_csv(
+            csv_filename, static_cast<int>(parallel_threads_arg),
+            config.data_size, config.payload_size);
+
+        if (baseline_time_ms > 0.0) {
+          if (!quiet_mode) {
+            std::cout << "Found baseline time: " << std::fixed
+                      << std::setprecision(2) << baseline_time_ms
+                      << " ms (from CSV)\n";
+          }
+        } else {
+          if (!quiet_mode) {
+            std::cout
+                << "Warning: No baseline found in CSV. Speedup will be N/A.\n";
+          }
+        }
+      }
+
+      // Broadcast baseline time to all processes
+      MPI_Bcast(&baseline_time_ms, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+      // Run the actual multi-process test
+      run_hybrid_benchmark(config, rank, size, baseline_time_ms, csv_ptr);
+    }
   } catch (const std::exception &e) {
     if (rank == 0) {
       // Use std::cerr for errors to not interfere with table output to stdout

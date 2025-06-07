@@ -61,7 +61,17 @@ TARGET_MULTI_NODE = $(BIN_DIR)/multi_node_main
 # Default target
 all: $(TARGET_SEQ) $(TARGET_PERF) $(TARGET_CORRECT) $(TARGET_HYBRID_CORRECT) $(TARGET_HYBRID_PERF) $(TARGET_SINGLE_NODE) $(TARGET_MULTI_NODE)
 
-# Rule to create object files
+# Rule to create object files for hybrid MPI sources
+$(OBJ_DIR)/hybrid/%.o: $(SRC_DIR)/hybrid/%.cpp | $(OBJ_DIR)
+	@mkdir -p $(dir $@)
+	$(MPICXX) $(MPICXXFLAGS) -c $< -o $@
+
+# Rule to create object files for main sources that use MPI
+$(OBJ_DIR)/main/multi_node_main.o: $(SRC_DIR)/main/multi_node_main.cpp | $(OBJ_DIR)
+	@mkdir -p $(dir $@)
+	$(MPICXX) $(MPICXXFLAGS) -c $< -o $@
+
+# Rule to create object files (general case)
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp | $(OBJ_DIR)
 	@mkdir -p $(dir $@) # Ensure the target directory for the object file exists
 	$(CXX) $(CXXFLAGS) -c $< -o $@
@@ -167,7 +177,7 @@ help:
 # Default values for MPI nodes and FF threads for test_perf_hybrid
 MPI_NODES_LIST ?= 1 2 4 8
 FF_THREADS ?= 4
-RECORDS_SIZE_M ?= 100
+RECORDS_SIZE_M ?= 10
 PAYLOAD_SIZE_B ?= 64
 
 # Target to run hybrid performance tests with specified MPI nodes and FF threads
@@ -175,7 +185,7 @@ PAYLOAD_SIZE_B ?= 64
 # Ensure the target executable is built before running.
 test_perf_hybrid: $(TARGET_HYBRID_PERF)
 	@echo "=============================================================================="
-	@echo "           Scientific MPI Scaling Analysis - Hybrid MergeSort                 "
+	@echo "                      MPI Scaling Analysis - Hybrid MergeSort                 "
 	@echo "------------------------------------------------------------------------------"
 	@echo " Config: $(RECORDS_SIZE_M)M records, $(PAYLOAD_SIZE_B)B payload, $(FF_THREADS) parallel threads/process"
 	@echo "=============================================================================="
@@ -183,7 +193,7 @@ test_perf_hybrid: $(TARGET_HYBRID_PERF)
 	@echo "----------- -------------- ------------------- ------------ ---------------"
 	@rm -f hybrid_performance_results.csv # Remove existing CSV to ensure fresh start
 	@$(foreach N,$(MPI_NODES_LIST), \
-	    mpirun --oversubscribe -np $(N) $(TARGET_HYBRID_PERF) $(FF_THREADS) .baseline_time_hybrid_$(FF_THREADS).tmp $(RECORDS_SIZE_M) $(PAYLOAD_SIZE_B) hybrid_performance_results.csv; \
+	    mpirun --oversubscribe -np $(N) $(TARGET_HYBRID_PERF) $(FF_THREADS) $(RECORDS_SIZE_M) $(PAYLOAD_SIZE_B) hybrid_performance_results.csv --quiet; \
 	)
 	@echo "------------------------------------------------------------------------------"
 	@echo " Analysis Complete. Note: Speedup and Efficiency are relative to 1 MPI process."

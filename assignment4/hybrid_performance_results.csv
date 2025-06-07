@@ -1,3 +1,5 @@
 Test_Name,Data_Size,Payload_Size,MPI_Processes,Parallel_Threads,Total_Time_ms,Throughput_MRec_per_sec,Speedup,Efficiency_Percent
-Hybrid_MPI_Parallel,20000000,64,1,8,2714.22,7.3686,1,100
-Hybrid_MPI_Parallel,20000000,64,2,8,5271.34,3.7941,0.514902,25.7451
+Hybrid_MPI_Parallel,10000000,64,1,4,1346.19,7.42835,1,100
+Hybrid_MPI_Parallel,10000000,64,2,4,2373.47,4.21324,0.567182,28.3591
+Hybrid_MPI_Parallel,10000000,64,4,4,2300.4,4.34708,0.585199,14.63
+Hybrid_MPI_Parallel,10000000,64,8,4,2663.66,3.75423,0.50539,6.31738
