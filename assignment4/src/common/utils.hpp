@@ -42,12 +42,13 @@ std::vector<Record> generate_records(size_t n, size_t payload_size,
 namespace utils {
 
 /**
- * @brief Determines a reasonable number of FastFlow threads based on hardware.
- * @details Aims to use a percentage of available cores to leave resources for
- *          MPI communication handling, preventing oversaturation.
- * @return A suggested number of threads for a FastFlow farm.
+ * @brief Determines optimal parallel worker thread count based on system
+ * resources.
+ * @details Calculates 75% of available CPU cores to reserve resources for
+ *          MPI communication and system processes, preventing contention.
+ * @return Recommended thread count for parallel execution framework.
  */
-size_t get_optimal_ff_threads();
+size_t get_optimal_parallel_threads();
 
 } // namespace utils
 

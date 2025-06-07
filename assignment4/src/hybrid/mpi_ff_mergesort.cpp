@@ -9,8 +9,7 @@
 #include <thread>
 #include <vector>
 
-void ff_pipeline_two_farms_mergesort(std::vector<Record> &data,
-                                     size_t num_threads);
+void parallel_mergesort(std::vector<Record> &data, size_t num_threads);
 
 namespace hybrid {
 
@@ -24,8 +23,8 @@ HybridMergeSort::HybridMergeSort(const HybridConfig &config)
   }
   MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank_);
   MPI_Comm_size(MPI_COMM_WORLD, &mpi_size_);
-  if (config_.ff_threads == 0) {
-    config_.ff_threads = utils::get_optimal_ff_threads();
+  if (config_.parallel_threads == 0) {
+    config_.parallel_threads = utils::get_optimal_parallel_threads();
   }
 }
 
@@ -95,8 +94,9 @@ void HybridMergeSort::distribute_data(std::vector<Record> &local_data,
 void HybridMergeSort::sort_local_data(std::vector<Record> &data) {
   if (data.empty())
     return;
-  if (data.size() >= config_.min_local_threshold && config_.ff_threads > 1) {
-    ff_pipeline_two_farms_mergesort(data, config_.ff_threads);
+  if (data.size() >= config_.min_local_threshold &&
+      config_.parallel_threads > 1) {
+    parallel_mergesort(data, config_.parallel_threads);
   } else {
     std::sort(data.begin(), data.end());
   }

@@ -1,5 +1,6 @@
 /**
- * @file test_performance.cpp
+ * @file test_pevoid parallel_mergesort(std::vector<Record> &data, const size_t
+ * num_threads);ormance.cpp
  * @brief Simple performance benchmarking suite for single-node mergesort
  */
 
@@ -18,8 +19,7 @@
 #include <vector>
 
 // Forward declaration for FastFlow implementation
-void ff_pipeline_two_farms_mergesort(std::vector<Record> &data,
-                                     size_t num_threads);
+void parallel_mergesort(std::vector<Record> &data, size_t num_threads);
 
 /**
  * @brief Performance test result structure
@@ -78,8 +78,8 @@ TestResult run_performance_test(const std::string &implementation,
     std::sort(data.begin(), data.end());
   } else if (implementation == "Sequential") {
     sequential_mergesort(data);
-  } else if (implementation == "FastFlow") {
-    ff_pipeline_two_farms_mergesort(data, num_threads);
+  } else if (implementation == "Parallel") {
+    parallel_mergesort(data, num_threads);
   }
 
   result.execution_time_ms = timer.elapsed_ms();
@@ -168,7 +168,7 @@ void run_thread_scaling_test(std::ofstream &csv_file) {
 
   for (size_t threads : thread_counts) {
     auto ff_result =
-        run_performance_test("FastFlow", array_size, payload_size, threads);
+        run_performance_test("Parallel", array_size, payload_size, threads);
     write_csv_row(csv_file, ff_result);
 
     double ff_vs_std =
@@ -180,7 +180,7 @@ void run_thread_scaling_test(std::ofstream &csv_file) {
     ff_vs_std_ss << std::fixed << std::setprecision(2) << ff_vs_std << "x";
     ff_vs_seq_ss << std::fixed << std::setprecision(2) << ff_vs_seq << "x";
 
-    std::cout << std::setw(w_impl) << "FastFlow" << std::setw(w_threads)
+    std::cout << std::setw(w_impl) << "Parallel" << std::setw(w_threads)
               << threads << std::setw(w_time) << std::fixed
               << std::setprecision(1) << ff_result.execution_time_ms
               << std::setw(w_speedup1) << ff_vs_std_ss.str()
@@ -254,7 +254,7 @@ void run_array_size_test(std::ofstream &csv_file) {
               << std::endl;
 
     auto ff_result =
-        run_performance_test("FastFlow", size, payload_size, num_threads);
+        run_performance_test("Parallel", size, payload_size, num_threads);
     write_csv_row(csv_file, ff_result);
 
     double ff_vs_std =
@@ -266,7 +266,7 @@ void run_array_size_test(std::ofstream &csv_file) {
     ff_vs_std_ss << std::fixed << std::setprecision(2) << ff_vs_std << "x";
     ff_vs_seq_ss << std::fixed << std::setprecision(2) << ff_vs_seq << "x";
 
-    std::cout << std::setw(w_impl) << "FastFlow" << std::setw(w_size)
+    std::cout << std::setw(w_impl) << "Parallel" << std::setw(w_size)
               << size_info.first << std::setw(w_time) << std::fixed
               << std::setprecision(1) << ff_result.execution_time_ms
               << std::setw(w_speedup1) << ff_vs_std_ss.str()
@@ -340,7 +340,7 @@ void run_payload_size_test(std::ofstream &csv_file) {
               << std::endl;
 
     auto ff_result =
-        run_performance_test("FastFlow", array_size, payload, num_threads);
+        run_performance_test("Parallel", array_size, payload, num_threads);
     write_csv_row(csv_file, ff_result);
 
     double ff_vs_std =
@@ -352,7 +352,7 @@ void run_payload_size_test(std::ofstream &csv_file) {
     ff_vs_std_ss << std::fixed << std::setprecision(2) << ff_vs_std << "x";
     ff_vs_seq_ss << std::fixed << std::setprecision(2) << ff_vs_seq << "x";
 
-    std::cout << std::setw(w_impl) << "FastFlow" << std::setw(w_payload)
+    std::cout << std::setw(w_impl) << "Parallel" << std::setw(w_payload)
               << payload << std::setw(w_time) << std::fixed
               << std::setprecision(1) << ff_result.execution_time_ms
               << std::setw(w_speedup1) << ff_vs_std_ss.str()

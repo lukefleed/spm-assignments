@@ -163,7 +163,7 @@ std::vector<Record> generate_records(size_t n, size_t payload_size,
 // Implementation for the new namespaced function
 namespace utils {
 
-size_t get_optimal_ff_threads() {
+size_t get_optimal_parallel_threads() {
   // Get hardware concurrency, with a fallback.
   size_t hw_threads = std::thread::hardware_concurrency();
   if (hw_threads == 0) {

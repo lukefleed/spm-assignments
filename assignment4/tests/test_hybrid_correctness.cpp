@@ -1,6 +1,6 @@
 /**
  * @file test_hybrid_correctness.cpp
- * @brief Correctness testing for hybrid MPI+FastFlow mergesort
+ * @brief Correctness testing for hybrid MPI+parallel mergesort
  */
 
 #include "../src/common/record.hpp"
@@ -22,7 +22,7 @@ struct TestCase {
   size_t data_size;
   size_t payload_size;
   DataPattern pattern;
-  size_t ff_threads;
+  size_t parallel_threads;
   std::string description;
 };
 
@@ -57,7 +57,7 @@ int main(int argc, char *argv[]) {
   MPI_Comm_size(MPI_COMM_WORLD, &size);
 
   if (rank == 0) {
-    std::cout << "\nHybrid MPI+FastFlow Mergesort Correctness Tests\n";
+    std::cout << "\nHybrid MPI+Parallel Mergesort Correctness Tests\n";
     std::cout << "===============================================\n";
     std::cout << "Running with " << size << " MPI processes\n\n";
   }
@@ -79,7 +79,7 @@ int main(int argc, char *argv[]) {
     if (rank == 0) {
       std::cout << "Testing " << test.description << " (size=" << test.data_size
                 << ", payload=" << test.payload_size
-                << ", threads=" << test.ff_threads << ")... ";
+                << ", threads=" << test.parallel_threads << ")... ";
       std::cout.flush();
     }
 
@@ -100,7 +100,7 @@ int main(int argc, char *argv[]) {
 
       // Run hybrid sort using the same class as multi_node_main
       hybrid::HybridConfig config;
-      config.ff_threads = test.ff_threads;
+      config.parallel_threads = test.parallel_threads;
       hybrid::HybridMergeSort sorter(config);
       auto result = sorter.sort(data, test.payload_size);
 

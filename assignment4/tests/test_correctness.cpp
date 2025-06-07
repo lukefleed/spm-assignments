@@ -8,9 +8,8 @@
 #include <set>
 #include <vector>
 
-// Forward declaration for FastFlow implementation
-void ff_pipeline_two_farms_mergesort(std::vector<Record> &data,
-                                     size_t num_threads);
+// Forward declaration for parallel implementation
+void parallel_mergesort(std::vector<Record> &data, size_t num_threads);
 
 /**
  * @brief Validates that the sorted array maintains all original keys
@@ -81,12 +80,12 @@ bool run_test_case(const TestCase &test) {
     return false;
   }
 
-  // Test FastFlow implementation
+  // Test parallel implementation
   auto ff_data = copy_records(original_data);
-  ff_pipeline_two_farms_mergesort(ff_data, test.threads);
+  parallel_mergesort(ff_data, test.threads);
 
   if (!validate_sort_correctness(ff_data, original_data)) {
-    std::cout << " FAILED (FastFlow)" << std::endl;
+    std::cout << " FAILED (Parallel)" << std::endl;
     return false;
   }
 

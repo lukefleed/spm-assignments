@@ -11,8 +11,10 @@ namespace {
 
 /**
  * @struct MergeTask
- * @brief Definisce un'operazione di sort o merge. Non possiede memoria,
- *        prevenendo l'overhead di allocazione durante l'esecuzione.
+ * @brief Task descriptor for sort and merge operations
+ *
+ * Lightweight task representation that does not own memory,
+ * preventing allocation overhead during execution.
  */
 struct MergeTask {
   Record *source;
@@ -24,7 +26,7 @@ struct MergeTask {
 
 /**
  * @class Emitter
- * @brief Emette task per una passata di sort o merge.
+ * @brief Task generator for sort and merge phases
  */
 class Emitter : public ff_node {
 public:
@@ -41,9 +43,8 @@ public:
     size_t mid = std::min(start + step_size, n);
     size_t end = std::min(start + 2 * step_size, n);
 
-    // Per la fase di sort iniziale (quando 'to' è nullo), il task definisce
-    // solo un segmento da ordinare in-place, identificato da start e end (che è
-    // uguale a mid).
+    // Initial sort phase: task defines a segment to be sorted in-place,
+    // identified by start and end (which equals mid).
     if (to == nullptr) {
       end = mid;
     }
@@ -64,7 +65,7 @@ private:
 
 /**
  * @class SortWorker
- * @brief Ordina una regione specificata di un buffer in-place.
+ * @brief Sorts a specified region of a buffer in-place
  */
 class SortWorker : public ff_node_t<MergeTask, void> {
 public:
@@ -77,8 +78,7 @@ public:
 
 /**
  * @class MergeWorker
- * @brief Fonde due sotto-regioni ordinate da un buffer sorgente a uno
- * destinazione.
+ * @brief Merges two sorted sub-regions from source to destination buffer
  */
 class MergeWorker : public ff_node_t<MergeTask, void> {
 public:
@@ -96,14 +96,17 @@ public:
 } // anonymous namespace
 
 /**
- * @brief Sorts a vector of Records using a highly performant and correct
- * parallel merge sort implementation based on synchronized merge passes.
- * @note The function name is kept for API compatibility. The implementation
- * does not use a pipeline of farms but a more robust sequence of synchronized
- * farms.
+ * @brief Parallel merge sort implementation using FastFlow framework
+ *
+ * Implements a multi-stage parallel merge sort algorithm with synchronized
+ * farm patterns. The algorithm divides the input into fixed-size chunks for
+ * initial sorting, followed by iterative parallel merge phases until the
+ * entire dataset is sorted.
+ *
+ * @param data Input vector of Record objects to sort in-place
+ * @param num_threads Number of worker threads for parallel execution
  */
-void ff_pipeline_two_farms_mergesort(std::vector<Record> &data,
-                                     const size_t num_threads) {
+void parallel_mergesort(std::vector<Record> &data, const size_t num_threads) {
   const size_t n = data.size();
   if (n <= 1)
     return;
@@ -115,7 +118,7 @@ void ff_pipeline_two_farms_mergesort(std::vector<Record> &data,
     return;
   }
 
-  // --- Fase 1: Sort Parallelo In-place dei Chunk Iniziali ---
+  // Phase 1: Parallel in-place sorting of initial chunks
   const size_t chunk_size =
       std::max(static_cast<size_t>(1024), n / (effective_threads * 4));
 
@@ -135,7 +138,7 @@ void ff_pipeline_two_farms_mergesort(std::vector<Record> &data,
     throw std::runtime_error("Initial sorting farm failed");
   }
 
-  // --- Fase 2: Merge Parallelo a Passate Sincronizzate ---
+  // Phase 2: Synchronized parallel merge passes
   std::vector<Record> aux_buffer(n);
   Record *from = data.data();
   Record *to = aux_buffer.data();
@@ -160,7 +163,7 @@ void ff_pipeline_two_farms_mergesort(std::vector<Record> &data,
     std::swap(from, to);
   }
 
-  // --- Fase 3: Spostamento Finale dei Dati Ordinati ---
+  // Phase 3: Final data movement to original buffer
   if (from != data.data()) {
     std::move(from, from + n, data.data());
   }

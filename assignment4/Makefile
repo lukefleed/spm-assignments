@@ -3,7 +3,7 @@ CXX = g++
 MPICXX = mpic++
 
 # Compiler and Linker Flags
-# Added -pthread for FastFlow, ensure other necessary flags are present
+# Added -pthread for parallel framework support
 # Common flags for all compilations
 COMMON_FLAGS = -std=c++17 -Wall -Wextra -O3 -I./include -I./fastflow -pthread
 # Specific CXXFLAGS for non-MPI compilation
@@ -11,7 +11,7 @@ CXXFLAGS = $(COMMON_FLAGS)
 # Specific MPICXXFLAGS for MPI compilation
 MPICXXFLAGS = $(COMMON_FLAGS)
 
-# Linker flags - ensure pthreads is linked for FastFlow
+# Linker flags - ensure pthreads is linked for parallel framework
 LDFLAGS = -pthread
 
 # Directories
@@ -32,7 +32,7 @@ SEQ_OBJ = $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(SEQ_SRC))
 HYBRID_SRC = $(wildcard $(SRC_DIR)/hybrid/*.cpp)
 HYBRID_OBJ = $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(HYBRID_SRC))
 
-# FastFlow Mergesort sources and objects (Added)
+# Parallel Mergesort sources and objects
 FF_SRC = $(wildcard $(SRC_DIR)/fastflow/*.cpp)
 FF_OBJ = $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(FF_SRC))
 
@@ -54,8 +54,12 @@ TARGET_CORRECT = $(BIN_DIR)/test_correctness
 TARGET_HYBRID_CORRECT = $(BIN_DIR)/test_hybrid_correctness
 TARGET_HYBRID_PERF = $(BIN_DIR)/test_hybrid_performance
 
+# Main executables
+TARGET_SINGLE_NODE = $(BIN_DIR)/single_node_main
+TARGET_MULTI_NODE = $(BIN_DIR)/multi_node_main
+
 # Default target
-all: $(TARGET_SEQ) $(TARGET_PERF) $(TARGET_CORRECT) $(TARGET_HYBRID_CORRECT) $(TARGET_HYBRID_PERF)
+all: $(TARGET_SEQ) $(TARGET_PERF) $(TARGET_CORRECT) $(TARGET_HYBRID_CORRECT) $(TARGET_HYBRID_PERF) $(TARGET_SINGLE_NODE) $(TARGET_MULTI_NODE)
 
 # Rule to create object files
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp | $(OBJ_DIR)
@@ -98,6 +102,14 @@ $(TARGET_HYBRID_CORRECT): $(OBJ_DIR) $(BIN_DIR) $(COMMON_OBJ) $(HYBRID_OBJ) $(FF
 $(TARGET_HYBRID_PERF): $(OBJ_DIR) $(BIN_DIR) $(COMMON_OBJ) $(HYBRID_OBJ) $(FF_OBJ) $(TEST_HYBRID_PERF_SRC)
 	$(MPICXX) $(MPICXXFLAGS) $(TEST_HYBRID_PERF_SRC) $(COMMON_OBJ) $(HYBRID_OBJ) $(FF_OBJ) -o $@ $(LDFLAGS)
 
+# Link single_node_main executable
+$(TARGET_SINGLE_NODE): $(OBJ_DIR) $(BIN_DIR) $(COMMON_OBJ) $(SEQ_OBJ) $(FF_OBJ) $(OBJ_DIR)/main/single_node_main.o
+	$(CXX) $(CXXFLAGS) $(OBJ_DIR)/main/single_node_main.o $(COMMON_OBJ) $(SEQ_OBJ) $(FF_OBJ) -o $@ $(LDFLAGS)
+
+# Link multi_node_main executable
+$(TARGET_MULTI_NODE): $(OBJ_DIR) $(BIN_DIR) $(COMMON_OBJ) $(SEQ_OBJ) $(HYBRID_OBJ) $(FF_OBJ) $(OBJ_DIR)/main/multi_node_main.o
+	$(MPICXX) $(MPICXXFLAGS) $(OBJ_DIR)/main/multi_node_main.o $(COMMON_OBJ) $(SEQ_OBJ) $(HYBRID_OBJ) $(FF_OBJ) -o $@ $(LDFLAGS)
+
 # Clean rule
 clean:
 	@echo "Cleaning up object and binary files..."
@@ -120,26 +132,30 @@ test_perf_single_node: $(TARGET_PERF)
 
 # Hybrid correctness test
 test_correctness_hybrid: $(TARGET_HYBRID_CORRECT)
-	@echo "Running hybrid MPI+FastFlow correctness tests..."
+	@echo "Running hybrid MPI+parallel correctness tests..."
 	mpirun --oversubscribe -np 2 $(TARGET_HYBRID_CORRECT)
 
 # Help target
 help:
 	@echo "Available targets:"
-	@echo "  all                          - Build all test executables"
+	@echo "  all                          - Build all test executables and main programs"
 	@echo "  clean                        - Remove all build artifacts"
 	@echo ""
-	@echo "Single Node Tests (FastFlow only):"
+	@echo "Main Programs:"
+	@echo "  $(TARGET_SINGLE_NODE)        - Single-node parallel mergesort application"
+	@echo "  $(TARGET_MULTI_NODE)         - Multi-node hybrid MPI+parallel mergesort application"
+	@echo ""
+	@echo "Single Node Tests (Parallel implementation):"
 	@echo "  test_correctness_single_node - Run correctness tests for single node"
 	@echo "  test_perf_single_node        - Run performance benchmarks for single node"
 	@echo ""
-	@echo "Hybrid Tests (MPI + FastFlow):"
-	@echo "  test_correctness_hybrid      - Run correctness tests for hybrid MPI+FastFlow"
-	@echo "  test_perf_hybrid             - Run hybrid MPI+FastFlow performance analysis"
+	@echo "Hybrid Tests (MPI + Parallel):"
+	@echo "  test_correctness_hybrid      - Run correctness tests for hybrid MPI+parallel"
+	@echo "  test_perf_hybrid             - Run hybrid MPI+parallel performance analysis"
 	@echo ""
 	@echo "Customizable variables for test_perf_hybrid:"
 	@echo "  MPI_NODES_LIST=\"1 2 4 8\"     - List of MPI process counts to test"
-	@echo "  FF_THREADS=4                 - Number of FastFlow threads per process"
+	@echo "  FF_THREADS=4                 - Number of parallel threads per process"
 	@echo "  RECORDS_SIZE_M=100           - Number of records in millions"
 	@echo "  PAYLOAD_SIZE_B=64            - Payload size in bytes"
 	@echo ""
@@ -161,15 +177,17 @@ test_perf_hybrid: $(TARGET_HYBRID_PERF)
 	@echo "=============================================================================="
 	@echo "           Scientific MPI Scaling Analysis - Hybrid MergeSort                 "
 	@echo "------------------------------------------------------------------------------"
-	@echo " Config: $(RECORDS_SIZE_M)M records, $(PAYLOAD_SIZE_B)B payload, $(FF_THREADS) FastFlow threads/process"
+	@echo " Config: $(RECORDS_SIZE_M)M records, $(PAYLOAD_SIZE_B)B payload, $(FF_THREADS) parallel threads/process"
 	@echo "=============================================================================="
 	@echo "MPI Procs   Time (ms)      Throughput (MRec/s)   Speedup      Efficiency (%)"
 	@echo "----------- -------------- ------------------- ------------ ---------------"
+	@rm -f hybrid_performance_results.csv # Remove existing CSV to ensure fresh start
 	@$(foreach N,$(MPI_NODES_LIST), \
-	    mpirun --oversubscribe -np $(N) $(TARGET_HYBRID_PERF) $(FF_THREADS) .baseline_time_hybrid_$(FF_THREADS).tmp; \
+	    mpirun --oversubscribe -np $(N) $(TARGET_HYBRID_PERF) $(FF_THREADS) .baseline_time_hybrid_$(FF_THREADS).tmp $(RECORDS_SIZE_M) $(PAYLOAD_SIZE_B) hybrid_performance_results.csv; \
 	)
 	@echo "------------------------------------------------------------------------------"
 	@echo " Analysis Complete. Note: Speedup and Efficiency are relative to 1 MPI process."
+	@echo " Results saved to: hybrid_performance_results.csv"
 	@echo "=============================================================================="
 	@rm -f .baseline_time_hybrid_$(FF_THREADS).tmp # Clean up the temporary baseline file
 

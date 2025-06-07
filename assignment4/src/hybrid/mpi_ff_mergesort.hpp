@@ -11,7 +11,7 @@
 namespace hybrid {
 
 struct HybridConfig {
-  size_t ff_threads{0};
+  size_t parallel_threads{0};
   size_t min_local_threshold{10000};
 };
 

@@ -7,9 +7,8 @@
 #include <iostream>
 #include <set>
 
-// Forward declaration for the FastFlow implementation
-void ff_pipeline_two_farms_mergesort(std::vector<Record> &data,
-                                     size_t num_threads);
+// Forward declaration for the parallel implementation
+void parallel_mergesort(std::vector<Record> &data, size_t num_threads);
 
 /**
  * @brief Validates the result of a sort operation.
@@ -126,11 +125,11 @@ int main(int argc, char *argv[]) {
               << std::setw(15) << (valid ? "✓" : "✗") << "\n";
   }
 
-  // Test FastFlow pipeline with two farms
+  // Test parallel pipeline with two farms
   {
     auto data = copy_records(original_data);
     Timer t;
-    ff_pipeline_two_farms_mergesort(data, config.num_threads);
+    parallel_mergesort(data, config.num_threads);
     double ms = t.elapsed_ms();
 
     bool valid = config.validate ? validate_result(data, original_data) : true;
