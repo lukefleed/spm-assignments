@@ -13,9 +13,9 @@
 # Modify these values before running on cluster with vim
 
 # Performance test parameters
-FF_THREADS=12       # FastFlow threads per MPI process
-RECORDS_SIZE_M=5    # Array size in millions of records (5M = ~320MB per process)
-PAYLOAD_SIZE_B=64   # Payload size in bytes
+FF_THREADS=8       # FastFlow threads per MPI process
+RECORDS_SIZE_M=100    # Array size in millions of records (5M = ~320MB per process)
+PAYLOAD_SIZE_B=8  # Payload size in bytes
 
 # Output file
 CSV_FILENAME="hybrid_performance_results.csv"
