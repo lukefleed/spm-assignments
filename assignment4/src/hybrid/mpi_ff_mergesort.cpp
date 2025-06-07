@@ -9,6 +9,7 @@
 #include <thread>
 #include <vector>
 
+// External function from FastFlow implementation
 void parallel_mergesort(std::vector<Record> &data, size_t num_threads);
 
 namespace hybrid {
@@ -51,8 +52,7 @@ std::vector<Record> HybridMergeSort::sort(std::vector<Record> &data,
   metrics_.total_time = total_timer.elapsed_ms();
   metrics_.local_elements = (mpi_rank_ == 0) ? local_data.size() : 0;
 
-  return local_data; // Only rank 0 has the final data, others have an empty
-                     // vector
+  return local_data;
 }
 
 void HybridMergeSort::distribute_data(std::vector<Record> &local_data,
@@ -63,37 +63,95 @@ void HybridMergeSort::distribute_data(std::vector<Record> &local_data,
   if (total_num_records == 0)
     return;
 
-  const size_t record_byte_size = sizeof(unsigned long) + payload_size_;
-  std::vector<int> send_counts_bytes(mpi_size_);
-  std::vector<int> displs_bytes(mpi_size_);
+  // Calculate distribution
+  std::vector<int> send_counts(mpi_size_);
+  std::vector<int> displs(mpi_size_);
 
-  size_t offset_bytes = 0;
+  size_t base_count = total_num_records / mpi_size_;
+  size_t remainder = total_num_records % mpi_size_;
+
   for (int i = 0; i < mpi_size_; ++i) {
-    size_t num_records_for_rank =
-        total_num_records / mpi_size_ +
-        (i < static_cast<int>(total_num_records % mpi_size_) ? 1 : 0);
-    send_counts_bytes[i] = num_records_for_rank * record_byte_size;
-    displs_bytes[i] = offset_bytes;
-    offset_bytes += send_counts_bytes[i];
+    send_counts[i] = base_count + (i < static_cast<int>(remainder) ? 1 : 0);
+    displs[i] = (i == 0) ? 0 : displs[i - 1] + send_counts[i - 1];
   }
 
-  std::vector<char> send_buffer;
-  if (mpi_rank_ == 0) {
-    send_buffer = pack_records(global_data, record_byte_size);
+  // Pre-allocate and construct records
+  local_data.clear();
+  local_data.reserve(send_counts[mpi_rank_]);
+  for (int i = 0; i < send_counts[mpi_rank_]; ++i) {
+    local_data.emplace_back(payload_size_);
   }
 
-  std::vector<char> recv_buffer(send_counts_bytes[mpi_rank_]);
-  MPI_Scatterv(send_buffer.data(), send_counts_bytes.data(),
-               displs_bytes.data(), MPI_BYTE, recv_buffer.data(),
-               recv_buffer.size(), MPI_BYTE, 0, MPI_COMM_WORLD);
+  if (payload_size_ == 0) {
+    // Optimize for zero payload - just scatter keys
+    std::vector<unsigned long> keys;
+    if (mpi_rank_ == 0) {
+      keys.reserve(global_data.size());
+      for (const auto &rec : global_data) {
+        keys.push_back(rec.key);
+      }
+    }
 
-  local_data = unpack_records(recv_buffer, payload_size_, record_byte_size);
-  metrics_.bytes_communicated += recv_buffer.size();
+    std::vector<unsigned long> local_keys(send_counts[mpi_rank_]);
+    MPI_Scatterv(keys.data(), send_counts.data(), displs.data(),
+                 MPI_UNSIGNED_LONG, local_keys.data(), send_counts[mpi_rank_],
+                 MPI_UNSIGNED_LONG, 0, MPI_COMM_WORLD);
+
+    for (size_t i = 0; i < local_keys.size(); ++i) {
+      local_data[i].key = local_keys[i];
+    }
+  } else {
+    // For non-zero payload, use single buffer approach
+    const size_t record_byte_size = sizeof(unsigned long) + payload_size_;
+    std::vector<int> send_counts_bytes(mpi_size_);
+    std::vector<int> displs_bytes(mpi_size_);
+
+    for (int i = 0; i < mpi_size_; ++i) {
+      send_counts_bytes[i] = send_counts[i] * record_byte_size;
+      displs_bytes[i] = displs[i] * record_byte_size;
+    }
+
+    // Pack only once on root
+    std::vector<char> send_buffer;
+    if (mpi_rank_ == 0) {
+      send_buffer.resize(total_num_records * record_byte_size);
+      char *ptr = send_buffer.data();
+      for (const auto &rec : global_data) {
+        memcpy(ptr, &rec.key, sizeof(unsigned long));
+        ptr += sizeof(unsigned long);
+        if (rec.payload && rec.payload_size > 0) {
+          memcpy(ptr, rec.payload, rec.payload_size);
+        }
+        ptr += rec.payload_size;
+      }
+    }
+
+    std::vector<char> recv_buffer(send_counts_bytes[mpi_rank_]);
+    MPI_Scatterv(send_buffer.data(), send_counts_bytes.data(),
+                 displs_bytes.data(), MPI_BYTE, recv_buffer.data(),
+                 recv_buffer.size(), MPI_BYTE, 0, MPI_COMM_WORLD);
+
+    // Unpack directly into pre-allocated local_data
+    const char *ptr = recv_buffer.data();
+    for (int i = 0; i < send_counts[mpi_rank_]; ++i) {
+      memcpy(&local_data[i].key, ptr, sizeof(unsigned long));
+      ptr += sizeof(unsigned long);
+      if (payload_size_ > 0) {
+        memcpy(local_data[i].payload, ptr, payload_size_);
+      }
+      ptr += payload_size_;
+    }
+  }
+
+  metrics_.bytes_communicated +=
+      send_counts[mpi_rank_] * (sizeof(unsigned long) + payload_size_);
 }
 
 void HybridMergeSort::sort_local_data(std::vector<Record> &data) {
   if (data.empty())
     return;
+
+  // Use existing parallel_mergesort implementation
   if (data.size() >= config_.min_local_threshold &&
       config_.parallel_threads > 1) {
     parallel_mergesort(data, config_.parallel_threads);
@@ -103,80 +161,124 @@ void HybridMergeSort::sort_local_data(std::vector<Record> &data) {
 }
 
 void HybridMergeSort::hierarchical_merge(std::vector<Record> &local_data) {
-  MPI_Comm active_comm = MPI_COMM_WORLD;
-  int current_rank = mpi_rank_;
-  int current_size = mpi_size_;
+  // Use binary tree reduction instead of comm splitting
+  for (int step = 1; step < mpi_size_; step *= 2) {
+    if ((mpi_rank_ % (2 * step)) == 0) {
+      int source = mpi_rank_ + step;
+      if (source < mpi_size_) {
+        // Receive size first
+        size_t incoming_size;
+        MPI_Recv(&incoming_size, 1, MPI_UNSIGNED_LONG, source, 0,
+                 MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
-  while (current_size > 1) {
-    int partner = -1;
-    bool is_receiver = false;
+        if (incoming_size > 0) {
+          // Pre-allocate partner data with proper construction
+          std::vector<Record> partner_data;
+          partner_data.reserve(incoming_size);
+          for (size_t i = 0; i < incoming_size; ++i) {
+            partner_data.emplace_back(payload_size_);
+          }
 
-    if ((current_rank % 2) == 0) {
-      partner = current_rank + 1;
-      if (partner < current_size)
-        is_receiver = true;
-    } else {
-      partner = current_rank - 1;
-    }
+          if (payload_size_ == 0) {
+            // Optimize for zero payload
+            std::vector<unsigned long> keys(incoming_size);
+            MPI_Recv(keys.data(), incoming_size, MPI_UNSIGNED_LONG, source, 1,
+                     MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
-    if (partner != -1 && partner < current_size) {
-      local_data =
-          merge_with_partner(local_data, partner, is_receiver, active_comm);
-    }
+            for (size_t i = 0; i < incoming_size; ++i) {
+              partner_data[i].key = keys[i];
+            }
+          } else {
+            // Use contiguous buffer for better MPI performance
+            const size_t record_bytes = sizeof(unsigned long) + payload_size_;
+            std::vector<char> buffer(incoming_size * record_bytes);
 
-    int color =
-        ((current_rank % 2 == 0) && (partner < current_size || partner == -1))
-            ? 0
-            : MPI_UNDEFINED;
+            MPI_Recv(buffer.data(), buffer.size(), MPI_BYTE, source, 1,
+                     MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
-    MPI_Comm next_comm;
-    MPI_Comm_split(active_comm, color, current_rank, &next_comm);
+            // Unpack
+            const char *ptr = buffer.data();
+            for (size_t i = 0; i < incoming_size; ++i) {
+              memcpy(&partner_data[i].key, ptr, sizeof(unsigned long));
+              ptr += sizeof(unsigned long);
+              if (payload_size_ > 0) {
+                memcpy(partner_data[i].payload, ptr, payload_size_);
+              }
+              ptr += payload_size_;
+            }
+          }
 
-    if (active_comm != MPI_COMM_WORLD)
-      MPI_Comm_free(&active_comm);
-    active_comm = next_comm;
+          // Merge using move semantics
+          if (local_data.empty()) {
+            local_data = std::move(partner_data);
+          } else {
+            std::vector<Record> merged;
+            merged.reserve(local_data.size() + partner_data.size());
 
-    if (active_comm == MPI_COMM_NULL)
+            // Manual merge with move semantics
+            size_t i = 0, j = 0;
+            while (i < local_data.size() && j < partner_data.size()) {
+              if (local_data[i] < partner_data[j]) {
+                merged.push_back(std::move(local_data[i++]));
+              } else {
+                merged.push_back(std::move(partner_data[j++]));
+              }
+            }
+
+            // Move remaining elements
+            while (i < local_data.size()) {
+              merged.push_back(std::move(local_data[i++]));
+            }
+            while (j < partner_data.size()) {
+              merged.push_back(std::move(partner_data[j++]));
+            }
+
+            local_data = std::move(merged);
+          }
+
+          metrics_.bytes_communicated +=
+              incoming_size * (sizeof(unsigned long) + payload_size_);
+        }
+      }
+    } else if ((mpi_rank_ % (2 * step)) == step) {
+      int target = mpi_rank_ - step;
+
+      // Send size first
+      size_t size = local_data.size();
+      MPI_Send(&size, 1, MPI_UNSIGNED_LONG, target, 0, MPI_COMM_WORLD);
+
+      if (size > 0) {
+        if (payload_size_ == 0) {
+          // Optimize for zero payload
+          std::vector<unsigned long> keys(size);
+          for (size_t i = 0; i < size; ++i) {
+            keys[i] = local_data[i].key;
+          }
+          MPI_Send(keys.data(), size, MPI_UNSIGNED_LONG, target, 1,
+                   MPI_COMM_WORLD);
+        } else {
+          // Pack once and send
+          const size_t record_bytes = sizeof(unsigned long) + payload_size_;
+          std::vector<char> buffer(size * record_bytes);
+          char *ptr = buffer.data();
+
+          for (const auto &rec : local_data) {
+            memcpy(ptr, &rec.key, sizeof(unsigned long));
+            ptr += sizeof(unsigned long);
+            if (rec.payload && rec.payload_size > 0) {
+              memcpy(ptr, rec.payload, rec.payload_size);
+            }
+            ptr += rec.payload_size;
+          }
+
+          MPI_Send(buffer.data(), buffer.size(), MPI_BYTE, target, 1,
+                   MPI_COMM_WORLD);
+        }
+      }
+
+      local_data.clear();
       break;
-
-    MPI_Comm_rank(active_comm, &current_rank);
-    MPI_Comm_size(active_comm, &current_size);
-  }
-  if (active_comm != MPI_COMM_WORLD && active_comm != MPI_COMM_NULL) {
-    MPI_Comm_free(&active_comm);
-  }
-}
-
-std::vector<Record>
-HybridMergeSort::merge_with_partner(std::vector<Record> &local_data,
-                                    int partner_rank, bool is_receiver,
-                                    MPI_Comm comm) {
-  const size_t record_byte_size = sizeof(unsigned long) + payload_size_;
-  if (is_receiver) {
-    size_t partner_byte_size = 0;
-    MPI_Recv(&partner_byte_size, 1, MPI_UNSIGNED_LONG, partner_rank, 0, comm,
-             MPI_STATUS_IGNORE);
-    if (partner_byte_size == 0)
-      return std::move(local_data);
-
-    std::vector<char> partner_buffer(partner_byte_size);
-    MPI_Recv(partner_buffer.data(), partner_buffer.size(), MPI_BYTE,
-             partner_rank, 1, comm, MPI_STATUS_IGNORE);
-
-    metrics_.bytes_communicated += partner_buffer.size();
-
-    std::vector<Record> partner_data =
-        unpack_records(partner_buffer, payload_size_, record_byte_size);
-    return merge_sorted_vectors(local_data, partner_data);
-  } else {
-    std::vector<char> send_buffer = pack_records(local_data, record_byte_size);
-    size_t local_byte_size = send_buffer.size();
-    MPI_Send(&local_byte_size, 1, MPI_UNSIGNED_LONG, partner_rank, 0, comm);
-    if (local_byte_size > 0) {
-      MPI_Send(send_buffer.data(), send_buffer.size(), MPI_BYTE, partner_rank,
-               1, comm);
     }
-    return {};
   }
 }
 
@@ -188,66 +290,6 @@ void HybridMergeSort::update_metrics(const std::string &phase,
     metrics_.merge_time = elapsed_time;
   else if (phase == "distribution")
     metrics_.communication_time = elapsed_time;
-}
-
-std::vector<char>
-HybridMergeSort::pack_records(const std::vector<Record> &records,
-                              size_t record_byte_size) {
-  std::vector<char> buffer(records.size() * record_byte_size);
-  char *current = buffer.data();
-  for (const auto &rec : records) {
-    memcpy(current, &rec.key, sizeof(unsigned long));
-    current += sizeof(unsigned long);
-    if (rec.payload_size > 0 && rec.payload != nullptr) {
-      memcpy(current, rec.payload, rec.payload_size);
-    }
-    current += rec.payload_size;
-  }
-  return buffer;
-}
-
-std::vector<Record>
-HybridMergeSort::unpack_records(const std::vector<char> &buffer,
-                                size_t payload_size, size_t record_byte_size) {
-  if (buffer.empty())
-    return {};
-  size_t num_records = buffer.size() / record_byte_size;
-  std::vector<Record> records;
-  records.reserve(num_records);
-  const char *current = buffer.data();
-  for (size_t i = 0; i < num_records; ++i) {
-    Record rec(payload_size);
-    memcpy(&rec.key, current, sizeof(unsigned long));
-    current += sizeof(unsigned long);
-    if (payload_size > 0) {
-      memcpy(rec.payload, current, payload_size);
-    }
-    current += payload_size;
-    records.push_back(std::move(rec));
-  }
-  return records;
-}
-
-std::vector<Record>
-HybridMergeSort::merge_sorted_vectors(std::vector<Record> &left,
-                                      std::vector<Record> &right) {
-  std::vector<Record> result;
-  result.reserve(left.size() + right.size());
-
-  size_t i = 0, j = 0;
-  while (i < left.size() && j < right.size()) {
-    if (left[i] < right[j]) {
-      result.push_back(std::move(left[i++]));
-    } else {
-      result.push_back(std::move(right[j++]));
-    }
-  }
-  while (i < left.size())
-    result.push_back(std::move(left[i++]));
-  while (j < right.size())
-    result.push_back(std::move(right[j++]));
-
-  return result;
 }
 
 } // namespace hybrid
