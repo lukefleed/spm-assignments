@@ -1,0 +1,4 @@
+Test_Name,Data_Size,Payload_Size,MPI_Processes,Parallel_Threads,Total_Time_ms,Throughput_MRec_per_sec,Parallel_Speedup,MPI_Efficiency_Percent,Total_Efficiency_Percent
+Parallel_Baseline,1000000,16,1,8,107.758,9.28008,1,100,100
+Parallel_Baseline,1000000,16,1,8,113.455,8.81409,1,100,100
+Parallel_Baseline,1000000,16,1,10,105.54,9.47505,1,100,100
