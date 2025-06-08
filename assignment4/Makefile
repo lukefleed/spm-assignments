@@ -160,9 +160,12 @@ test_correctness_hybrid: $(TARGET_HYBRID_CORRECT)
 	@echo "Running hybrid MPI+parallel correctness tests..."
 	mpirun --oversubscribe -np 2 $(TARGET_HYBRID_CORRECT)
 
-# Help target
+# Help target with enhanced information
 help:
-	@echo "Available targets:"
+	@echo "Hybrid MPI+Parallel Mergesort Build System"
+	@echo "==========================================="
+	@echo ""
+	@echo "Build Targets:"
 	@echo "  all                          - Build all test executables and main programs"
 	@echo "  clean                        - Remove all build artifacts"
 	@echo ""
@@ -170,61 +173,66 @@ help:
 	@echo "  $(TARGET_SINGLE_NODE)        - Single-node parallel mergesort application"
 	@echo "  $(TARGET_MULTI_NODE)         - Multi-node hybrid MPI+parallel mergesort application"
 	@echo ""
-	@echo "Single Node Tests (Parallel implementation):"
-	@echo "  test_correctness_single_node - Run correctness tests for single node"
-	@echo "  test_perf_single_node        - Configurable single node performance test"
+	@echo "Testing Targets:"
+	@echo "  test_correctness_single_node - Verify single-node implementation correctness"
+	@echo "  test_correctness_hybrid      - Verify hybrid MPI+parallel correctness"
+	@echo "  test_perf_single_node        - Single-node performance analysis"
+	@echo "  test_perf_hybrid             - Dual-baseline hybrid performance analysis"
 	@echo ""
-	@echo "Customizable variables for test_perf_single_node:"
-	@echo "  THREAD_LIST=\"2 4 8 12\"       - List of thread counts to test (default: 2,4,6...up to nproc)"
-	@echo "  ARRAY_SIZE_M=10              - Array size in millions of records"
-	@echo "  PAYLOAD_SIZE_B=64            - Payload size in bytes"
-	@echo "  EXTRA_FLAGS=                 - Optional: --size-scaling --payload-scaling"
+	@echo "Hybrid Performance Test Configuration:"
+	@echo "  MPI_NODES_LIST=\"1 2 4 8\"     - MPI process counts to test"
+	@echo "  FF_THREADS=4                 - FastFlow threads per MPI process"
+	@echo "  RECORDS_SIZE_M=10            - Dataset size in millions of records"
+	@echo "  PAYLOAD_SIZE_B=64            - Record payload size in bytes"
+	@echo "  HYBRID_CSV_FILE=results.csv  - Output CSV file for detailed analysis"
 	@echo ""
-	@echo "Hybrid Tests (MPI + Parallel):"
-	@echo "  test_correctness_hybrid      - Run correctness tests for hybrid MPI+parallel"
-	@echo "  test_perf_hybrid             - Run hybrid MPI+parallel performance analysis"
-	@echo ""
-	@echo "Customizable variables for test_perf_hybrid:"
-	@echo "  MPI_NODES_LIST=\"1 2 4 8\"     - List of MPI process counts to test"
-	@echo "  FF_THREADS=4                 - Number of parallel threads per process"
-	@echo "  RECORDS_SIZE_M=100           - Number of records in millions"
-	@echo "  PAYLOAD_SIZE_B=64            - Payload size in bytes"
-	@echo ""
-	@echo "Examples:"
-	@echo "  make test_perf_hybrid MPI_NODES_LIST=\"1 2 3 4\" FF_THREADS=8"
-	@echo "  make test_perf_hybrid FF_THREADS=2"
-	@echo "  make test_perf_single_node THREAD_LIST=\"1 2 4 8 12\" ARRAY_SIZE_M=10 PAYLOAD_SIZE_B=64"
-	@echo "  make test_perf_single_node EXTRA_FLAGS=\"--size-scaling --payload-scaling\""
-	@echo "  make help"
+	@echo "Example Usage:"
+	@echo "  make test_perf_hybrid MPI_NODES_LIST=\"1 2 4\" FF_THREADS=8"
+	@echo "  make test_perf_hybrid RECORDS_SIZE_M=50 PAYLOAD_SIZE_B=128"
 
-# Default values for MPI nodes and FF threads for test_perf_hybrid
+# Hybrid MPI+Parallel performance test with dual baseline analysis
 MPI_NODES_LIST ?= 1 2 4 8
 FF_THREADS ?= 4
 RECORDS_SIZE_M ?= 10
 PAYLOAD_SIZE_B ?= 64
+HYBRID_CSV_FILE ?= hybrid_performance_results.csv
 
-# Target to run hybrid performance tests with specified MPI nodes and FF threads
-# This target will now manage the header and footer for the output table.
-# Ensure the target executable is built before running.
+# Hybrid MPI+Parallel performance test with dual baseline analysis
 test_perf_hybrid: $(TARGET_HYBRID_PERF)
 	@echo "=============================================================================="
-	@echo "                      MPI Scaling Analysis - Hybrid MergeSort                 "
+	@echo "                 Hybrid MPI+Parallel Performance Test                        "
 	@echo "------------------------------------------------------------------------------"
-	@echo " Config: $(RECORDS_SIZE_M)M records, $(PAYLOAD_SIZE_B)B payload, $(FF_THREADS) parallel threads/process"
+	@echo " Config: $(RECORDS_SIZE_M)M records, $(PAYLOAD_SIZE_B)B payload, $(FF_THREADS) FF threads/process"
+	@echo " MPI Processes: $(MPI_NODES_LIST)"
+	@echo " Analysis: Dual baseline (sequential + single-node parallel)"
+	@echo " Output: $(HYBRID_CSV_FILE)"
 	@echo "=============================================================================="
-	@echo "MPI Procs   Time (ms)      Throughput (MRec/s)   Speedup      Efficiency (%)"
-	@echo "----------- -------------- ------------------- ------------ ---------------"
-	@rm -f hybrid_performance_results.csv # Remove existing CSV to ensure fresh start
-	@$(foreach N,$(MPI_NODES_LIST), \
-	    mpirun --oversubscribe -np $(N) $(TARGET_HYBRID_PERF) $(FF_THREADS) $(RECORDS_SIZE_M) $(PAYLOAD_SIZE_B) hybrid_performance_results.csv --quiet; \
-	)
-	@echo "------------------------------------------------------------------------------"
-	@echo " Analysis Complete. Note: Speedup and Efficiency are relative to 1 MPI process."
-	@echo " Results saved to: hybrid_performance_results.csv"
+	@# Run baseline establishment first (sequential + single-node parallel)
+	@mpirun --oversubscribe -np 1 $(TARGET_HYBRID_PERF) $(FF_THREADS) $(RECORDS_SIZE_M) $(PAYLOAD_SIZE_B) $(HYBRID_CSV_FILE) --quiet
+	@echo ""
+	@echo "Running MPI scaling analysis..."
+	@echo ""
+	@echo "MPI Procs       Time (ms)Throughput (MRec/s) Seq Speedup Par Speedup    MPI Eff (%)  Total Eff (%)"
+	@echo "--------------------------------------------------------------------------------------------------"
+	@for nodes in $(MPI_NODES_LIST); do \
+		if [ $$nodes -gt 1 ]; then \
+			mpirun --oversubscribe -np $$nodes $(TARGET_HYBRID_PERF) $(FF_THREADS) $(RECORDS_SIZE_M) $(PAYLOAD_SIZE_B) $(HYBRID_CSV_FILE) --quiet --skip-baselines; \
+		fi; \
+	done
 	@echo "=============================================================================="
-	@rm -f .baseline_time_hybrid_$(FF_THREADS).tmp # Clean up the temporary baseline file
 
-# Example of how to run with different parameters:
-# make test_perf_hybrid MPI_NODES_LIST="1 2 3" FF_THREADS=2
-# make test_perf_hybrid FF_THREADS=8
-# make test_perf_hybrid MPI_NODES_LIST="1"
+# Performance analysis targets for different scenarios
+.PHONY: test_perf_hybrid_scaling test_perf_hybrid_threads
+
+# MPI scaling test with fixed thread count
+test_perf_hybrid_scaling: $(TARGET_HYBRID_PERF)
+	@echo "=== MPI Scaling Analysis (Fixed $(FF_THREADS) threads/process) ==="
+	@make test_perf_hybrid MPI_NODES_LIST="1 2 4 8 16" FF_THREADS=$(FF_THREADS)
+
+# Thread scaling test with single MPI process
+test_perf_hybrid_threads: $(TARGET_HYBRID_PERF)
+	@echo "=== Thread Scaling Analysis (Single MPI process) ==="
+	@for threads in 1 2 4 8 12 16; do \
+		echo "Testing $$threads threads..."; \
+		mpirun --oversubscribe -np 1 $(TARGET_HYBRID_PERF) $$threads $(RECORDS_SIZE_M) $(PAYLOAD_SIZE_B) thread_scaling_$(HYBRID_CSV_FILE) --quiet; \
+	done

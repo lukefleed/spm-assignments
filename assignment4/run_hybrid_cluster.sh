@@ -1,11 +1,13 @@
 #!/bin/bash
 
 ## @file run_hybrid_cluster.sh
-## @brief SLURM script for hybrid MPI+FastFlow performance testing on cluster
-## @details Follows strict cluster guidelines: one run per job, max 5min wall-time
+## @brief SLURM script for hybrid MPI+FastFlow performance testing with dual baseline analysis
+## @details Performance analysis with sequential and parallel baselines.
+##          Cluster constraints: one run per job, max 5min wall-time.
+##          Speedup metrics: vs sequential std::sort and vs single-node parallel.
 ## @usage ./run_hybrid_cluster.sh <nodes>
-## @example ./run_hybrid_cluster.sh 1    # baseline
-## @example ./run_hybrid_cluster.sh 2    # test with 2 nodes
+## @example ./run_hybrid_cluster.sh 1    # baseline establishment
+## @example ./run_hybrid_cluster.sh 2    # MPI scaling test
 
 # ============================================================================
 #                          CONFIGURATION PARAMETERS
@@ -27,10 +29,12 @@ if [ $# -ne 1 ]; then
     echo "Usage: $0 <nodes>"
     echo ""
     echo "Examples:"
-    echo "  $0 1    # Baseline measurement (1 MPI process on 1 node)"
-    echo "  $0 2    # Scaling test (2 MPI processes on 2 nodes)"
-    echo "  $0 4    # Scaling test (4 MPI processes on 4 nodes)"
-    echo "  $0 8    # Scaling test (8 MPI processes on 8 nodes)"
+    echo "  $0 1    # Dual baseline measurement (sequential + single-node parallel)"
+    echo "  $0 2    # MPI scaling test (2 processes)"
+    echo "  $0 4    # MPI scaling test (4 processes)"
+    echo "  $0 8    # MPI scaling test (8 processes)"
+    echo ""
+    echo "Analysis: Sequential speedup, parallel speedup, MPI efficiency, total efficiency"
     echo ""
     echo "Professor's guidelines: Run ONE test per job, queue jobs one at a time"
     exit 1
@@ -44,15 +48,15 @@ if ! [[ "$NODES" =~ ^[0-9]+$ ]] || [ "$NODES" -lt 1 ]; then
     exit 1
 fi
 
-echo "==================================================================="
-echo "         Hybrid MPI+FastFlow Performance Test Configuration        "
-echo "==================================================================="
+echo "======================================================================================================"
+echo "               Hybrid MPI+FastFlow Performance Test Configuration                                   "
+echo "======================================================================================================"
 echo "Nodes:          ${NODES}"
 echo "FF Threads:     ${FF_THREADS}"
 echo "Array Size:     ${RECORDS_SIZE_M}M records"
 echo "Payload Size:   ${PAYLOAD_SIZE_B}B"
 echo "CSV Output:     ${CSV_FILENAME}"
-echo "==================================================================="
+echo "======================================================================================================"
 echo "Started at: $(date)"
 
 # Configure FastFlow on the required nodes before running the actual test
@@ -71,21 +75,22 @@ if [ -f "${CSV_FILENAME}" ]; then
     FILE_EXISTS=true
 fi
 
-# Print test header only if starting fresh or if this is first run
+# Print comprehensive test header with dual baseline analysis
 if [ "$FILE_EXISTS" = false ]; then
-    echo "=============================================================================="
-    echo "           Scientific MPI Scaling Analysis - Hybrid MergeSort                 "
-    echo "------------------------------------------------------------------------------"
-    echo " Config: ${RECORDS_SIZE_M}M records, ${PAYLOAD_SIZE_B}B payload, ${FF_THREADS} parallel threads/process"
-    echo "=============================================================================="
-    echo "MPI Procs   Time (ms)      Throughput (MRec/s)   Speedup      Efficiency (%)"
-    echo "----------- -------------- ------------------- ------------ ---------------"
+    echo "======================================================================================================"
+    echo "                    Hybrid MPI+FastFlow Performance Analysis                                        "
+    echo "------------------------------------------------------------------------------------------------------"
+    echo " Config: ${RECORDS_SIZE_M}M records, ${PAYLOAD_SIZE_B}B payload, ${FF_THREADS} FF threads/process"
+    echo " Analysis: Dual baseline comparison with MPI scaling"
+    echo "======================================================================================================"
+    echo "MPI Procs   Time (ms)      Throughput (MRec/s)   Seq Speedup  Par Speedup  MPI Eff (%)  Total Eff (%)"
+    echo "----------- -------------- ------------------- ------------ ------------ ------------- --------------"
 fi
 
-# Run single test based on nodes parameter
+# Run single test based on nodes parameter with enhanced baseline analysis
 if [ ${NODES} -eq 1 ]; then
-    # Baseline measurement with 1 MPI process
-    echo "=== Running baseline: 1 MPI process on 1 node ==="
+    # Baseline measurements with comprehensive analysis
+    echo "=== Running dual baseline analysis: Sequential + Single-node Parallel ==="
     srun --ntasks=1 \
          --nodes=1 \
          --cpus-per-task=${FF_THREADS} \
@@ -93,24 +98,30 @@ if [ ${NODES} -eq 1 ]; then
          --mpi=pmix \
          bin/test_hybrid_performance ${FF_THREADS} ${RECORDS_SIZE_M} ${PAYLOAD_SIZE_B} ${CSV_FILENAME} --quiet
 else
-    # Scaling test with specified number of nodes
-    echo "=== Running scaling test: ${NODES} MPI processes on ${NODES} nodes ==="
+    # Scaling test with dual speedup analysis
+    echo "=== Running MPI scaling test: ${NODES} processes with dual baseline comparison ==="
     srun --nodes=${NODES} \
          --ntasks=${NODES} \
          --ntasks-per-node=1 \
          --time=00:05:00 \
          --mpi=pmix \
-         bin/test_hybrid_performance ${FF_THREADS} ${RECORDS_SIZE_M} ${PAYLOAD_SIZE_B} ${CSV_FILENAME} --quiet
+         bin/test_hybrid_performance ${FF_THREADS} ${RECORDS_SIZE_M} ${PAYLOAD_SIZE_B} ${CSV_FILENAME} --quiet --skip-baselines
 fi
 
 echo ""
-echo "------------------------------------------------------------------------------"
-echo " Test completed for ${NODES} nodes. Results appended to: ${CSV_FILENAME}"
-echo " To run full scaling analysis, execute:"
-echo "   ./run_hybrid_cluster.sh 1    # baseline"
-echo "   ./run_hybrid_cluster.sh 2    # 2 nodes"
-echo "   ./run_hybrid_cluster.sh 4    # 4 nodes"
-echo "   ./run_hybrid_cluster.sh 8    # 8 nodes"
+echo "------------------------------------------------------------------------------------------------------"
+echo " Analysis completed for ${NODES} nodes. Results with dual speedup metrics saved to: ${CSV_FILENAME}"
+echo " Metrics explanation:"
+echo "   • Seq Speedup: Performance vs pure sequential std::sort baseline"
+echo "   • Par Speedup: Performance vs single-node parallel (1 MPI + ${FF_THREADS} FF threads)"
+echo "   • MPI Eff (%): MPI scaling efficiency (Par Speedup / MPI Processes)"
+echo "   • Total Eff (%): Overall parallel efficiency (Seq Speedup / Total Threads)"
+echo ""
+echo " To run complete scaling analysis:"
+echo "   ./run_hybrid_cluster.sh 1    # establish dual baselines"
+echo "   ./run_hybrid_cluster.sh 2    # 2-node MPI scaling"
+echo "   ./run_hybrid_cluster.sh 4    # 4-node MPI scaling"
+echo "   ./run_hybrid_cluster.sh 8    # 8-node MPI scaling"
 
 echo "Completed at: $(date)"
-echo "==================================================================="
+echo "======================================================================================================"
