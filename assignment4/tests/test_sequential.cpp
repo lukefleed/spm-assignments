@@ -1,3 +1,13 @@
+/**
+ * @file test_sequential.cpp
+ * @brief Performance benchmarking and validation for sequential mergesort
+ * implementation
+ *
+ * Comparative testing framework evaluating custom sequential mergesort against
+ * std::sort baseline. Provides isolated performance measurements and optional
+ * correctness validation across configurable data patterns and sizes.
+ */
+
 #include "../src/common/record.hpp"
 #include "../src/common/timer.hpp"
 #include "../src/common/utils.hpp"
@@ -6,12 +16,31 @@
 #include <iostream>
 
 /**
- * @brief Wrapper for std::sort to maintain consistent interface
+ * @brief Adapter for std::sort maintaining consistent interface with custom
+ * implementation
+ * @param data Record vector to sort in-place
+ *
+ * Provides interface consistency for comparative benchmarking. std::sort serves
+ * as performance baseline due to its highly optimized introsort implementation
+ * (quicksort + heapsort + insertion sort hybrid).
  */
 void stl_sort(std::vector<Record> &data) {
   std::sort(data.begin(), data.end());
 }
 
+/**
+ * @brief Sequential sorting benchmark and validation entry point
+ * @param argc Command line argument count
+ * @param argv Command line arguments for test configuration
+ * @return 0 on success, 1 on validation failure
+ *
+ * Executes isolated performance comparison between custom sequential mergesort
+ * and std::sort baseline. Independent data copies prevent cross-contamination
+ * between test runs. Timer overhead is minimized through RAII scoping.
+ *
+ * Validation is conditionally performed based on configuration to enable
+ * pure performance benchmarking when correctness is already established.
+ */
 int main(int argc, char *argv[]) {
   Config config = parse_args(argc, argv);
 

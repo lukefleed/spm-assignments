@@ -273,8 +273,8 @@ void run_benchmark_suite(const MultiNodeConfig &base_config, int rank, int size,
         std::vector<Record> test_data;
         if (rank == 0) {
           test_data =
-              generate_records(test_config.array_size, test_config.payload_size,
-                               test_config.pattern);
+              generate_data(test_config.array_size, test_config.payload_size,
+                            test_config.pattern);
         }
 
         Timer timer;
@@ -378,8 +378,8 @@ int main(int argc, char *argv[]) {
                   << config.payload_size << " byte payload...\n";
       }
 
-      original_data = generate_records(config.array_size, config.payload_size,
-                                       config.pattern);
+      original_data =
+          generate_data(config.array_size, config.payload_size, config.pattern);
 
       if (config.verbose) {
         std::cout << "Data generation complete. Starting hybrid sort...\n";

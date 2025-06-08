@@ -25,26 +25,27 @@
  * @brief Performance test configuration
  */
 struct PerfTestConfig {
-  size_t data_size;
-  size_t payload_size;
-  DataPattern pattern;
-  size_t parallel_threads; // Number of threads for parallel implementation
-  size_t iterations;
+  size_t data_size;        ///< Total number of records to sort
+  size_t payload_size;     ///< Size of each record's payload in bytes
+  DataPattern pattern;     ///< Data distribution pattern (random, sorted, etc.)
+  size_t parallel_threads; ///< FastFlow worker threads for parallel stage
+  size_t iterations;       ///< Number of test iterations (currently unused)
 };
 
 /**
- * @brief Result structure for hybrid performance test data
+ * @brief Performance metrics for hybrid MPI+FastFlow implementation
  */
 struct HybridTestResult {
-  std::string test_name;
-  size_t data_size;
-  size_t payload_size;
-  int mpi_processes;
-  int parallel_threads;
-  double total_time_ms;
-  double throughput_mrec_per_sec;
-  double speedup;
-  double efficiency_percent;
+  std::string test_name; ///< Test identifier
+  size_t data_size;      ///< Number of records processed
+  size_t payload_size;   ///< Record payload size in bytes
+  int mpi_processes;     ///< MPI process count
+  int parallel_threads;  ///< FastFlow worker thread count
+  double total_time_ms;  ///< Total execution time in milliseconds
+  double
+      throughput_mrec_per_sec; ///< Throughput in millions of records per second
+  double speedup;              ///< Speedup relative to baseline
+  double efficiency_percent;   ///< Parallel efficiency percentage
 
   HybridTestResult(const std::string &name, size_t size, size_t payload,
                    int processes, int threads, double time, double throughput,
@@ -75,12 +76,16 @@ void write_hybrid_csv_row(std::ofstream &file, const HybridTestResult &result) {
 }
 
 /**
- * @brief Read baseline time from CSV file
- * @param csv_filename Path to the CSV file
- * @param parallel_threads Number of parallel threads to match
- * @param data_size Data size to match
+ * @brief Extract baseline execution time from previous test results
+ * @param csv_filename Path to CSV file containing historical results
+ * @param parallel_threads FastFlow thread count to match
+ * @param data_size Record count to match
  * @param payload_size Payload size to match
- * @return Baseline time in milliseconds, or 0.0 if not found
+ * @return Baseline time in milliseconds, 0.0 if no matching single-process
+ * result found
+ *
+ * Searches for a single-process (MPI rank 1) result with matching parameters
+ * to establish speedup baseline for multi-process comparisons.
  */
 double read_baseline_from_csv(const std::string &csv_filename,
                               int parallel_threads, size_t data_size,
@@ -104,7 +109,7 @@ double read_baseline_from_csv(const std::string &csv_filename,
     }
 
     if (tokens.size() >= 9) {
-      // Parse:
+      // CSV format:
       // Test_Name,Data_Size,Payload_Size,MPI_Processes,Parallel_Threads,Total_Time_ms,Throughput_MRec_per_sec,Speedup,Efficiency_Percent
       try {
         size_t csv_data_size = std::stoul(tokens[1]);
@@ -113,13 +118,14 @@ double read_baseline_from_csv(const std::string &csv_filename,
         int csv_parallel_threads = std::stoi(tokens[4]);
         double csv_time = std::stod(tokens[5]);
 
+        // Match single-process baseline with identical test parameters
         if (csv_mpi_processes == 1 &&
             csv_parallel_threads == parallel_threads &&
             csv_data_size == data_size && csv_payload_size == payload_size) {
           baseline_time = csv_time;
         }
       } catch (const std::exception &) {
-        // Skip malformed lines
+        // Skip malformed lines - robust parsing for production environments
         continue;
       }
     }
@@ -129,57 +135,58 @@ double read_baseline_from_csv(const std::string &csv_filename,
 }
 
 /**
- * @brief Run performance benchmark for hybrid implementation
- * @param config The performance test configuration.
- * @param rank The MPI rank of the current process.
- * @param mpi_world_size The total number of MPI processes.
- * @param baseline_time_ms Baseline time in milliseconds for speedup
- * calculation.
- * @param csv_file Pointer to CSV output file (nullptr if not saving to CSV).
+ * @brief Execute hybrid MPI+FastFlow mergesort benchmark
+ * @param config Test configuration parameters
+ * @param rank Current MPI process rank
+ * @param mpi_world_size Total MPI process count
+ * @param baseline_time_ms Single-process baseline time for speedup calculation
+ * @param csv_file Output file stream for results persistence (rank 0 only)
+ *
+ * Performs distributed sorting with local FastFlow parallelization.
+ * Uses MPI barriers for accurate timing across all processes.
+ * Validates correctness on rank 0 before recording results.
  */
 void run_hybrid_benchmark(const PerfTestConfig &config, int rank,
                           int mpi_world_size, double baseline_time_ms,
                           std::ofstream *csv_file = nullptr) {
   MPI_Barrier(MPI_COMM_WORLD);
 
-  // Generate test data
+  // Generate identical test data across all processes
   auto data =
       generate_data(config.data_size, config.payload_size, config.pattern);
 
-  // Setup hybrid sorter
+  // Configure hybrid sorter with FastFlow parallelization
   hybrid::HybridConfig hybrid_config;
   hybrid_config.parallel_threads = config.parallel_threads;
   hybrid::HybridMergeSort sorter(hybrid_config);
 
+  // Synchronize before timing to ensure fair measurement
   MPI_Barrier(MPI_COMM_WORLD);
   Timer timer;
 
-  // Run the sort
   auto result = sorter.sort(data, config.payload_size);
 
+  // Ensure all processes complete before measuring elapsed time
   MPI_Barrier(MPI_COMM_WORLD);
   double elapsed = timer.elapsed_ms();
 
   if (rank == 0) {
-    // Verify correctness
+    // Verify sort correctness before recording performance metrics
     bool sorted = std::is_sorted(
         result.begin(), result.end(),
         [](const Record &a, const Record &b) { return a.key < b.key; });
     if (!sorted) {
-      // Still print to cerr for critical errors, but not to stdout table
       std::cerr << "ERROR: Result not sorted for MPI Processes: "
                 << mpi_world_size << "!\n";
-      // Output a line indicating failure or skip, to maintain table structure
-      // if desired For now, we just don't print a success line.
-      return;
+      return; // Skip recording invalid results
     }
 
-    // Calculate throughput (MRec/s)
+    // Calculate performance metrics
     double throughput_mrecs =
         (static_cast<double>(config.data_size) / 1000000.0) /
         (elapsed / 1000.0);
 
-    // Calculate speedup and efficiency
+    // Compute speedup and efficiency relative to single-process baseline
     double speedup = 1.0;
     double efficiency_percent = 100.0;
 
@@ -188,13 +195,14 @@ void run_hybrid_benchmark(const PerfTestConfig &config, int rank,
       efficiency_percent = (speedup / mpi_world_size) * 100.0;
     }
 
-    // Print formatted row to console
+    // Format and display results in tabular format
     std::cout << std::left << std::setw(11) << mpi_world_size << std::right
               << std::setw(14) << std::fixed << std::setprecision(2) << elapsed
               << std::right << std::setw(19) << std::fixed
               << std::setprecision(2) << throughput_mrecs;
 
     if (mpi_world_size == 1) {
+      // Baseline case: speedup=1.0, efficiency=100%
       std::cout << std::right << std::setw(12) << std::fixed
                 << std::setprecision(2) << 1.00 << std::right << std::setw(15)
                 << std::fixed << std::setprecision(1) << 100.0;
@@ -204,12 +212,13 @@ void run_hybrid_benchmark(const PerfTestConfig &config, int rank,
                 << std::setw(15) << std::fixed << std::setprecision(1)
                 << efficiency_percent;
     } else {
+      // No baseline available for speedup calculation
       std::cout << std::right << std::setw(12) << "N/A" << std::right
                 << std::setw(15) << "N/A";
     }
     std::cout << std::endl;
 
-    // Save to CSV if file is provided
+    // Persist results to CSV for analysis and baseline establishment
     if (csv_file && csv_file->is_open()) {
       HybridTestResult result(
           "Hybrid_MPI_Parallel", config.data_size, config.payload_size,
@@ -221,9 +230,14 @@ void run_hybrid_benchmark(const PerfTestConfig &config, int rank,
 }
 
 /**
- * @brief Main performance testing function
+ * @brief Hybrid MPI+FastFlow mergesort performance benchmarking suite
+ *
+ * Measures performance characteristics of distributed sorting with local
+ * FastFlow parallelization. Supports baseline establishment and speedup
+ * analysis across varying MPI process counts.
  */
 int main(int argc, char *argv[]) {
+  // Initialize MPI with thread support for FastFlow integration
   int provided;
   MPI_Init_thread(&argc, &argv, MPI_THREAD_FUNNELED, &provided);
 
@@ -250,10 +264,10 @@ int main(int argc, char *argv[]) {
   }
 
   size_t parallel_threads_arg;
-  size_t data_size_millions = 10; // Default 10M
-  size_t payload_size_bytes = 64; // Default 64B
-  std::string csv_filename = "";  // Empty means no CSV
-  bool quiet_mode = false;        // Suppress headers and info messages
+  size_t data_size_millions = 10; // Default: 10M records
+  size_t payload_size_bytes = 64; // Default: 64B payload per record
+  std::string csv_filename = "";  // Optional CSV output file
+  bool quiet_mode = false;        // Suppress headers and informational output
 
   try {
     parallel_threads_arg = std::stoul(argv[1]);
@@ -297,13 +311,12 @@ int main(int argc, char *argv[]) {
   PerfTestConfig config = {data_size_millions * 1000000, payload_size_bytes,
                            DataPattern::RANDOM, parallel_threads_arg, 1};
 
-  // Setup CSV file if requested (only on rank 0)
+  // Initialize CSV output for results persistence (rank 0 only)
   std::ofstream csv_file;
   std::ofstream *csv_ptr = nullptr;
 
   if (rank == 0 && !csv_filename.empty()) {
-    // Check if this is the first MPI process count (create header) or
-    // subsequent (append)
+    // Append to existing file or create with header
     bool file_exists = std::ifstream(csv_filename).good();
 
     csv_file.open(csv_filename, std::ios::app);
@@ -338,11 +351,11 @@ int main(int argc, char *argv[]) {
 
   try {
     if (size == 1) {
-      // Single process - establish baseline and save to CSV
+      // Single process: establish baseline for future speedup calculations
       run_hybrid_benchmark(config, rank, size, 0.0, csv_ptr);
 
     } else {
-      // Multi-process - read baseline from CSV if available
+      // Multi-process: attempt to load baseline from CSV for speedup analysis
       double baseline_time_ms = 0.0;
 
       if (rank == 0 && !csv_filename.empty()) {
@@ -364,15 +377,13 @@ int main(int argc, char *argv[]) {
         }
       }
 
-      // Broadcast baseline time to all processes
+      // Distribute baseline to all processes for consistent calculations
       MPI_Bcast(&baseline_time_ms, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
-      // Run the actual multi-process test
       run_hybrid_benchmark(config, rank, size, baseline_time_ms, csv_ptr);
     }
   } catch (const std::exception &e) {
     if (rank == 0) {
-      // Use std::cerr for errors to not interfere with table output to stdout
       std::cerr << "Error during benchmark: " << e.what() << "\n";
     }
     MPI_Finalize();

@@ -1,4 +1,7 @@
-// FILE: src/common/utils.cpp
+/**
+ * @file utils.cpp
+ * @brief Utility functions for parallel sorting benchmarks and data generation.
+ */
 
 #include "utils.hpp"
 #include <cctype>
@@ -6,15 +9,24 @@
 #include <cstring>
 #include <sstream>
 #include <stdexcept>
-#include <thread> // Required for hardware_concurrency
+#include <thread>
 
-// Implementations for non-namespaced functions remain the same
+/**
+ * @brief Generates test dataset with specified pattern and payload.
+ * @details Optimized for cache efficiency using reserve() and move semantics.
+ *          NEARLY_SORTED introduces 1% disorder for realistic scenarios.
+ * @param n Number of records to generate
+ * @param payload_size Size of each record's payload in bytes
+ * @param pattern Data distribution pattern for benchmarking
+ * @param seed RNG seed for reproducible results
+ * @return Vector of generated records
+ */
 std::vector<Record> generate_data(size_t n, size_t payload_size,
                                   DataPattern pattern, unsigned seed) {
   std::vector<Record> data;
-  data.reserve(n);
+  data.reserve(n); // Pre-allocate to avoid reallocations during generation
 
-  std::mt19937_64 gen(seed);
+  std::mt19937_64 gen(seed); // 64-bit Mersenne Twister for quality randomness
   std::uniform_int_distribution<unsigned long> dist(0, ULONG_MAX);
 
   for (size_t i = 0; i < n; ++i) {
@@ -31,21 +43,30 @@ std::vector<Record> generate_data(size_t n, size_t payload_size,
       break;
     case DataPattern::NEARLY_SORTED:
       rec.key = i;
+      // Introduce ~1% disorder by swapping adjacent elements
       if (dist(gen) % 100 == 0 && i > 0) {
         std::swap(rec.key, data.back().key);
       }
       break;
     }
     if (payload_size > 0) {
+      // ASCII characters only for portable payload generation
       std::uniform_int_distribution<char> char_dist(0, 127);
       for (size_t j = 0; j < payload_size; ++j) {
         rec.payload[j] = char_dist(gen);
       }
     }
-    data.push_back(std::move(rec));
+    data.push_back(std::move(rec)); // Move to avoid unnecessary copy
   }
   return data;
 }
+
+/**
+ * @brief Verifies array is sorted in ascending order by key.
+ * @details Single-pass O(n) verification with early termination.
+ * @param data Vector of records to check
+ * @return true if sorted, false otherwise
+ */
 
 bool is_sorted(const std::vector<Record> &data) {
   for (size_t i = 1; i < data.size(); ++i) {
@@ -54,6 +75,13 @@ bool is_sorted(const std::vector<Record> &data) {
   }
   return true;
 }
+
+/**
+ * @brief Outputs comprehensive dataset statistics for debugging and
+ * verification.
+ * @details Displays size, memory usage, key samples, and sort status.
+ * @param data Vector of records to analyze
+ */
 
 void print_stats(const std::vector<Record> &data) {
   if (data.empty()) {
@@ -76,12 +104,20 @@ void print_stats(const std::vector<Record> &data) {
   std::cout << "\nSorted: " << (is_sorted(data) ? "YES" : "NO") << "\n";
 }
 
+/**
+ * @brief Creates deep copy of record vector with payload duplication.
+ * @details Memory-safe copying using memcpy for payload data.
+ * @param original Source vector to copy
+ * @return Independent copy of the original vector
+ */
+
 std::vector<Record> copy_records(const std::vector<Record> &original) {
   std::vector<Record> copy;
-  copy.reserve(original.size());
+  copy.reserve(original.size()); // Pre-allocate for efficiency
   for (const auto &rec : original) {
     Record new_rec(rec.payload_size);
     new_rec.key = rec.key;
+    // Safe payload copying with null checks
     if (rec.payload && new_rec.payload && rec.payload_size > 0) {
       std::memcpy(new_rec.payload, rec.payload, rec.payload_size);
     }
@@ -89,6 +125,14 @@ std::vector<Record> copy_records(const std::vector<Record> &original) {
   }
   return copy;
 }
+
+/**
+ * @brief Parses command-line arguments into configuration structure.
+ * @details Basic argument parser without error handling for missing values.
+ * @param argc Argument count
+ * @param argv Argument vector
+ * @return Populated configuration structure
+ */
 
 Config parse_args(int argc, char *argv[]) {
   Config config;
@@ -118,10 +162,18 @@ Config parse_args(int argc, char *argv[]) {
   return config;
 }
 
+/**
+ * @brief Formats byte count into human-readable string with appropriate units.
+ * @details Uses binary units (1024-based) with 2 decimal precision.
+ * @param bytes Raw byte count to format
+ * @return Formatted string with units (B, KB, MB, GB)
+ */
+
 std::string format_bytes(size_t bytes) {
   const char *units[] = {"B", "KB", "MB", "GB"};
   int unit = 0;
   double size = static_cast<double>(bytes);
+  // Convert to larger units while maintaining precision
   while (size >= 1024 && unit < 3) {
     size /= 1024;
     unit++;
@@ -131,6 +183,14 @@ std::string format_bytes(size_t bytes) {
   return oss.str();
 }
 
+/**
+ * @brief Parses size string with optional K/M/G suffix into byte count.
+ * @details Supports binary multipliers (1024-based) with input validation.
+ * @param size_str Input string (e.g., "100M", "1G", "512")
+ * @return Size in bytes
+ * @throws std::invalid_argument for malformed input
+ */
+
 size_t parse_size(const std::string &size_str) {
   if (size_str.empty())
     throw std::invalid_argument("Empty size string");
@@ -139,6 +199,7 @@ size_t parse_size(const std::string &size_str) {
   char last_char = std::toupper(str.back());
   if (!isdigit(last_char)) {
     str.pop_back();
+    // Binary multipliers for memory-related calculations
     if (last_char == 'K')
       multiplier = 1024;
     else if (last_char == 'M')
@@ -155,22 +216,23 @@ size_t parse_size(const std::string &size_str) {
   }
 }
 
-std::vector<Record> generate_records(size_t n, size_t payload_size,
-                                     DataPattern pattern, unsigned seed) {
-  return generate_data(n, payload_size, pattern, seed);
-}
-
-// Implementation for the new namespaced function
 namespace utils {
 
+/**
+ * @brief Calculates optimal thread count for parallel operations.
+ * @details Uses 75% of available cores to prevent resource contention with
+ *          MPI processes and system tasks. Fallback value of 4 handles
+ *          virtualized environments where hardware_concurrency() returns 0.
+ * @return Recommended thread count, minimum 1
+ */
+
 size_t get_optimal_parallel_threads() {
-  // Get hardware concurrency, with a fallback.
   size_t hw_threads = std::thread::hardware_concurrency();
   if (hw_threads == 0) {
-    hw_threads = 4; // A reasonable fallback for virtualized environments.
+    // Fallback for virtualized environments where detection fails
+    hw_threads = 4;
   }
-  // Use 75% of available cores to leave resources for MPI and OS tasks.
-  // Ensure at least 1 thread is returned.
+  // Reserve 25% for MPI communication and OS processes
   return std::max(size_t(1), static_cast<size_t>(hw_threads * 0.75));
 }
 

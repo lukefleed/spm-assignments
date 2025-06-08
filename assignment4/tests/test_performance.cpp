@@ -1,7 +1,11 @@
 /**
- * @file test_pevoid parallel_mergesort(std::vector<Record> &data, const size_t
- * num_threads);ormance.cpp
- * @brief Simple performance benchmarking suite for single-node mergesort
+ * @file test_performance.cpp
+ * @brief Performance benchmarking suite for mergesort implementations
+ *
+ * Comprehensive benchmarking tool that compares std::sort, sequential
+ * mergesort, and parallel mergesort across different thread counts, array
+ * sizes, and payload sizes. Outputs both console tables and CSV data for
+ * analysis.
  */
 
 #include "../src/common/record.hpp"
@@ -22,7 +26,10 @@
 void parallel_mergesort(std::vector<Record> &data, size_t num_threads);
 
 /**
- * @brief Performance test result structure
+ * @brief Performance metrics container for benchmark results
+ *
+ * Stores timing, throughput, and speedup data for a single test run.
+ * Speedup calculations are relative to baseline implementations.
  */
 struct TestResult {
   std::string implementation;
@@ -35,7 +42,7 @@ struct TestResult {
 };
 
 /**
- * @brief Write CSV header
+ * @brief Write CSV header with standard benchmark metrics
  */
 void write_csv_header(std::ofstream &file) {
   file << "implementation,array_size,payload_size,num_threads,execution_time_"
@@ -43,7 +50,12 @@ void write_csv_header(std::ofstream &file) {
 }
 
 /**
- * @brief Write test result to CSV
+ * @brief Write formatted test result row to CSV output
+ *
+ * @param file Output CSV file stream
+ * @param result TestResult structure containing benchmark data
+ *
+ * Uses fixed precision formatting for consistent numerical output.
  */
 void write_csv_row(std::ofstream &file, const TestResult &result) {
   file << result.implementation << "," << result.array_size << ","
@@ -54,7 +66,20 @@ void write_csv_row(std::ofstream &file, const TestResult &result) {
 }
 
 /**
- * @brief Run a single performance test
+ * @brief Execute and measure performance of a specific sorting implementation
+ *
+ * @param implementation Name of the sorting algorithm ("std::sort",
+ * "Sequential", "Parallel")
+ * @param array_size Number of records to sort
+ * @param payload_size Size of each record's payload in bytes
+ * @param num_threads Thread count for parallel implementations (ignored for
+ * others)
+ * @param baseline_time_ms Optional baseline execution time for speedup
+ * calculation
+ * @return TestResult containing timing and throughput metrics
+ *
+ * Uses RANDOM data pattern for consistent benchmark conditions.
+ * Verifies sort correctness post-execution for reliability.
  */
 TestResult run_performance_test(const std::string &implementation,
                                 size_t array_size, size_t payload_size,
@@ -67,10 +92,10 @@ TestResult run_performance_test(const std::string &implementation,
   result.payload_size = payload_size;
   result.num_threads = num_threads;
 
-  // Generate test data
+  // Generate randomized test data for unbiased performance measurement
   auto data = generate_data(array_size, payload_size, DataPattern::RANDOM);
 
-  // Run benchmark
+  // Execute timed benchmark of specified implementation
   Timer timer;
   timer.start();
 
@@ -84,7 +109,8 @@ TestResult run_performance_test(const std::string &implementation,
 
   result.execution_time_ms = timer.elapsed_ms();
 
-  // Calculate throughput
+  // Calculate throughput in MB/s accounting for actual memory layout
+  // Record size excludes unique_ptr overhead, includes only key + payload
   size_t data_size_bytes =
       (array_size *
        (sizeof(Record) - sizeof(std::unique_ptr<char[]>) + payload_size));
@@ -93,14 +119,14 @@ TestResult run_performance_test(const std::string &implementation,
   result.throughput_mb_per_sec =
       data_size_mb / (result.execution_time_ms / 1000.0);
 
-  // Calculate speedup
+  // Calculate relative speedup against baseline if provided
   if (baseline_time_ms > 0.0) {
     result.speedup = baseline_time_ms / result.execution_time_ms;
   } else {
     result.speedup = 1.0;
   }
 
-  // Verify correctness
+  // Post-execution correctness validation
   if (!is_sorted(data)) {
     std::cerr << "ERROR: " << implementation << " produced unsorted output!"
               << std::endl;
@@ -110,7 +136,15 @@ TestResult run_performance_test(const std::string &implementation,
 }
 
 /**
- * @brief Thread scaling test with configurable parameters
+ * @brief Benchmark parallel scaling across multiple thread counts
+ *
+ * @param csv_file Output file for structured results
+ * @param thread_counts Vector of thread counts to test
+ * @param array_size Fixed number of records for all tests
+ * @param payload_size Fixed payload size for all tests
+ *
+ * Compares all implementations with std::sort and sequential as baselines.
+ * Tests each thread count once to measure scaling characteristics.
  */
 void run_thread_scaling_test(std::ofstream &csv_file,
                              const std::vector<size_t> &thread_counts,
@@ -118,6 +152,7 @@ void run_thread_scaling_test(std::ofstream &csv_file,
   std::cout << "\n=== Thread Scaling Test (" << array_size / 1000000
             << "M records, " << payload_size << "B payload) ===" << std::endl;
 
+  // Fixed column widths for aligned tabular output
   const int w_impl = 15;
   const int w_threads = 10;
   const int w_time = 15;
@@ -188,7 +223,12 @@ void run_thread_scaling_test(std::ofstream &csv_file,
 }
 
 /**
- * @brief Array size scaling test: 8 threads, 100K-10M records
+ * @brief Array size scaling analysis with fixed thread count
+ *
+ * @param csv_file Output file for structured results
+ *
+ * Tests performance across 100K to 10M records using 8 threads and 64B payload.
+ * Fixed parameters isolate array size impact on performance characteristics.
  */
 void run_array_size_test(std::ofstream &csv_file) {
   std::cout << "\n=== Array Size Scaling Test (8 threads, 64B payload) ==="
@@ -197,6 +237,7 @@ void run_array_size_test(std::ofstream &csv_file) {
   const size_t payload_size = 64;
   const size_t num_threads = 8;
 
+  // Test dataset sizes: exponential progression from 100K to 10M records
   std::vector<std::pair<std::string, size_t>> sizes = {{"100K", 100000},
                                                        {"500K", 500000},
                                                        {"1M", 1000000},
@@ -281,14 +322,20 @@ void run_array_size_test(std::ofstream &csv_file) {
 }
 
 /**
- * @brief Payload size scaling test: 10M records, 8 threads
+ * @brief Payload size scaling analysis with fixed array size and threads
+ *
+ * @param csv_file Output file for structured results
+ *
+ * Tests performance across 8B to 256B payload sizes using 10M records and 8
+ * threads. Isolates memory bandwidth and cache effects of varying record sizes.
  */
 void run_payload_size_test(std::ofstream &csv_file) {
   std::cout << "\n=== Payload Size Scaling Test (10M records, 8 threads) ==="
             << std::endl;
 
-  const size_t array_size = 10000000;
-  const size_t num_threads = 8;
+  const size_t array_size = 10000000; // Fixed 10M records
+  const size_t num_threads = 8;       // Fixed thread count
+  // Payload sizes: powers of 2 from 8B to 256B spanning typical cache behavior
   std::vector<size_t> payload_sizes = {8, 16, 32, 64, 128, 256};
 
   const int w_impl = 15;
@@ -367,7 +414,10 @@ void run_payload_size_test(std::ofstream &csv_file) {
 }
 
 /**
- * @brief Parse command line arguments for flexible testing
+ * @brief Configuration parameters for benchmark execution
+ *
+ * Encapsulates all test parameters to enable flexible benchmark scenarios.
+ * Default values provide comprehensive baseline testing.
  */
 struct TestConfig {
   std::vector<size_t> thread_counts;
@@ -377,13 +427,24 @@ struct TestConfig {
   bool run_payload_scaling;
 };
 
+/**
+ * @brief Parse command line arguments into test configuration
+ *
+ * @param argc Argument count from main()
+ * @param argv Argument vector from main()
+ * @return TestConfig structure with parsed or default values
+ *
+ * Supports flexible parameter specification with comprehensive error handling.
+ * Exits on parse errors or help requests to prevent invalid test execution.
+ */
 TestConfig parse_test_args(int argc, char *argv[]) {
   TestConfig config;
 
-  // Default values
+  // Default configuration optimized for typical benchmarking scenarios
   config.thread_counts = {2, 4, 6, 8, 10, 12, 24};
-  config.array_size = 10000000; // 10M
-  config.payload_size = 64;
+  config.array_size = 10000000; // 10M records - balanced between runtime and
+                                // statistical significance
+  config.payload_size = 64;     // 64B - typical cache line fraction
   config.run_size_scaling = false;
   config.run_payload_scaling = false;
 
@@ -414,7 +475,7 @@ TestConfig parse_test_args(int argc, char *argv[]) {
   }
 
   if (argc >= 2) {
-    // Parse thread counts from first argument (space-separated string)
+    // Parse space-separated thread counts from quoted string argument
     std::string thread_str = argv[1];
     std::istringstream iss(thread_str);
     std::string token;
@@ -433,7 +494,7 @@ TestConfig parse_test_args(int argc, char *argv[]) {
 
   if (argc >= 3) {
     try {
-      // Parse array size in millions
+      // Convert millions to actual record count for internal use
       config.array_size = std::stoul(argv[2]) * 1000000;
     } catch (const std::exception &e) {
       std::cerr << "Error parsing array size: " << argv[2] << std::endl;
@@ -453,7 +514,7 @@ TestConfig parse_test_args(int argc, char *argv[]) {
     }
   }
 
-  // Check for optional flags
+  // Parse remaining arguments as test configuration flags
   for (int i = 4; i < argc; ++i) {
     std::string arg = argv[i];
     if (arg == "--size-scaling") {
@@ -485,11 +546,12 @@ int main(int argc, char *argv[]) {
 
   write_csv_header(csv_file);
 
-  // Always run thread scaling test with provided/default parameters
+  // Execute core thread scaling benchmark with user-specified or default
+  // parameters
   run_thread_scaling_test(csv_file, config.thread_counts, config.array_size,
                           config.payload_size);
 
-  // Optional tests
+  // Execute optional scaling analyses if requested
   if (config.run_size_scaling) {
     run_array_size_test(csv_file);
   }
