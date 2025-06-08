@@ -11,6 +11,7 @@
 #include "../src/common/record.hpp"
 #include "../src/common/timer.hpp"
 #include "../src/common/utils.hpp"
+#include "../src/fastflow/ff_mergesort.hpp"
 #include "../src/hybrid/mpi_ff_mergesort.hpp"
 #include "../src/sequential/sequential_mergesort.hpp"
 #include <algorithm>
@@ -192,14 +193,15 @@ double run_sequential_baseline(const PerfTestConfig &config,
 }
 
 /**
- * @brief Execute single-node parallel baseline measurement
+ * @brief Execute pure FastFlow baseline measurement
  * @param config Test configuration parameters
  * @param sequential_time_ms Sequential baseline for speedup calculation
  * @param csv_file Output file stream for results persistence
  * @return Single-node parallel execution time in milliseconds
  *
- * Establishes single-node parallel baseline using 1 MPI process + FastFlow
- * to isolate pure MPI distribution effects in multi-node tests.
+ * Establishes single-node parallel baseline using direct FastFlow call
+ * to avoid MPI infrastructure overhead and provide consistent baseline
+ * measurements between single-node and hybrid test suites.
  */
 double run_parallel_baseline(const PerfTestConfig &config,
                              double sequential_time_ms,
@@ -207,17 +209,13 @@ double run_parallel_baseline(const PerfTestConfig &config,
   auto data =
       generate_data(config.data_size, config.payload_size, config.pattern);
 
-  hybrid::HybridConfig hybrid_config;
-  hybrid_config.parallel_threads = config.parallel_threads;
-  hybrid::HybridMergeSort sorter(hybrid_config);
-
   Timer timer;
-  auto result = sorter.sort(data, config.payload_size);
+  parallel_mergesort(data, config.parallel_threads);
   double elapsed = timer.elapsed_ms();
 
   // Verify correctness
   bool sorted = std::is_sorted(
-      result.begin(), result.end(),
+      data.begin(), data.end(),
       [](const Record &a, const Record &b) { return a.key < b.key; });
   if (!sorted) {
     throw std::runtime_error("Parallel baseline sort verification failed");
