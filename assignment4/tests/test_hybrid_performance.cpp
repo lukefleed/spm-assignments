@@ -280,7 +280,8 @@ int main(int argc, char *argv[]) {
     if (rank == 0) {
       std::cerr << "Usage: " << argv[0]
                 << " <parallel_threads> [data_size_millions] [payload_size] "
-                   "[csv_filename] [--quiet] [--skip-baselines]"
+                   "[csv_filename] [--quiet] [--skip-baselines] "
+                   "[--baseline-time=<ms>]"
                 << std::endl;
     }
     MPI_Finalize();
@@ -293,6 +294,7 @@ int main(int argc, char *argv[]) {
   std::string csv_filename = "";
   bool quiet_mode = false;
   bool skip_baselines = false;
+  double baseline_time_ms = 0.0;
 
   try {
     parallel_threads_arg = std::stoul(argv[1]);
@@ -310,6 +312,9 @@ int main(int argc, char *argv[]) {
         quiet_mode = true;
       else if (arg == "--skip-baselines")
         skip_baselines = true;
+      else if (arg.find("--baseline-time=") == 0) {
+        baseline_time_ms = std::stod(arg.substr(16));
+      }
     }
   } catch (const std::exception &e) {
     if (rank == 0) {
@@ -375,6 +380,11 @@ int main(int argc, char *argv[]) {
 
     // Distribute baseline to all processes for consistent calculations
     MPI_Bcast(&parallel_time, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+    // Use provided baseline time if available
+    if (baseline_time_ms > 0.0) {
+      parallel_time = baseline_time_ms;
+    }
 
     if (size > 1 || skip_baselines) {
       run_enhanced_hybrid_benchmark(config, rank, size, parallel_time,

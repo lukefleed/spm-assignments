@@ -134,12 +134,18 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+# Extract baseline time from CSV for speedup calculations
+BASELINE_TIME=""
+if [ -f "${CSV_FILENAME}" ]; then
+    BASELINE_TIME=$(tail -n 1 "${CSV_FILENAME}" | cut -d',' -f6)
+fi
+
 echo ""
 echo "MPI Procs   Time (ms)      Throughput (MRec/s)   Par Speedup  MPI Eff (%)  Total Eff (%)"
 echo "----------- -------------- ------------------- ------------ ------------- --------------"
 
 # Extract and display baseline with proper formatting
-echo "$BASELINE_OUTPUT" | grep "^Mergesort FF" | sed 's/^Mergesort FF/1                /'
+echo "$BASELINE_OUTPUT" | grep "^Mergesort FF" | sed 's/^Mergesort FF/1          /'
 
 # ============================================================================
 #                          MAIN EXECUTION LOOP
@@ -167,7 +173,7 @@ for nodes in "${NODES_ARRAY[@]}"; do
          --cpus-per-task=${FF_THREADS} \
          --time=00:08:00 \
          --mpi=pmix \
-         bin/test_hybrid_performance ${FF_THREADS} ${RECORDS_SIZE_M} ${PAYLOAD_SIZE_B} ${CSV_FILENAME} --quiet --skip-baselines
+         bin/test_hybrid_performance ${FF_THREADS} ${RECORDS_SIZE_M} ${PAYLOAD_SIZE_B} ${CSV_FILENAME} --quiet --skip-baselines --baseline-time=${BASELINE_TIME}
 
     # Exit on failure
     if [ $? -ne 0 ]; then
