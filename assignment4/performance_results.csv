@@ -1,0 +1,6 @@
+implementation,array_size,payload_size,num_threads,execution_time_ms,throughput_mb_per_sec,speedup
+std::sort,1000000,32,1,72.275,633.37,1.000
+Sequential,1000000,32,1,174.018,263.06,1.000
+Parallel,1000000,32,1,106.047,431.66,1.000
+Parallel,1000000,32,2,65.524,698.62,1.000
+Parallel,1000000,32,4,56.177,814.86,1.000
