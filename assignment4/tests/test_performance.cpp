@@ -110,16 +110,13 @@ TestResult run_performance_test(const std::string &implementation,
 }
 
 /**
- * @brief Thread scaling test: 10M records, 1-12 threads
+ * @brief Thread scaling test with configurable parameters
  */
-void run_thread_scaling_test(std::ofstream &csv_file) {
-  std::cout << "\n=== Thread Scaling Test (10M records, 64B payload) ==="
-            << std::endl;
-
-  const size_t array_size = 10000000; // 10M records
-  const size_t payload_size = 64;      // 64 bytes payload
-
-  std::vector<size_t> thread_counts = {2, 4, 6, 8, 10, 12, 24};
+void run_thread_scaling_test(std::ofstream &csv_file,
+                             const std::vector<size_t> &thread_counts,
+                             size_t array_size, size_t payload_size) {
+  std::cout << "\n=== Thread Scaling Test (" << array_size / 1000000
+            << "M records, " << payload_size << "B payload) ===" << std::endl;
 
   const int w_impl = 15;
   const int w_threads = 10;
@@ -369,9 +366,115 @@ void run_payload_size_test(std::ofstream &csv_file) {
   }
 }
 
-int main() {
+/**
+ * @brief Parse command line arguments for flexible testing
+ */
+struct TestConfig {
+  std::vector<size_t> thread_counts;
+  size_t array_size;
+  size_t payload_size;
+  bool run_size_scaling;
+  bool run_payload_scaling;
+};
+
+TestConfig parse_test_args(int argc, char *argv[]) {
+  TestConfig config;
+
+  // Default values
+  config.thread_counts = {2, 4, 6, 8, 10, 12, 24};
+  config.array_size = 10000000; // 10M
+  config.payload_size = 64;
+  config.run_size_scaling = false;
+  config.run_payload_scaling = false;
+
+  // Check for help first
+  for (int i = 1; i < argc; ++i) {
+    std::string arg = argv[i];
+    if (arg == "--help" || arg == "-h") {
+      std::cout
+          << "Usage: " << argv[0]
+          << " [THREAD_COUNTS] [ARRAY_SIZE_M] [PAYLOAD_SIZE_B] [OPTIONS]\n";
+      std::cout << "\nParameters:\n";
+      std::cout << "  THREAD_COUNTS    Space-separated list of thread counts "
+                   "(e.g., \"2 4 8 12\")\n";
+      std::cout << "  ARRAY_SIZE_M     Array size in millions of records "
+                   "(default: 10)\n";
+      std::cout << "  PAYLOAD_SIZE_B   Payload size in bytes (default: 64)\n";
+      std::cout << "\nOptions:\n";
+      std::cout << "  --size-scaling   Enable array size scaling test\n";
+      std::cout << "  --payload-scaling Enable payload size scaling test\n";
+      std::cout << "  --help, -h       Show this help message\n";
+      std::cout << "\nExamples:\n";
+      std::cout << "  " << argv[0] << " \"1 2 4 8\" 10 64\n";
+      std::cout << "  " << argv[0] << " \"2 4 8\" 5 32 --size-scaling\n";
+      std::cout << "  " << argv[0]
+                << " \"1 2 4 8 12\" 10 64 --size-scaling --payload-scaling\n";
+      exit(0);
+    }
+  }
+
+  if (argc >= 2) {
+    // Parse thread counts from first argument (space-separated string)
+    std::string thread_str = argv[1];
+    std::istringstream iss(thread_str);
+    std::string token;
+    config.thread_counts.clear();
+    try {
+      while (iss >> token) {
+        config.thread_counts.push_back(std::stoul(token));
+      }
+    } catch (const std::exception &e) {
+      std::cerr << "Error parsing thread counts: " << thread_str << std::endl;
+      std::cerr << "Expected space-separated numbers, e.g., \"2 4 8 12\""
+                << std::endl;
+      exit(1);
+    }
+  }
+
+  if (argc >= 3) {
+    try {
+      // Parse array size in millions
+      config.array_size = std::stoul(argv[2]) * 1000000;
+    } catch (const std::exception &e) {
+      std::cerr << "Error parsing array size: " << argv[2] << std::endl;
+      std::cerr << "Expected a number in millions, e.g., 10" << std::endl;
+      exit(1);
+    }
+  }
+
+  if (argc >= 4) {
+    try {
+      // Parse payload size in bytes
+      config.payload_size = std::stoul(argv[3]);
+    } catch (const std::exception &e) {
+      std::cerr << "Error parsing payload size: " << argv[3] << std::endl;
+      std::cerr << "Expected a number in bytes, e.g., 64" << std::endl;
+      exit(1);
+    }
+  }
+
+  // Check for optional flags
+  for (int i = 4; i < argc; ++i) {
+    std::string arg = argv[i];
+    if (arg == "--size-scaling") {
+      config.run_size_scaling = true;
+    } else if (arg == "--payload-scaling") {
+      config.run_payload_scaling = true;
+    } else {
+      std::cerr << "Unknown option: " << arg << std::endl;
+      std::cerr << "Use --help for usage information" << std::endl;
+      exit(1);
+    }
+  }
+
+  return config;
+}
+
+int main(int argc, char *argv[]) {
   std::cout << "Single Node Performance Benchmarking Suite" << std::endl;
   std::cout << "===========================================" << std::endl;
+
+  TestConfig config = parse_test_args(argc, argv);
 
   std::ofstream csv_file("performance_results.csv");
 
@@ -382,9 +485,18 @@ int main() {
 
   write_csv_header(csv_file);
 
-  run_thread_scaling_test(csv_file);
-  run_array_size_test(csv_file);
-  run_payload_size_test(csv_file); // <-- Chiamata alla nuova funzione
+  // Always run thread scaling test with provided/default parameters
+  run_thread_scaling_test(csv_file, config.thread_counts, config.array_size,
+                          config.payload_size);
+
+  // Optional tests
+  if (config.run_size_scaling) {
+    run_array_size_test(csv_file);
+  }
+
+  if (config.run_payload_scaling) {
+    run_payload_size_test(csv_file);
+  }
 
   csv_file.close();
 

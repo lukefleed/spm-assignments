@@ -127,7 +127,7 @@ clean:
 	@rm -f .baseline_time_hybrid_*.tmp
 
 # Phony targets
-.PHONY: all clean test_perf_hybrid test_correctness_single_node test_perf_single_node test_correctness_hybrid help
+.PHONY: all clean test_perf_hybrid test_correctness_single_node test_perf_single_node test_performance_single_node test_correctness_hybrid help
 
 # Single node correctness test
 test_correctness_single_node: $(TARGET_CORRECT)
@@ -139,6 +139,25 @@ test_perf_single_node: $(TARGET_PERF)
 	@echo "Running single node performance benchmarks..."
 	@echo "This may take several minutes to complete..."
 	$(TARGET_PERF)
+
+# Default values for single node performance test
+THREAD_LIST ?= "2 4 6 8 10 12 24"
+ARRAY_SIZE_M ?= 10
+PAYLOAD_SIZE_B ?= 64
+
+# Configurable single node performance test
+test_performance_single_node: $(TARGET_PERF)
+	@echo "=============================================================================="
+	@echo "                   Single Node Performance Analysis                           "
+	@echo "------------------------------------------------------------------------------"
+	@echo " Config: $(ARRAY_SIZE_M)M records, $(PAYLOAD_SIZE_B)B payload"
+	@echo " Threads: $(THREAD_LIST)"
+	@echo " Optional tests: --size-scaling --payload-scaling"
+	@echo "=============================================================================="
+	$(TARGET_PERF) "$(THREAD_LIST)" $(ARRAY_SIZE_M) $(PAYLOAD_SIZE_B) $(EXTRA_FLAGS)
+	@echo "------------------------------------------------------------------------------"
+	@echo " Analysis Complete. Results saved to: performance_results.csv"
+	@echo "=============================================================================="
 
 # Hybrid correctness test
 test_correctness_hybrid: $(TARGET_HYBRID_CORRECT)
@@ -158,6 +177,13 @@ help:
 	@echo "Single Node Tests (Parallel implementation):"
 	@echo "  test_correctness_single_node - Run correctness tests for single node"
 	@echo "  test_perf_single_node        - Run performance benchmarks for single node"
+	@echo "  test_performance_single_node - Configurable single node performance test"
+	@echo ""
+	@echo "Customizable variables for test_performance_single_node:"
+	@echo "  THREAD_LIST=\"2 4 8 12\"       - List of thread counts to test (space-separated)"
+	@echo "  ARRAY_SIZE_M=10              - Array size in millions of records"
+	@echo "  PAYLOAD_SIZE_B=64            - Payload size in bytes"
+	@echo "  EXTRA_FLAGS=                 - Optional: --size-scaling --payload-scaling"
 	@echo ""
 	@echo "Hybrid Tests (MPI + Parallel):"
 	@echo "  test_correctness_hybrid      - Run correctness tests for hybrid MPI+parallel"
@@ -172,6 +198,8 @@ help:
 	@echo "Examples:"
 	@echo "  make test_perf_hybrid MPI_NODES_LIST=\"1 2 3 4\" FF_THREADS=8"
 	@echo "  make test_perf_hybrid FF_THREADS=2"
+	@echo "  make test_performance_single_node THREAD_LIST=\"1 2 4 8 12\" ARRAY_SIZE_M=10 PAYLOAD_SIZE_B=64"
+	@echo "  make test_performance_single_node EXTRA_FLAGS=\"--size-scaling --payload-scaling\""
 	@echo "  make help"
 
 # Default values for MPI nodes and FF threads for test_perf_hybrid
