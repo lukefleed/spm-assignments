@@ -1,3 +1,0 @@
-Test_Name,Data_Size,Payload_Size,MPI_Processes,Parallel_Threads,Total_Time_ms,Throughput_MRec_per_sec,Sequential_Speedup,Parallel_Speedup,MPI_Efficiency_Percent,Total_Efficiency_Percent
-Sequential_Baseline,5000000,8,1,1,409.412,12.2126,1,1,100,100
-Parallel_Baseline,5000000,8,1,8,501.942,9.96131,0.815656,1,100,10.1957
