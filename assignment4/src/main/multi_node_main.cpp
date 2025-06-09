@@ -66,7 +66,7 @@ struct MultiNodeConfig {
   bool benchmark_mode;
 
   MultiNodeConfig()
-      : array_size(1000000), payload_size(64), parallel_threads(0),
+      : array_size(1000000), payload_size(64), parallel_threads(4),
         pattern(DataPattern::RANDOM), validate(true), verbose(false),
         benchmark_mode(false) {}
 };
@@ -260,7 +260,8 @@ void run_benchmark_suite(const MultiNodeConfig &base_config, int rank, int size,
   for (size_t test_size : test_sizes) {
     for (size_t payload_size : payload_sizes) {
       for (size_t threads : thread_counts) {
-        if (threads > utils::get_optimal_parallel_threads())
+        // Skip excessively high thread counts (reasonable limit)
+        if (threads > 64)
           continue;
 
         MultiNodeConfig test_config = base_config;
@@ -338,10 +339,7 @@ int main(int argc, char *argv[]) {
     if (rank == 0 && config.verbose) {
       std::cout << "Hybrid MPI+Parallel MergeSort starting...\n";
       std::cout << "MPI processes: " << size << "\n";
-      std::cout << "Parallel threads per node: "
-                << (config.parallel_threads == 0
-                        ? utils::get_optimal_parallel_threads()
-                        : config.parallel_threads)
+      std::cout << "Parallel threads per node: " << config.parallel_threads
                 << "\n";
     }
 
@@ -391,9 +389,7 @@ int main(int argc, char *argv[]) {
     hybrid_config.parallel_threads = config.parallel_threads;
 
     // Adjust configuration based on problem size and cluster size
-    size_t total_threads = size * (config.parallel_threads == 0
-                                       ? utils::get_optimal_parallel_threads()
-                                       : config.parallel_threads);
+    size_t total_threads = size * config.parallel_threads;
 
     if (config.array_size < total_threads * 1024) {
       // For small problems, use simpler configuration

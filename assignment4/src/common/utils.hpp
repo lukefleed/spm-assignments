@@ -47,12 +47,6 @@ std::vector<Record> generate_data(size_t n, size_t payload_size,
 bool is_sorted(const std::vector<Record> &data);
 
 /**
- * @brief Outputs comprehensive dataset statistics for verification.
- * @param data Vector of records to analyze
- */
-void print_stats(const std::vector<Record> &data);
-
-/**
  * @brief Creates deep copy of record vector with payload duplication.
  * @param original Source vector to copy
  * @return Independent copy of the original vector
@@ -102,19 +96,6 @@ size_t parse_size(const std::string &size_str);
  * @details Provides optimal thread count calculation for MPI+threading
  *          hybrid parallelization strategies.
  */
-namespace utils {
-
-/**
- * @brief Determines optimal parallel worker thread count based on system
- * resources.
- * @details Calculates 75% of available CPU cores to reserve resources for
- *          MPI communication and system processes, preventing contention.
- *          Minimum return value is 1, with fallback for virtualized
- * environments.
- * @return Recommended thread count for parallel execution framework
- */
-size_t get_optimal_parallel_threads();
-
-} // namespace utils
+namespace utils {} // namespace utils
 
 #endif // UTILS_HPP

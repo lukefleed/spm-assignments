@@ -2,20 +2,6 @@
  * @file ff_mergesort.cpp
  * @brief FastFlow parallel mergesort with farm pattern optimization
  *
- * ARCHITECTURAL DESIGN DECISIONS AND ALTERNATIVES ANALYSIS:
- *
- * Framework Pattern Selection (Farm vs Alternatives):
- * - Farm pattern chosen over FastFlow's parallel_for for explicit task
- * granularity control
- * - Alternative parallel_for consideration:
- *   * Pros: Simpler implementation, automatic load balancing
- *   * Cons: Fixed work decomposition, no control over task size optimization
- *   * Cons: Limited flexibility for irregular merge phases with variable-size
- * ranges
- * - Alternative pipeline pattern:
- *   * Cons: Sequential bottleneck in merge phases, poor parallelism utilization
- *   * Pros: Memory streaming benefits for very large datasets exceeding RAM
- *
  * Memory Management Philosophy:
  * - Auxiliary buffer strategy trades 2x memory for algorithmic simplicity
  * - Alternative in-place merging:
@@ -103,7 +89,7 @@ struct MergeTask {
  *   * Pros: Perfect load balancing for irregular workloads
  *   * Cons: Work stealing protocols add synchronization overhead
  *   * Cons: Cache thrashing from cross-core queue access patterns
- *   * Analysis: Merge sort has uniform O(n log n) work distribution, static
+ * Merge sort has uniform O(n log n) work distribution, static
  * sufficient
  *
  * Template Method Pattern Application:
@@ -120,7 +106,6 @@ struct MergeTask {
  * naturally lock-free
  * - Alternative: Shared work queue with locks
  *   * Cons: Lock contention becomes bottleneck at high thread counts
- *   * Cons: Priority inversion risks in real-time scenarios
  *
  * Dual-purpose emitter serving both sort and merge phases through
  * constructor parameterization. Uses offset-based iteration to avoid
@@ -175,18 +160,6 @@ private:
  * @class SortWorker
  * @brief In-place sorting worker for initial chunk processing
  *
- * ALGORITHM SELECTION AND CACHE OPTIMIZATION:
- *
- * Standard Library Integration Strategy:
- * - std::sort delegation leverages highly optimized introsort implementation
- * - Alternative: Custom parallel quicksort implementation
- *   * Cons: Reinventing well-optimized wheel, likely inferior performance
- *   * Cons: Need to handle pathological cases (sorted, reverse-sorted inputs)
- *   * Cons: Maintenance burden for platform-specific optimizations
- * - Standard library provides:
- *   * Cache-aware partitioning strategies
- *   * SIMD optimizations for comparison-heavy operations
- *   * Adaptive algorithms with worst-case guarantees (heapsort fallback)
  *
  * In-Place vs Out-of-Place Sorting:
  * - In-place operation eliminates memory allocation overhead during sort phase
@@ -196,9 +169,8 @@ private:
  * - Direct buffer operation maximizes cache efficiency for chunk-level sorting
  *
  * Leverages std::sort's highly optimized introsort implementation
- * (typically quicksort with heapsort fallback). Operates directly
- * on source buffer to eliminate copy overhead during initial phase.
- * Task cleanup integrated to prevent memory leaks in farm execution.
+ * Operates directly on source buffer to eliminate copy overhead during initial
+ * phase. Task cleanup integrated to prevent memory leaks in farm execution.
  */
 class SortWorker : public ff_node_t<MergeTask, void> {
 public:
@@ -236,11 +208,6 @@ public:
  *
  * Stability Preservation:
  * - std::merge maintains relative ordering of equivalent elements
- * - Critical for multi-key sorting scenarios and deterministic results
- * - Alternative: Unstable merge for performance
- *   * Pros: Slight performance improvement from relaxed ordering constraints
- *   * Cons: Non-deterministic results complicate testing and debugging
- *   * Cons: Violates expected merge sort semantics
  *
  * Performs out-of-place merge using move semantics to minimize
  * Record copy overhead. Uses std::merge's optimized two-way merge
@@ -267,28 +234,7 @@ public:
 } // anonymous namespace
 
 /**
- * @brief High-performance parallel merge sort using FastFlow framework
- *
- * THREE-PHASE ALGORITHM DESIGN AND SCALABILITY ANALYSIS:
- *
- * Overall Algorithm Selection (Merge Sort vs Alternatives):
- * - Merge sort chosen for guaranteed O(n log n) worst-case complexity
- * - Alternative parallel quicksort:
- *   * Pros: Better average-case cache behavior, in-place operation
- *   * Cons: O(n²) worst-case, load balancing challenges with skewed pivots
- *   * Cons: Parallel partitioning complexity, potential stack overflow
- * - Alternative parallel sample sort:
- *   * Pros: Superior scalability for very large process counts (P > 1000)
- *   * Cons: Additional sampling phase overhead, complex pivot selection
- *   * Cons: Load balancing depends on data distribution assumptions
- *
- * Memory Layout and NUMA Considerations:
- * - Auxiliary buffer strategy optimizes for cache-coherent architectures
- * - Potential NUMA issues: buffer allocation may be non-local to some workers
- * - Alternative: NUMA-aware buffer allocation with numa_alloc_onnode
- *   * Pros: Reduced memory access latency for NUMA systems
- *   * Cons: Increased implementation complexity, portability concerns
- *   * Analysis: Benefit limited for communication-bound merge operations
+ * @brief parallel merge sort using FastFlow
  *
  * Synchronization Strategy:
  * - Synchronous farms ensure level completion before buffer swap
@@ -297,19 +243,10 @@ public:
  *   * Cons: Complex dependency management, limited benefit for merge sort
  *   * Cons: Buffer management complexity with overlapping levels
  *
- * Scalability Characteristics:
- * - Time complexity: O(n log n), Space complexity: O(n)
- * - Parallel efficiency: High for moderate thread counts (< 32)
- * - Bottleneck analysis: Memory bandwidth becomes limiting factor at scale
- * - Alternative algorithms for extreme parallelism: radix sort, histogram sort
- *
  * Implements three-phase merge sort algorithm optimized for large datasets:
  * 1. Parallel initial sorting of cache-friendly chunks
  * 2. Iterative parallel merge passes with buffer ping-ponging
  * 3. Final data placement ensuring in-place result semantics
- *
- * Time complexity: O(n log n), Space complexity: O(n)
- * Parallelization overhead amortized across log n merge levels
  *
  * @param data Input vector sorted in-place (strong exception safety)
  * @param num_threads Worker thread count (0 defaults to single-threaded)
@@ -333,10 +270,6 @@ void parallel_mergesort(std::vector<Record> &data, const size_t num_threads) {
   // - Alternative: Fixed threshold approach
   //   * Cons: Ignores available parallelism, poor resource utilization
   //   * Cons: Doesn't scale with thread count, suboptimal for varying hardware
-  // - Alternative: Complex runtime profiling
-  //   * Pros: Adaptive threshold based on actual overhead measurements
-  //   * Cons: Implementation complexity, potential measurement noise
-  //   * Cons: Overhead of profiling itself may exceed benefits
   if (n < effective_threads * 1024) {
     std::sort(data.begin(), data.end());
     return;
@@ -350,7 +283,7 @@ void parallel_mergesort(std::vector<Record> &data, const size_t num_threads) {
   // balancing
   //   * 4x oversubscription factor provides resilience against:
   //     - Thread scheduling variations and OS interruptions
-  //     - Memory access latency variations (cache misses, NUMA effects)
+  //     - Memory access latency variations (cache misses, etc..)
   //     - Heterogeneous processing speeds across cores
   // - Alternative: threads * 2 oversubscription
   //   * Cons: Insufficient buffering against load imbalance
@@ -443,7 +376,6 @@ void parallel_mergesort(std::vector<Record> &data, const size_t num_threads) {
   // - Alternative: Always copy back to original buffer
   //   * Cons: Unnecessary copy operation when result already in correct
   //   location
-  //   * Cons: Additional O(n) overhead for large datasets
   // - Alternative: Return result buffer pointer, modify interface
   //   * Pros: Eliminates final copy operation entirely
   //   * Cons: Interface change complicates integration, breaks in-place

@@ -9,7 +9,6 @@
 #include <cstring>
 #include <sstream>
 #include <stdexcept>
-#include <thread>
 
 /**
  * @brief Generates test dataset with specified pattern and payload.
@@ -74,34 +73,6 @@ bool is_sorted(const std::vector<Record> &data) {
       return false;
   }
   return true;
-}
-
-/**
- * @brief Outputs comprehensive dataset statistics for debugging and
- * verification.
- * @details Displays size, memory usage, key samples, and sort status.
- * @param data Vector of records to analyze
- */
-
-void print_stats(const std::vector<Record> &data) {
-  if (data.empty()) {
-    std::cout << "Empty dataset\n";
-    return;
-  }
-  std::cout << "Array size: " << data.size() << " records\n";
-  std::cout << "Payload size: " << data[0].payload_size << " bytes\n";
-  std::cout << "Total memory: "
-            << format_bytes(data.size() *
-                            (sizeof(unsigned long) + data[0].payload_size))
-            << "\n";
-  std::cout << "First 5 keys: ";
-  for (size_t i = 0; i < std::min(size_t(5), data.size()); ++i)
-    std::cout << data[i].key << " ";
-  std::cout << "\nLast 5 keys: ";
-  size_t start = data.size() >= 5 ? data.size() - 5 : 0;
-  for (size_t i = start; i < data.size(); ++i)
-    std::cout << data[i].key << " ";
-  std::cout << "\nSorted: " << (is_sorted(data) ? "YES" : "NO") << "\n";
 }
 
 /**
@@ -216,24 +187,4 @@ size_t parse_size(const std::string &size_str) {
   }
 }
 
-namespace utils {
-
-/**
- * @brief Calculates optimal thread count for parallel operations.
- * @details Uses 75% of available cores to prevent resource contention with
- *          MPI processes and system tasks. Fallback value of 4 handles
- *          virtualized environments where hardware_concurrency() returns 0.
- * @return Recommended thread count, minimum 1
- */
-
-size_t get_optimal_parallel_threads() {
-  size_t hw_threads = std::thread::hardware_concurrency();
-  if (hw_threads == 0) {
-    // Fallback for virtualized environments where detection fails
-    hw_threads = 4;
-  }
-  // Reserve 25% for MPI communication and OS processes
-  return std::max(size_t(1), static_cast<size_t>(hw_threads * 0.75));
-}
-
-} // namespace utils
+namespace utils {} // namespace utils

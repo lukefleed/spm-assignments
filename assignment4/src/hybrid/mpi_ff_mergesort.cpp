@@ -13,7 +13,6 @@
  * - Sufficient for FastFlow's master-worker pattern where only main thread
  * communicates
  * - MPI_THREAD_MULTIPLE would add unnecessary synchronization overhead
- * - FastFlow handles intra-node parallelism, MPI handles inter-node
  * communication
  * - Alternative: MPI_THREAD_SERIALIZED would be too restrictive for concurrent
  * FastFlow workers
@@ -25,9 +24,8 @@
  * - Alternative linear reduction: O(P) rounds, unacceptable for large process
  * counts
  * - Alternative all-to-all: O(1) rounds but O(N*P) memory and communication
- * overhead
- * - Choice justified: Optimal balance of rounds vs memory for typical HPC
- * clusters
+ * overhead. I tried to implement this, the performance was slightly worse, with
+ * far more complexity in the code.
  *
  * Data Distribution Strategy (Load-Balanced Scatter):
  * - Block distribution with remainder handling ensures max difference of 1
@@ -40,10 +38,6 @@
  * Memory Management Philosophy:
  * - Move semantics throughout merge eliminates O(payload_size) copy overhead
  * - Pre-allocation strategies prevent memory fragmentation during runtime
- * - Alternative in-place merging: Complex implementation, minimal memory
- * savings
- * - Alternative recursive splitting: Higher memory overhead, worse cache
- * behavior
  *
  * Key performance optimizations:
  * - Zero-payload fast path using MPI_UNSIGNED_LONG for cache efficiency
@@ -51,10 +45,6 @@
  * - Move semantics throughout merge operations minimize copy costs
  * - Pre-allocation with emplace_back prevents vector reallocations
  * - Binary tree reduction ensures O(log P) communication complexity
- *
- * External dependencies:
- * - FastFlow parallel_mergesort: Three-phase algorithm with farm patterns
- * - MPI_THREAD_FUNNELED: Required for FastFlow multi-threading integration
  */
 
 #include "mpi_ff_mergesort.hpp"
@@ -69,7 +59,6 @@
 /**
  * @brief External FastFlow parallel mergesort implementation
  *
- * Dependency: src/fastflow/ff_mergesort.cpp::parallel_mergesort()
  * Implements three-phase merge sort with farm patterns and buffer ping-ponging:
  * 1. Parallel initial sorting of cache-friendly chunks
  * 2. Iterative parallel merge passes with buffer alternation
@@ -93,9 +82,6 @@ HybridMergeSort::HybridMergeSort(const HybridConfig &config)
   //   * Pros: Maximum flexibility for multi-threaded MPI usage
   //   * Cons: Significant performance overhead from internal MPI
   //   synchronization
-  //   * Cons: Not required for current FastFlow integration pattern
-  //   * Analysis: Benchmarks show 15-25% performance penalty on typical
-  //   clusters
   int provided;
   MPI_Query_thread(&provided);
   if (provided < MPI_THREAD_FUNNELED) {
@@ -104,15 +90,10 @@ HybridMergeSort::HybridMergeSort(const HybridConfig &config)
   MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank_);
   MPI_Comm_size(MPI_COMM_WORLD, &mpi_size_);
 
-  // SCALABILITY CONSIDERATIONS:
-  // - Binary tree reduction scales to O(log P) but memory per process grows
-  // - At extreme scales (P > 10⁴), memory becomes limiting factor
-  // - Alternative sample sort for very large process counts:
-  //   * Pros: O(1) memory growth per process, better load balancing
-  //   * Cons: Additional sampling phase, more complex implementation
-  //   * Threshold: Typically advantageous when P > 1000 and N/P > 10⁶
+  // Note: parallel_threads must be explicitly set - no auto-detection
   if (config_.parallel_threads == 0) {
-    config_.parallel_threads = utils::get_optimal_parallel_threads();
+    throw std::invalid_argument(
+        "parallel_threads must be explicitly set (> 0)");
   }
 }
 
@@ -184,9 +165,6 @@ void HybridMergeSort::distribute_data(std::vector<Record> &local_data,
     // ZERO-PAYLOAD OPTIMIZATION RATIONALE:
     // - MPI_UNSIGNED_LONG provides superior cache behavior vs MPI_BYTE arrays
     // - Eliminates serialization overhead for key-only datasets
-    // - Alternative: Always use generic byte buffer approach
-    //   * Cons: 8x more TLB pressure, worse prefetcher behavior
-    //   * Cons: Unnecessary memory allocation for payload buffers
     // - Alternative: Custom MPI datatype for Record structure
     //   * Cons: MPI datatype creation overhead, padding complications
     //   * Cons: Less portable across different MPI implementations
@@ -216,11 +194,6 @@ void HybridMergeSort::distribute_data(std::vector<Record> &local_data,
     //   * Cons: Performance penalty from MPI datatype overhead
     //   * Cons: Padding issues with different compiler/architecture
     //   combinations
-    // - Alternative: Separate scatter for keys and payloads
-    //   * Cons: 2x communication rounds, higher latency
-    //   * Cons: Requires additional synchronization between key/payload
-    //   transfers
-    // - Manual packing/unpacking trades CPU cycles for reduced network overhead
     const size_t record_byte_size = sizeof(unsigned long) + payload_size_;
     std::vector<int> send_counts_bytes(mpi_size_);
     std::vector<int> displs_bytes(mpi_size_);
@@ -286,7 +259,6 @@ void HybridMergeSort::sort_local_data(std::vector<Record> &data) {
       config_.parallel_threads > 1) {
     parallel_mergesort(data, config_.parallel_threads);
   } else {
-    // std::sort typically uses introsort: quicksort with heapsort fallback
     std::sort(data.begin(), data.end());
   }
 }
@@ -321,9 +293,9 @@ void HybridMergeSort::hierarchical_merge(std::vector<Record> &local_data) {
    * - Memory requirements remain O(N) per process throughout
    *
    * Tree structure visualization for 8 processes:
-   * Round 1: 0←1, 2←3, 4←5, 6←7  (step=1, survivors: 0,2,4,6)
-   * Round 2: 0←2, 4←6            (step=2, survivors: 0,4)
-   * Round 3: 0←4                 (step=4, survivors: 0)
+   * Round 1: 0<--1, 2<--3, 4<--5, 6<--7  (step=1, survivors: 0,2,4,6)
+   * Round 2: 0<--2, 4<--6            (step=2, survivors: 0,4)
+   * Round 3: 0<--4                 (step=4, survivors: 0)
    *
    * Survivor condition: rank % (2 * step) == 0
    * Sender condition:   rank % (2 * step) == step
@@ -378,16 +350,6 @@ void HybridMergeSort::hierarchical_merge(std::vector<Record> &local_data) {
 
           // MERGE ALGORITHM SELECTION AND OPTIMIZATION:
           // - Two-way merge chosen over k-way merge for cache efficiency
-          // - Alternative k-way merge with priority queue:
-          //   * Pros: Could handle multiple incoming streams simultaneously
-          //   * Cons: Log k overhead per element, poor cache locality for large
-          //   k
-          //   * Cons: Complex memory management for variable-sized incoming
-          //   streams
-          // - Alternative in-place merge:
-          //   * Pros: O(1) additional memory
-          //   * Cons: O(N log N) time complexity vs O(N) for out-of-place
-          //   * Cons: Complex implementation, poor constant factors
           // - Move semantics optimization eliminates payload deep-copy overhead
           // - Pre-allocation prevents memory fragmentation during merge
           // operation
@@ -460,11 +422,6 @@ void HybridMergeSort::hierarchical_merge(std::vector<Record> &local_data) {
           // SENDER-SIDE PACKING STRATEGY:
           // - Manual serialization chosen over MPI derived datatypes
           // - Sequential memory layout optimizes network adapter DMA transfers
-          // - Alternative: Scatter-gather I/O for non-contiguous data
-          //   * Pros: Avoids explicit packing overhead
-          //   * Cons: Multiple memory regions stress network hardware buffers
-          //   * Cons: Potential network adapter limitations on scatter-gather
-          //   lists
           const size_t record_bytes = sizeof(unsigned long) + payload_size_;
           std::vector<char> buffer(size * record_bytes);
           char *ptr = buffer.data();
