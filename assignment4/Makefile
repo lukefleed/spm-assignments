@@ -204,19 +204,19 @@ test_perf_hybrid: $(TARGET_HYBRID_PERF)
 	@echo "------------------------------------------------------------------------------"
 	@echo " Config: $(RECORDS_SIZE_M)M records, $(PAYLOAD_SIZE_B)B payload, $(FF_THREADS) FF threads/process"
 	@echo " MPI Processes: $(MPI_NODES_LIST)"
-	@echo " Analysis: Dual baseline (sequential + single-node parallel)"
+	@echo " Analysis: Parallel baseline comparison with MPI scaling"
 	@echo " Output: $(HYBRID_CSV_FILE)"
 	@echo "=============================================================================="
-	@# Run baseline establishment first (sequential + single-node parallel)
-	@mpirun --oversubscribe -np 1 $(TARGET_HYBRID_PERF) $(FF_THREADS) $(RECORDS_SIZE_M) $(PAYLOAD_SIZE_B) $(HYBRID_CSV_FILE) --quiet
-	@echo ""
-	@echo "Running MPI scaling analysis..."
-	@echo ""
-	@echo "MPI Procs       Time (ms)Throughput (MRec/s) Seq Speedup Par Speedup    MPI Eff (%)  Total Eff (%)"
-	@echo "--------------------------------------------------------------------------------------------------"
-	@for nodes in $(MPI_NODES_LIST); do \
-		if [ $$nodes -gt 1 ]; then \
-			mpirun --oversubscribe -np $$nodes $(TARGET_HYBRID_PERF) $(FF_THREADS) $(RECORDS_SIZE_M) $(PAYLOAD_SIZE_B) $(HYBRID_CSV_FILE) --quiet --skip-baselines; \
+	@# Run baseline establishment first (single-node parallel)
+	@baseline_time=$$(mpirun --oversubscribe -np 1 $(TARGET_HYBRID_PERF) $(FF_THREADS) $(RECORDS_SIZE_M) $(PAYLOAD_SIZE_B) $(HYBRID_CSV_FILE) --quiet 2>&1 | grep "Mergesort FF" | awk '{print $$3}'); \
+	echo ""; \
+	echo "MPI Procs       Time (ms)Throughput (MRec/s) 	    Speedup    MPI Eff (%)  Total Eff (%)"; \
+	echo "--------------------------------------------------------------------------------------------"; \
+	for nodes in $(MPI_NODES_LIST); do \
+		if [ $$nodes -eq 1 ]; then \
+			mpirun --oversubscribe -np $$nodes $(TARGET_HYBRID_PERF) $(FF_THREADS) $(RECORDS_SIZE_M) $(PAYLOAD_SIZE_B) $(HYBRID_CSV_FILE) --quiet; \
+		else \
+			mpirun --oversubscribe -np $$nodes $(TARGET_HYBRID_PERF) $(FF_THREADS) $(RECORDS_SIZE_M) $(PAYLOAD_SIZE_B) $(HYBRID_CSV_FILE) --quiet --skip-baselines --baseline-time=$$baseline_time; \
 		fi; \
 	done
 	@echo "=============================================================================="
