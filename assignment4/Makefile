@@ -135,11 +135,11 @@ test_correctness_single_node: $(TARGET_CORRECT)
 	$(TARGET_CORRECT)
 
 # Default values for single node performance test
-# Generate thread list dynamically: 2, 4, 6, 8, ..., up to max system threads
+# Generate thread list dynamically: 2, 4, 8, 16, ..., up to max system threads
 MAX_THREADS := $(shell nproc)
-THREAD_LIST ?= $(shell seq 2 2 $(MAX_THREADS))
-ARRAY_SIZE_M ?= 10
-PAYLOAD_SIZE_B ?= 64
+THREAD_LIST ?= $(shell i=2; while [ $$i -le $(MAX_THREADS) ]; do echo $$i; i=$$((i*2)); done | tr '\n' ' ')
+ARRAY_SIZE_M ?= 100
+PAYLOAD_SIZE_B ?= 16
 
 # Configurable single node performance test
 test_perf_single_node: $(TARGET_PERF)
