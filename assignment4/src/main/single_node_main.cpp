@@ -125,7 +125,7 @@ int main(int argc, char *argv[]) {
               << std::setw(15) << (valid ? "✓" : "✗") << "\n";
   }
 
-  // Test parallel pipeline with two farms
+  // Test FastFlow parallel mergesort
   {
     auto data = copy_records(original_data);
     Timer t;
@@ -133,7 +133,7 @@ int main(int argc, char *argv[]) {
     double ms = t.elapsed_ms();
 
     bool valid = config.validate ? validate_result(data, original_data) : true;
-    std::cout << std::left << std::setw(25) << "FF Pipeline Two Farms"
+    std::cout << std::left << std::setw(25) << "FastFlow MergeSort"
               << std::right << std::setw(15) << std::fixed
               << std::setprecision(2) << ms << std::setw(15) << std::fixed
               << std::setprecision(2) << baseline_time / ms << "x"

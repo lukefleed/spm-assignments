@@ -158,7 +158,7 @@ void HybridMergeSort::distribute_data(std::vector<Record> &local_data,
   local_data.clear();
   local_data.reserve(send_counts[mpi_rank_]);
   for (int i = 0; i < send_counts[mpi_rank_]; ++i) {
-    local_data.emplace_back(payload_size_);
+    local_data.emplace_back();
   }
 
   if (payload_size_ == 0) {
@@ -194,7 +194,7 @@ void HybridMergeSort::distribute_data(std::vector<Record> &local_data,
     //   * Cons: Performance penalty from MPI datatype overhead
     //   * Cons: Padding issues with different compiler/architecture
     //   combinations
-    const size_t record_byte_size = sizeof(unsigned long) + payload_size_;
+    const size_t record_byte_size = sizeof(unsigned long) + RPAYLOAD;
     std::vector<int> send_counts_bytes(mpi_size_);
     std::vector<int> displs_bytes(mpi_size_);
 
@@ -212,10 +212,10 @@ void HybridMergeSort::distribute_data(std::vector<Record> &local_data,
       for (const auto &rec : global_data) {
         memcpy(ptr, &rec.key, sizeof(unsigned long));
         ptr += sizeof(unsigned long);
-        if (rec.payload && rec.payload_size > 0) {
-          memcpy(ptr, rec.payload, rec.payload_size);
+        if (payload_size_ > 0 && payload_size_ <= RPAYLOAD) {
+          memcpy(ptr, rec.rpayload, std::min(payload_size_, size_t(RPAYLOAD)));
         }
-        ptr += rec.payload_size;
+        ptr += RPAYLOAD;
       }
     }
 
@@ -230,14 +230,15 @@ void HybridMergeSort::distribute_data(std::vector<Record> &local_data,
       memcpy(&local_data[i].key, ptr, sizeof(unsigned long));
       ptr += sizeof(unsigned long);
       if (payload_size_ > 0) {
-        memcpy(local_data[i].payload, ptr, payload_size_);
+        memcpy(local_data[i].rpayload, ptr,
+               std::min(payload_size_, size_t(RPAYLOAD)));
       }
-      ptr += payload_size_;
+      ptr += RPAYLOAD;
     }
   }
 
   metrics_.bytes_communicated +=
-      send_counts[mpi_rank_] * (sizeof(unsigned long) + payload_size_);
+      send_counts[mpi_rank_] * (sizeof(unsigned long) + RPAYLOAD);
 }
 
 void HybridMergeSort::sort_local_data(std::vector<Record> &data) {
@@ -316,7 +317,7 @@ void HybridMergeSort::hierarchical_merge(std::vector<Record> &local_data) {
           std::vector<Record> partner_data;
           partner_data.reserve(incoming_size);
           for (size_t i = 0; i < incoming_size; ++i) {
-            partner_data.emplace_back(payload_size_);
+            partner_data.emplace_back();
           }
 
           if (payload_size_ == 0) {
@@ -330,7 +331,7 @@ void HybridMergeSort::hierarchical_merge(std::vector<Record> &local_data) {
             }
           } else {
             // Contiguous buffer strategy: single MPI call reduces overhead
-            const size_t record_bytes = sizeof(unsigned long) + payload_size_;
+            const size_t record_bytes = sizeof(unsigned long) + RPAYLOAD;
             std::vector<char> buffer(incoming_size * record_bytes);
 
             MPI_Recv(buffer.data(), buffer.size(), MPI_BYTE, source, 1,
@@ -342,9 +343,10 @@ void HybridMergeSort::hierarchical_merge(std::vector<Record> &local_data) {
               memcpy(&partner_data[i].key, ptr, sizeof(unsigned long));
               ptr += sizeof(unsigned long);
               if (payload_size_ > 0) {
-                memcpy(partner_data[i].payload, ptr, payload_size_);
+                memcpy(partner_data[i].rpayload, ptr,
+                       std::min(payload_size_, size_t(RPAYLOAD)));
               }
-              ptr += payload_size_;
+              ptr += RPAYLOAD;
             }
           }
 
@@ -391,7 +393,7 @@ void HybridMergeSort::hierarchical_merge(std::vector<Record> &local_data) {
           }
 
           metrics_.bytes_communicated +=
-              incoming_size * (sizeof(unsigned long) + payload_size_);
+              incoming_size * (sizeof(unsigned long) + RPAYLOAD);
         }
       }
     } else if ((mpi_rank_ % (2 * step)) == step) {
@@ -422,17 +424,18 @@ void HybridMergeSort::hierarchical_merge(std::vector<Record> &local_data) {
           // SENDER-SIDE PACKING STRATEGY:
           // - Manual serialization chosen over MPI derived datatypes
           // - Sequential memory layout optimizes network adapter DMA transfers
-          const size_t record_bytes = sizeof(unsigned long) + payload_size_;
+          const size_t record_bytes = sizeof(unsigned long) + RPAYLOAD;
           std::vector<char> buffer(size * record_bytes);
           char *ptr = buffer.data();
 
           for (const auto &rec : local_data) {
             memcpy(ptr, &rec.key, sizeof(unsigned long));
             ptr += sizeof(unsigned long);
-            if (rec.payload && rec.payload_size > 0) {
-              memcpy(ptr, rec.payload, rec.payload_size);
+            if (payload_size_ > 0) {
+              memcpy(ptr, rec.rpayload,
+                     std::min(payload_size_, size_t(RPAYLOAD)));
             }
-            ptr += rec.payload_size;
+            ptr += RPAYLOAD;
           }
 
           MPI_Send(buffer.data(), buffer.size(), MPI_BYTE, target, 1,

@@ -29,7 +29,7 @@ std::vector<Record> generate_data(size_t n, size_t payload_size,
   std::uniform_int_distribution<unsigned long> dist(0, ULONG_MAX);
 
   for (size_t i = 0; i < n; ++i) {
-    Record rec(payload_size);
+    Record rec;
     switch (pattern) {
     case DataPattern::RANDOM:
       rec.key = dist(gen);
@@ -48,14 +48,18 @@ std::vector<Record> generate_data(size_t n, size_t payload_size,
       }
       break;
     }
-    if (payload_size > 0) {
+
+    // Fill payload with deterministic data up to the requested size
+    size_t actual_payload_size = std::min(payload_size, size_t(RPAYLOAD));
+    if (actual_payload_size > 0) {
       // ASCII characters only for portable payload generation
       std::uniform_int_distribution<char> char_dist(0, 127);
-      for (size_t j = 0; j < payload_size; ++j) {
-        rec.payload[j] = char_dist(gen);
+      for (size_t j = 0; j < actual_payload_size; ++j) {
+        rec.rpayload[j] = char_dist(gen);
       }
     }
-    data.push_back(std::move(rec)); // Move to avoid unnecessary copy
+
+    data.push_back(rec);
   }
   return data;
 }
@@ -77,7 +81,7 @@ bool is_sorted(const std::vector<Record> &data) {
 
 /**
  * @brief Creates deep copy of record vector with payload duplication.
- * @details Memory-safe copying using memcpy for payload data.
+ * @details Memory-safe copying using memcpy for fixed-size payload data.
  * @param original Source vector to copy
  * @return Independent copy of the original vector
  */
@@ -86,13 +90,11 @@ std::vector<Record> copy_records(const std::vector<Record> &original) {
   std::vector<Record> copy;
   copy.reserve(original.size()); // Pre-allocate for efficiency
   for (const auto &rec : original) {
-    Record new_rec(rec.payload_size);
+    Record new_rec;
     new_rec.key = rec.key;
-    // Safe payload copying with null checks
-    if (rec.payload && new_rec.payload && rec.payload_size > 0) {
-      std::memcpy(new_rec.payload, rec.payload, rec.payload_size);
-    }
-    copy.push_back(std::move(new_rec));
+    // Copy fixed-size payload array
+    std::memcpy(new_rec.rpayload, rec.rpayload, RPAYLOAD);
+    copy.push_back(new_rec);
   }
   return copy;
 }

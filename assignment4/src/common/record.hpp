@@ -1,64 +1,32 @@
 #ifndef RECORD_HPP
 #define RECORD_HPP
 
+#include "../include/config.hpp"
 #include <cstddef>
 #include <cstring>
 
 /**
- * @brief Record structure with variable-size payload for high-performance
- * sorting
+ * @brief Record structure with fixed-size payload for high-performance sorting
  *
- * Uses raw pointer for payload to minimize overhead during sort operations.
- * Copy operations disabled to prevent expensive deep copies during sorting.
+ * Conforms to assignment specification with contiguous memory layout for
+ * efficient MPI communication and cache performance.
  */
 struct Record {
-  unsigned long key;   ///< Primary sorting key
-  char *payload;       ///< Variable-size payload data
-  size_t payload_size; ///< Payload byte count
+  unsigned long key;       ///< Primary sorting key
+  char rpayload[RPAYLOAD]; ///< Fixed-size payload data
 
   /**
-   * @brief Construct record with zero-initialized payload
-   * @param payload_size Payload allocation size in bytes
+   * @brief Default constructor with zero-initialized payload
    */
-  Record(size_t payload_size = 0)
-      : key(0), payload(nullptr), payload_size(payload_size) {
-    if (payload_size > 0) {
-      payload = new char[payload_size];
-      std::memset(payload, 0, payload_size);
-    }
-  }
-
-  /// Copy operations disabled to prevent expensive deep copies during sorting
-  Record(const Record &) = delete;
-  Record &operator=(const Record &) = delete;
+  Record() : key(0) { std::memset(rpayload, 0, RPAYLOAD); }
 
   /**
-   * @brief Move constructor for efficient container operations
+   * @brief Constructor with key initialization
+   * @param k Initial key value
    */
-  Record(Record &&other) noexcept
-      : key(other.key), payload(other.payload),
-        payload_size(other.payload_size) {
-    other.payload = nullptr;
-    other.payload_size = 0;
+  explicit Record(unsigned long k) : key(k) {
+    std::memset(rpayload, 0, RPAYLOAD);
   }
-
-  /**
-   * @brief Move assignment for efficient container operations
-   */
-  Record &operator=(Record &&other) noexcept {
-    if (this != &other) {
-      delete[] payload;
-      key = other.key;
-      payload = other.payload;
-      payload_size = other.payload_size;
-      other.payload = nullptr;
-      other.payload_size = 0;
-    }
-    return *this;
-  }
-
-  /// Destructor releases allocated payload memory
-  ~Record() { delete[] payload; }
 
   /// @name Comparison operators for key-based sorting
   /// @{
