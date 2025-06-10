@@ -136,7 +136,6 @@ double run_parallel_baseline(const PerfTestConfig &config,
  */
 void run_enhanced_hybrid_benchmark(const PerfTestConfig &config, int rank,
                                    int mpi_world_size, double parallel_time_ms,
-                                   bool quiet_mode = false,
                                    std::ofstream *csv_file = nullptr) {
   MPI_Barrier(MPI_COMM_WORLD);
 
@@ -339,8 +338,7 @@ int main(int argc, char *argv[]) {
 
     // Run multi-process benchmark
     if (size > 1 || skip_baselines) {
-      run_enhanced_hybrid_benchmark(config, rank, size, parallel_time,
-                                    quiet_mode, csv_ptr);
+      run_enhanced_hybrid_benchmark(config, rank, size, parallel_time, csv_ptr);
     }
 
     // Display metrics explanation

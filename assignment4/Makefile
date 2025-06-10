@@ -220,19 +220,3 @@ test_perf_hybrid: $(TARGET_HYBRID_PERF)
 		fi; \
 	done
 	@echo "=============================================================================="
-
-# Performance analysis targets for different scenarios
-.PHONY: test_perf_hybrid_scaling test_perf_hybrid_threads
-
-# MPI scaling test with fixed thread count
-test_perf_hybrid_scaling: $(TARGET_HYBRID_PERF)
-	@echo "=== MPI Scaling Analysis (Fixed $(FF_THREADS) threads/process) ==="
-	@make test_perf_hybrid MPI_NODES_LIST="1 2 4 8 16" FF_THREADS=$(FF_THREADS)
-
-# Thread scaling test with single MPI process
-test_perf_hybrid_threads: $(TARGET_HYBRID_PERF)
-	@echo "=== Thread Scaling Analysis (Single MPI process) ==="
-	@for threads in 1 2 4 8 12 16; do \
-		echo "Testing $$threads threads..."; \
-		mpirun --oversubscribe -np 1 $(TARGET_HYBRID_PERF) $$threads $(RECORDS_SIZE_M) $(PAYLOAD_SIZE_B) thread_scaling_$(HYBRID_CSV_FILE) --quiet; \
-	done
