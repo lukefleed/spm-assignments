@@ -1,10 +1,6 @@
 /**
  * @file test_correctness.cpp
- * @brief Comprehensive correctness validation for mergesort implementations
- *
- * Validates both sequential and parallel mergesort algorithms through
- * extensive test cases covering edge conditions, data patterns, and
- * cross-implementation consistency verification.
+ * @brief Correctness validation for mergesort implementations
  */
 
 #include "../src/common/record.hpp"
@@ -20,15 +16,10 @@
 void parallel_mergesort(std::vector<Record> &data, size_t num_threads);
 
 /**
- * @brief Validates sorted array integrity and ordering correctness
- *
- * Performs dual validation: ordering verification (O(n)) and key preservation
- * check using multiset comparison (O(n log n)). Multiset approach chosen over
- * sorting original data to avoid modifying input and enable concurrent testing.
- *
- * @param sorted Array to validate for correct ordering
- * @param original Reference array for key preservation verification
- * @return true if array is properly sorted and contains identical key set
+ * @brief Validate sorted array correctness and key preservation
+ * @param sorted Array to validate for ordering
+ * @param original Reference array for key preservation check
+ * @return true if properly sorted with identical key set
  */
 bool validate_sort_correctness(const std::vector<Record> &sorted,
                                const std::vector<Record> &original) {
@@ -38,7 +29,7 @@ bool validate_sort_correctness(const std::vector<Record> &sorted,
     return false;
   }
 
-  // Verify ascending order invariant
+  // Check ascending order
   for (size_t i = 1; i < sorted.size(); ++i) {
     if (sorted[i - 1].key > sorted[i].key) {
       std::cerr << "Not sorted at position " << i << ": " << sorted[i - 1].key
@@ -47,7 +38,7 @@ bool validate_sort_correctness(const std::vector<Record> &sorted,
     }
   }
 
-  // Verify key preservation via multiset equality check
+  // Check key preservation using multiset comparison
   std::multiset<unsigned long> original_keys, sorted_keys;
   for (const auto &record : original) {
     original_keys.insert(record.key);
@@ -65,40 +56,30 @@ bool validate_sort_correctness(const std::vector<Record> &sorted,
 }
 
 /**
- * @brief Test case configuration encapsulating all test parameters
+ * @brief Test case configuration
  */
 struct TestCase {
-  std::string name;    ///< Human-readable test identifier
-  size_t size;         ///< Number of records to sort
+  std::string name;    ///< Test identifier
+  size_t size;         ///< Number of records
   size_t payload_size; ///< Record payload size in bytes
-  DataPattern pattern; ///< Initial data ordering pattern
-  size_t threads;      ///< Thread count for parallel implementation
+  DataPattern pattern; ///< Data ordering pattern
+  size_t threads;      ///< Thread count for parallel test
 };
 
 /**
- * @brief Executes comprehensive test validation with cross-implementation
- * verification
- *
- * Performs isolated testing of both sequential and parallel implementations
- * using independent data copies to prevent interference. Validates each
- * implementation against original data, then cross-validates for result
- * equivalence to detect implementation-specific issues or non-deterministic
- * behavior.
- *
- * @param test Test configuration specifying size, pattern, and threading
- * parameters
- * @return true if both implementations pass validation and produce equivalent
- * results
+ * @brief Execute test case with cross-implementation verification
+ * @param test Test configuration
+ * @return true if both implementations pass and produce equivalent results
  */
 bool run_test_case(const TestCase &test) {
   std::cout << "Running test: " << test.name << " (size=" << test.size
             << ", threads=" << test.threads << ")..." << std::flush;
 
-  // Generate test data with specified characteristics
+  // Generate test data
   auto original_data =
       generate_data(test.size, test.payload_size, test.pattern);
 
-  // Test sequential implementation with independent data copy
+  // Test sequential implementation
   auto seq_data = copy_records(original_data);
   sequential_mergesort(seq_data);
 
@@ -107,7 +88,7 @@ bool run_test_case(const TestCase &test) {
     return false;
   }
 
-  // Test parallel implementation with independent data copy
+  // Test parallel implementation
   auto ff_data = copy_records(original_data);
   parallel_mergesort(ff_data, test.threads);
 
@@ -134,25 +115,28 @@ bool run_test_case(const TestCase &test) {
   return true;
 }
 
+/**
+ * @brief Single-node mergesort correctness test suite
+ */
 int main() {
   std::cout << "=== Single Node MergeSort Correctness Tests ===" << std::endl;
 
   std::vector<TestCase> test_cases = {
-      // Boundary conditions and degenerate cases
+      // Edge cases and boundary conditions
       {"Empty array", 0, 8, DataPattern::RANDOM, 1},
       {"Single element", 1, 8, DataPattern::RANDOM, 1},
       {"Two elements (random)", 2, 8, DataPattern::RANDOM, 1},
       {"Two elements (sorted)", 2, 8, DataPattern::SORTED, 1},
       {"Two elements (reverse)", 2, 8, DataPattern::REVERSE_SORTED, 1},
 
-      // Small dataset validation across thread configurations
+      // Small dataset validation
       {"Small random (thread=1)", 10, 8, DataPattern::RANDOM, 1},
       {"Small random (thread=2)", 10, 8, DataPattern::RANDOM, 2},
       {"Small sorted", 10, 8, DataPattern::SORTED, 2},
       {"Small reverse", 10, 8, DataPattern::REVERSE_SORTED, 2},
       {"Small nearly sorted", 10, 8, DataPattern::NEARLY_SORTED, 2},
 
-      // Medium-scale pattern-specific validation
+      // Medium-scale pattern testing
       {"Medium random", 1000, 8, DataPattern::RANDOM, 4},
       {"Medium sorted", 1000, 8, DataPattern::SORTED, 4},
       {"Medium reverse", 1000, 8, DataPattern::REVERSE_SORTED, 4},
@@ -163,7 +147,7 @@ int main() {
       {"Large sorted", 100000, 8, DataPattern::SORTED, 8},
       {"Large reverse", 100000, 8, DataPattern::REVERSE_SORTED, 8},
 
-      // Variable payload size impact assessment
+      // Payload size variations
       {"Small payload", 1000, 1, DataPattern::RANDOM, 4},
       {"Large payload", 1000, 64, DataPattern::RANDOM, 4},
       {"No payload", 1000, 0, DataPattern::RANDOM, 4},
@@ -175,7 +159,7 @@ int main() {
       {"Thread test (8)", 10000, 8, DataPattern::RANDOM, 8},
       {"Thread test (16)", 10000, 8, DataPattern::RANDOM, 16},
 
-      // Special case and alignment testing
+      // Special cases
       {"All identical keys", 5000, 8, DataPattern::SORTED, 4},
       {"Power of 2 size", 4096, 8, DataPattern::RANDOM, 4},
       {"Prime size", 4099, 8, DataPattern::RANDOM, 4},
@@ -185,12 +169,14 @@ int main() {
   size_t passed = 0;
   size_t total = test_cases.size();
 
+  // Execute all test cases
   for (const auto &test : test_cases) {
     if (run_test_case(test)) {
       ++passed;
     }
   }
 
+  // Display final results
   std::cout << std::endl;
   std::cout << "=== Test Results ===" << std::endl;
   std::cout << "Passed: " << passed << "/" << total << std::endl;

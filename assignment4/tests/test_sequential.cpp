@@ -1,11 +1,6 @@
 /**
  * @file test_sequential.cpp
- * @brief Performance benchmarking and validation for sequential mergesort
- * implementation
- *
- * Comparative testing framework evaluating custom sequential mergesort against
- * std::sort baseline. Provides isolated performance measurements and optional
- * correctness validation across configurable data patterns and sizes.
+ * @brief Performance benchmarking for sequential mergesort implementation
  */
 
 #include "../src/common/record.hpp"
@@ -16,30 +11,14 @@
 #include <iostream>
 
 /**
- * @brief Adapter for std::sort maintaining consistent interface with custom
- * implementation
- * @param data Record vector to sort in-place
- *
- * Provides interface consistency for comparative benchmarking. std::sort serves
- * as performance baseline due to its highly optimized introsort implementation
- * (quicksort + heapsort + insertion sort hybrid).
+ * @brief std::sort adapter for consistent interface
  */
 void stl_sort(std::vector<Record> &data) {
   std::sort(data.begin(), data.end());
 }
 
 /**
- * @brief Sequential sorting benchmark and validation entry point
- * @param argc Command line argument count
- * @param argv Command line arguments for test configuration
- * @return 0 on success, 1 on validation failure
- *
- * Executes isolated performance comparison between custom sequential mergesort
- * and std::sort baseline. Independent data copies prevent cross-contamination
- * between test runs. Timer overhead is minimized through RAII scoping.
- *
- * Validation is conditionally performed based on configuration to enable
- * pure performance benchmarking when correctness is already established.
+ * @brief Sequential sorting benchmark and validation
  */
 int main(int argc, char *argv[]) {
   Config config = parse_args(argc, argv);
@@ -52,7 +31,7 @@ int main(int argc, char *argv[]) {
   auto data =
       generate_data(config.array_size, config.payload_size, config.pattern);
 
-  // Test custom mergesort
+  // Test custom sequential mergesort
   {
     auto data_copy = copy_records(data);
     Timer t("Sequential MergeSort");
@@ -66,7 +45,7 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  // Test std::sort
+  // Test std::sort baseline
   {
     auto data_copy = copy_records(data);
     Timer t("std::sort");

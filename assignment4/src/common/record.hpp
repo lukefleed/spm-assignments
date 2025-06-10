@@ -5,19 +5,18 @@
 #include <cstring>
 
 /**
- * @brief Record structure with variable-size payload for high-performance
- * sorting
+ * @brief Record structure for variable-size payload sorting
  *
- * Uses raw pointer for payload to minimize overhead during sort operations.
- * Copy operations disabled to prevent expensive deep copies during sorting.
+ * Dynamic payload allocation enables runtime payload size configuration
+ * via command-line parameters. Move semantics optimize container operations.
  */
 struct Record {
-  unsigned long key;   ///< Primary sorting key
-  char *payload;       ///< Variable-size payload data
-  size_t payload_size; ///< Payload byte count
+  unsigned long key;   ///< Sorting key
+  char *payload;       ///< Dynamic payload buffer
+  size_t payload_size; ///< Payload size in bytes
 
   /**
-   * @brief Construct record with zero-initialized payload
+   * @brief Initialize record with specified payload size
    * @param payload_size Payload allocation size in bytes
    */
   Record(size_t payload_size = 0)
@@ -28,13 +27,9 @@ struct Record {
     }
   }
 
-  /// Copy operations disabled to prevent expensive deep copies during sorting
   Record(const Record &) = delete;
   Record &operator=(const Record &) = delete;
 
-  /**
-   * @brief Move constructor for efficient container operations
-   */
   Record(Record &&other) noexcept
       : key(other.key), payload(other.payload),
         payload_size(other.payload_size) {
@@ -42,9 +37,6 @@ struct Record {
     other.payload_size = 0;
   }
 
-  /**
-   * @brief Move assignment for efficient container operations
-   */
   Record &operator=(Record &&other) noexcept {
     if (this != &other) {
       delete[] payload;
@@ -57,24 +49,18 @@ struct Record {
     return *this;
   }
 
-  /// Destructor releases allocated payload memory
   ~Record() { delete[] payload; }
 
-  /// @name Comparison operators for key-based sorting
-  /// @{
   bool operator<(const Record &other) const { return key < other.key; }
   bool operator<=(const Record &other) const { return key <= other.key; }
   bool operator>(const Record &other) const { return key > other.key; }
   bool operator>=(const Record &other) const { return key >= other.key; }
   bool operator==(const Record &other) const { return key == other.key; }
   bool operator!=(const Record &other) const { return key != other.key; }
-  /// @}
 };
 
 /**
- * @brief Function object for key-based record comparison
- *
- * Provides strict weak ordering for sorting algorithms.
+ * @brief Key-based comparator for sorting algorithms
  */
 struct RecordComparator {
   bool operator()(const Record &a, const Record &b) const {

@@ -8,8 +8,7 @@
 /**
  * @brief High-resolution timer for performance measurements
  *
- * Uses std::chrono::high_resolution_clock for maximum precision.
- * Not thread-safe - each thread should use separate Timer instances.
+ * Not thread-safe - use separate instances per thread.
  */
 class Timer {
 private:
@@ -22,18 +21,13 @@ private:
 
 public:
   /**
-   * @brief Constructs timer and immediately starts measurement
-   * @param timer_name Optional name for identification in output
-   * @param auto_print_on_destroy If true, prints elapsed time in destructor
+   * @brief Initialize and start timer
    */
   Timer(const std::string &timer_name = "", bool auto_print_on_destroy = false)
       : name(timer_name), auto_print(auto_print_on_destroy) {
     start();
   }
 
-  /**
-   * @brief Destructor with optional automatic timing output
-   */
   ~Timer() {
     if (auto_print) {
       std::cout << name << ": " << elapsed_ms() << " ms\n";
@@ -41,13 +35,12 @@ public:
   }
 
   /**
-   * @brief Resets timer to current time point
+   * @brief Reset timer to current time
    */
   void start() { start_time = clock::now(); }
 
   /**
-   * @brief Returns elapsed time in milliseconds since last start()
-   * @return Elapsed time as double precision milliseconds
+   * @brief Get elapsed time in milliseconds
    */
   double elapsed_ms() const {
     auto end_time = clock::now();
@@ -56,8 +49,7 @@ public:
   }
 
   /**
-   * @brief Returns elapsed time in microseconds since last start()
-   * @return Elapsed time as double precision microseconds
+   * @brief Get elapsed time in microseconds
    */
   double elapsed_us() const {
     auto end_time = clock::now();

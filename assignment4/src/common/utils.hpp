@@ -1,8 +1,6 @@
 /**
  * @file utils.hpp
- * @brief Utility functions and types for parallel sorting benchmark framework.
- * @details Provides data generation, configuration parsing, and system resource
- *          management for high-performance parallel sorting algorithms.
+ * @brief Utility functions for parallel sorting benchmarks
  */
 
 #ifndef UTILS_HPP
@@ -16,86 +14,65 @@
 #include <vector>
 
 /**
- * @brief Data distribution patterns for benchmark testing.
- * @details Different patterns stress-test sorting algorithms under varying
- *          input conditions to evaluate performance characteristics.
+ * @brief Data distribution patterns for algorithm stress testing
  */
 enum class DataPattern {
   RANDOM,         ///< Uniformly distributed random keys
-  SORTED,         ///< Already sorted in ascending order (best case)
-  REVERSE_SORTED, ///< Sorted in descending order (worst case)
-  NEARLY_SORTED   ///< ~99% sorted with 1% disorder (realistic scenario)
+  SORTED,         ///< Ascending order
+  REVERSE_SORTED, ///< Descending order
+  NEARLY_SORTED   ///< ~99% sorted with random disorder
 };
 
 /**
- * @brief Generates test dataset with specified pattern and payload.
- * @param n Number of records to generate
- * @param payload_size Size of each record's payload in bytes
- * @param pattern Data distribution pattern for benchmarking
+ * @brief Generate test dataset with specified pattern
+ * @param n Number of records
+ * @param payload_size Payload size in bytes
+ * @param pattern Data distribution pattern
  * @param seed RNG seed for reproducible results
- * @return Vector of generated records with specified characteristics
+ * @return Vector of generated records
  */
 std::vector<Record> generate_data(size_t n, size_t payload_size,
                                   DataPattern pattern = DataPattern::RANDOM,
                                   unsigned seed = std::random_device{}());
 
 /**
- * @brief Verifies array is sorted in ascending order by key.
- * @param data Vector of records to check
- * @return true if sorted, false otherwise
+ * @brief Verify array is sorted by key
  */
 bool is_sorted(const std::vector<Record> &data);
 
 /**
- * @brief Creates deep copy of record vector with payload duplication.
- * @param original Source vector to copy
- * @return Independent copy of the original vector
+ * @brief Deep copy record vector with payload duplication
  */
 std::vector<Record> copy_records(const std::vector<Record> &original);
 
 /**
- * @brief Configuration parameters for sorting benchmarks.
- * @details Encapsulates all tunable parameters with performance-optimized
- *          defaults suitable for typical multi-core systems.
+ * @brief Benchmark configuration parameters
  */
 struct Config {
-  size_t array_size = 1000000; ///< Records count (1M default for L3 cache fit)
-  size_t payload_size = 8;     ///< Payload bytes per record (cache-friendly)
-  size_t num_threads = 4;      ///< Worker thread count (conservative default)
-  DataPattern pattern =
-      DataPattern::RANDOM; ///< Input data distribution pattern
-  bool validate = true;    ///< Enable correctness verification
-  bool verbose = false;    ///< Enable detailed output logging
+  size_t array_size = 1000000;
+  size_t payload_size = 8;
+  size_t num_threads = 4;
+  DataPattern pattern = DataPattern::RANDOM;
+  bool validate = true;
+  bool verbose = false;
 };
 
 /**
- * @brief Parses command-line arguments into configuration structure.
- * @param argc Argument count
- * @param argv Argument vector
- * @return Populated configuration structure
+ * @brief Parse command-line arguments into configuration
  */
 Config parse_args(int argc, char *argv[]);
 
 /**
- * @brief Formats byte count into human-readable string with appropriate units.
- * @param bytes Raw byte count to format
- * @return Formatted string with binary units (B, KB, MB, GB)
+ * @brief Format byte count with appropriate units (B, KB, MB, GB)
  */
 std::string format_bytes(size_t bytes);
 
 /**
- * @brief Parses size string with optional K/M/G suffix into byte count.
+ * @brief Parse size string with K/M/G suffix
  * @param size_str Input string (e.g., "100M", "1G", "512")
  * @return Size in bytes
- * @throws std::invalid_argument for malformed input
+ * @throws std::invalid_argument for invalid input
  */
 size_t parse_size(const std::string &size_str);
-
-/**
- * @brief System resource management utilities for parallel execution.
- * @details Provides optimal thread count calculation for MPI+threading
- *          hybrid parallelization strategies.
- */
-namespace utils {} // namespace utils
 
 #endif // UTILS_HPP

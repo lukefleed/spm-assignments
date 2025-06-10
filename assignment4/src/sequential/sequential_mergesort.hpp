@@ -5,8 +5,8 @@
 #include <vector>
 
 /**
- * @brief Sorts a vector of Records using a sequential, recursive merge sort.
- * @param data The vector of Records to be sorted in-place.
+ * @brief Sequential recursive merge sort implementation
+ * @param data Vector of records to sort in-place by key
  */
 void sequential_mergesort(std::vector<Record> &data);
 

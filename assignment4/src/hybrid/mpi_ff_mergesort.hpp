@@ -1,19 +1,6 @@
 /**
  * @file mpi_ff_mergesort.hpp
- * @brief Hybrid MPI+FastFlow distributed mergesort implementation
- *
- * Implements scalable distributed sorting combining MPI inter-node
- * communication with FastFlow intra-node parallelization. Uses binary
- * tree reduction for hierarchical merging with optimized buffer strategies.
- *
- * Algorithm Design:
- * - Data distribution via MPI_Scatterv with load balancing
- * - Local sorting using FastFlow parallel mergesort (external dependency)
- * - Hierarchical merge via binary tree reduction pattern
- * - Zero-payload optimization path for key-only records
- *
- * Threading Model: Requires MPI_THREAD_FUNNELED for FastFlow integration
- * Memory Strategy: Contiguous buffer packing for optimal MPI performance
+ * @brief Hybrid MPI+FastFlow distributed mergesort
  */
 
 #pragma once
@@ -27,11 +14,7 @@
 namespace hybrid {
 
 /**
- * @struct HybridConfig
- * @brief Configuration parameters for hybrid mergesort algorithm
- *
- * Controls parallel execution behavior and performance thresholds.
- * Zero parallel_threads triggers automatic detection via hardware_concurrency.
+ * @brief Configuration parameters for hybrid mergesort
  */
 struct HybridConfig {
   size_t parallel_threads{0}; ///< FastFlow worker count (0 = auto-detect)
@@ -39,11 +22,7 @@ struct HybridConfig {
 };
 
 /**
- * @struct HybridMetrics
- * @brief Performance metrics collection for algorithm analysis
- *
- * Tracks timing and communication overhead across distributed execution phases.
- * Communication metrics include both MPI overhead and payload transfer costs.
+ * @brief Performance metrics collection
  */
 struct HybridMetrics {
   double total_time{0.0};         ///< End-to-end execution time (ms)
@@ -55,38 +34,21 @@ struct HybridMetrics {
 };
 
 /**
- * @class HybridMergeSort
  * @brief Distributed mergesort combining MPI distribution with FastFlow
  * parallelization
  *
- * Implements three-phase hybrid sorting algorithm:
- * 1. Data distribution across MPI processes with load balancing
- * 2. Local parallel sorting using FastFlow framework
- * 3. Hierarchical merging via binary tree reduction pattern
+ * Three-phase algorithm:
+ * 1. Data distribution across MPI processes
+ * 2. Local parallel sorting using FastFlow
+ * 3. Hierarchical merging via binary tree reduction
  *
- * Performance characteristics:
- * - Time complexity: O(n log n) distributed across P processes
- * - Communication complexity: O(log P) reduction rounds
- * - Memory efficiency: Zero-payload optimization for key-only records
- * - Thread safety: MPI_THREAD_FUNNELED requirement for FastFlow integration
- *
- * Threading model requirements:
- * - MPI initialized with MPI_THREAD_FUNNELED or higher
- * - FastFlow workers execute concurrently on multiple threads
- * - Only main thread performs MPI communication (funneled model)
+ * Requires MPI_THREAD_FUNNELED for FastFlow integration.
  */
 class HybridMergeSort {
 public:
   /**
-   * @brief Constructor requiring MPI_THREAD_FUNNELED threading support
-   *
-   * MPI_THREAD_FUNNELED requirement justification:
-   * - FastFlow workers execute on multiple threads simultaneously
-   * - Only main thread performs MPI communication (funneled model)
-   * - Higher threading levels (MULTIPLE) unnecessary and may hurt performance
-   * - Lower levels (SINGLE/SERIALIZED) incompatible with FastFlow execution
-   *
-   * @param config Algorithm configuration and performance parameters
+   * @brief Initialize hybrid sorter
+   * @param config Algorithm configuration parameters
    * @throws std::runtime_error if MPI threading support insufficient
    */
   explicit HybridMergeSort(const HybridConfig &config);
@@ -99,65 +61,32 @@ public:
 
   /**
    * @brief Distributed sort with hybrid MPI+FastFlow parallelization
-   *
-   * Three-phase execution:
-   * 1. Root broadcasts and scatters data across all processes
-   * 2. Each process sorts local partition using FastFlow parallelization
-   * 3. Binary tree reduction merges results back to root process
-   *
    * @param data Input dataset (root process only, others pass empty vector)
-   * @param payload_size Record payload size in bytes for packing optimization
+   * @param payload_size Record payload size in bytes
    * @return Sorted dataset on root process, empty on others
-   *
-   * @throws std::runtime_error if MPI threading support insufficient
-   * @pre MPI initialized with MPI_THREAD_FUNNELED or higher
-   * @post Root process contains globally sorted data, others empty
    */
   std::vector<Record> sort(std::vector<Record> &data, size_t payload_size);
 
   /**
-   * @brief Access performance metrics after sort completion
-   * @return Immutable reference to timing and communication metrics
+   * @brief Get performance metrics after sort completion
    */
   const HybridMetrics &get_metrics() const { return metrics_; }
 
 private:
   /**
-   * @brief Optimized data distribution with payload-aware strategy
-   *
-   * Performance optimizations:
-   * - Zero payload: Uses MPI_UNSIGNED_LONG scatter for cache efficiency
-   * - Non-zero payload: Contiguous buffer packing minimizes MPI overhead
-   * - Pre-allocation with emplace_back() prevents reallocations
-   * - Load balancing: remainder distributed across first (remainder) processes
+   * @brief Distribute data across MPI processes with load balancing
    */
   void distribute_data(std::vector<Record> &local_data,
                        const std::vector<Record> &global_data);
 
   /**
-   * @brief Local sorting with FastFlow integration and threshold logic
-   *
-   * Delegates to FastFlow parallel_mergesort for large datasets exceeding
-   * min_local_threshold, otherwise uses std::sort for optimal small-data
-   * performance.
+   * @brief Sort local data using FastFlow or std::sort based on size threshold
    */
   void sort_local_data(std::vector<Record> &data);
 
   /**
    * @brief Hierarchical merge using binary tree reduction pattern
-   *
-   * Implements log₂(P) communication rounds where P = MPI process count.
-   * Each round halves active processes: survivors receive and merge data
-   * from partners, then advance to next level. Survivors determined by
-   * rank % (2 * step) == 0, ensuring power-of-2 reduction tree.
-   *
-   * Performance optimizations:
-   * - Zero-payload path uses MPI_UNSIGNED_LONG for cache efficiency
-   * - Non-zero payload uses contiguous buffer packing for MPI performance
-   * - Move semantics during merge operations minimize copy overhead
-   *
    * @param local_data Process-local sorted data, becomes final result on rank 0
-   * @note Final result available only on rank 0, other processes cleared
    */
   void hierarchical_merge(std::vector<Record> &local_data);
 
@@ -166,13 +95,11 @@ private:
                                          MPI_Comm comm);
 
   /**
-   * @brief Update performance metrics for specific execution phase
-   * @param phase Phase identifier ("distribution", "local_sort", "merge")
-   * @param elapsed_time Phase execution time in milliseconds
+   * @brief Update performance metrics for execution phase
    */
   void update_metrics(const std::string &phase, double elapsed_time);
 
-  // Static utility methods for record serialization (currently unused)
+  // Utility methods for record serialization
   static std::vector<char> pack_records(const std::vector<Record> &records,
                                         size_t record_byte_size);
   static std::vector<Record> unpack_records(const std::vector<char> &buffer,
@@ -181,11 +108,11 @@ private:
   static std::vector<Record> merge_sorted_vectors(std::vector<Record> &left,
                                                   std::vector<Record> &right);
 
-  HybridConfig config_;   ///< Algorithm configuration parameters
-  int mpi_rank_;          ///< Current process rank in MPI_COMM_WORLD
-  int mpi_size_;          ///< Total process count in MPI_COMM_WORLD
-  size_t payload_size_;   ///< Current record payload size (bytes)
-  HybridMetrics metrics_; ///< Performance metrics accumulator
+  HybridConfig config_;   ///< Algorithm configuration
+  int mpi_rank_;          ///< Current process rank
+  int mpi_size_;          ///< Total process count
+  size_t payload_size_;   ///< Current record payload size
+  HybridMetrics metrics_; ///< Performance metrics
 };
 
 } // namespace hybrid

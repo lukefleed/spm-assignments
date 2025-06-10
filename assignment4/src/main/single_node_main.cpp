@@ -11,19 +11,13 @@
 void parallel_mergesort(std::vector<Record> &data, size_t num_threads);
 
 /**
- * @brief Validates the result of a sort operation.
+ * @brief Validate sort operation correctness
  *
- * Checks three conditions:
- * 1. The size of the sorted vector matches the original size.
- * 2. The multiset of keys in the sorted vector matches the original.
- * 3. The sorted vector is actually in non-decreasing order.
- *
- * @param sorted_data The vector after sorting.
- * @param original_data The vector before sorting.
- * @return True if all validation checks pass, false otherwise.
+ * Verifies size preservation, key content preservation, and sort order.
  */
 bool validate_result(const std::vector<Record> &sorted_data,
                      const std::vector<Record> &original_data) {
+  // Check size preservation
   if (sorted_data.size() != original_data.size()) {
     std::cerr << "\n  [!] Validation Error: Size mismatch! Expected "
               << original_data.size() << ", but got " << sorted_data.size()
@@ -31,12 +25,13 @@ bool validate_result(const std::vector<Record> &sorted_data,
     return false;
   }
 
+  // Check sort order
   if (!is_sorted(sorted_data)) {
     std::cerr << "\n  [!] Validation Error: Output is not sorted.\n";
     return false;
   }
 
-  // Use multisets to verify that all original keys are present in the result
+  // Check key content preservation using multisets
   std::multiset<unsigned long> original_keys;
   for (const auto &rec : original_data) {
     original_keys.insert(rec.key);
@@ -55,9 +50,13 @@ bool validate_result(const std::vector<Record> &sorted_data,
   return true;
 }
 
+/**
+ * @brief Single-node mergesort comparison benchmark
+ */
 int main(int argc, char *argv[]) {
   Config config = parse_args(argc, argv);
 
+  // Display benchmark configuration
   std::cout << "=== Single Node MergeSort Comparison ===\n";
   std::cout << "Array size: " << config.array_size << " elements\n";
   std::cout << "Payload size: " << config.payload_size << " bytes\n";
@@ -83,11 +82,11 @@ int main(int argc, char *argv[]) {
   }
   std::cout << "\n";
 
-  // Generate a single, canonical dataset for all tests to use
+  // Generate canonical dataset for all tests
   auto original_data =
       generate_data(config.array_size, config.payload_size, config.pattern);
 
-  // Results table
+  // Setup results table
   std::cout << std::left << std::setw(25) << "Implementation" << std::right
             << std::setw(15) << "Time (ms)" << std::setw(15) << "Speedup"
             << std::setw(15) << "Valid\n";
@@ -95,13 +94,13 @@ int main(int argc, char *argv[]) {
 
   double baseline_time = 0;
 
-  // Test std::sort (baseline)
+  // Benchmark 1: std::sort (baseline reference)
   {
     auto data = copy_records(original_data);
     Timer t;
     std::sort(data.begin(), data.end());
     double ms = t.elapsed_ms();
-    baseline_time = ms;
+    baseline_time = ms; // Store for speedup calculations
 
     bool valid = config.validate ? validate_result(data, original_data) : true;
     std::cout << std::left << std::setw(25) << "std::sort" << std::right
@@ -110,7 +109,7 @@ int main(int argc, char *argv[]) {
               << (valid ? "✓" : "✗") << "\n";
   }
 
-  // Test sequential mergesort
+  // Benchmark 2: Sequential mergesort implementation
   {
     auto data = copy_records(original_data);
     Timer t;
@@ -125,7 +124,7 @@ int main(int argc, char *argv[]) {
               << std::setw(15) << (valid ? "✓" : "✗") << "\n";
   }
 
-  // Test parallel pipeline with two farms
+  // Benchmark 3: FastFlow parallel mergesort
   {
     auto data = copy_records(original_data);
     Timer t;
@@ -133,7 +132,7 @@ int main(int argc, char *argv[]) {
     double ms = t.elapsed_ms();
 
     bool valid = config.validate ? validate_result(data, original_data) : true;
-    std::cout << std::left << std::setw(25) << "FF Pipeline Two Farms"
+    std::cout << std::left << std::setw(25) << "FF Parallel MergeSort"
               << std::right << std::setw(15) << std::fixed
               << std::setprecision(2) << ms << std::setw(15) << std::fixed
               << std::setprecision(2) << baseline_time / ms << "x"
