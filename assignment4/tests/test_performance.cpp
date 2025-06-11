@@ -185,7 +185,8 @@ void run_thread_scaling_test(std::ofstream &csv_file,
   // Benchmark parallel mergesort with different thread counts
   for (size_t threads : thread_counts) {
     auto ff_result =
-        run_performance_test("Parallel", array_size, payload_size, threads);
+        run_performance_test("Parallel", array_size, payload_size, threads,
+                             std_sort_result.execution_time_ms);
     write_standardized_csv_row(csv_file, ff_result,
                                sequential_result.execution_time_ms);
 
@@ -279,7 +280,8 @@ void run_array_size_test(std::ofstream &csv_file) {
 
     // Parallel mergesort
     auto ff_result =
-        run_performance_test("Parallel", size, payload_size, num_threads);
+        run_performance_test("Parallel", size, payload_size, num_threads,
+                             std_result.execution_time_ms);
     write_standardized_csv_row(csv_file, ff_result,
                                seq_result.execution_time_ms);
 
@@ -373,7 +375,8 @@ void run_payload_size_test(std::ofstream &csv_file) {
 
     // Parallel mergesort
     auto ff_result =
-        run_performance_test("Parallel", array_size, payload, num_threads);
+        run_performance_test("Parallel", array_size, payload, num_threads,
+                             std_result.execution_time_ms);
     write_standardized_csv_row(csv_file, ff_result,
                                seq_result.execution_time_ms);
 

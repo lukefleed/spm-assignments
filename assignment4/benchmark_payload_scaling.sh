@@ -25,32 +25,43 @@ echo "Payload sizes: ${PAYLOADS[*]} bytes"
 echo "Output file: $OUTPUT"
 echo
 
-# Remove existing output file to start fresh
+# Create consolidated CSV with header
 rm -f "$OUTPUT"
+echo "Test_Type,Implementation,Data_Size,Payload_Size_Bytes,Threads,Execution_Time_ms,Throughput_MRec_per_sec,Speedup_vs_StdSort,Speedup_vs_Sequential,Efficiency_Percent,Valid" > "$OUTPUT"
 
-# Initialize CSV with header by running first test
-echo "Testing payload ${PAYLOADS[0]} bytes..."
-./bin/single_node_main -s "$ARRAY_SIZE" -t "$THREADS" -r "${PAYLOADS[0]}" --no-validate --csv --csv-file "$OUTPUT" --verbose
-
-# Run remaining tests, appending to the same CSV file
-for ((i=1; i<${#PAYLOADS[@]}; i++)); do
-    payload="${PAYLOADS[i]}"
+for payload in "${PAYLOADS[@]}"; do
     echo "Testing payload $payload bytes..."
 
-    # Create temporary file for this test
-    temp_file=$(mktemp)
-    ./bin/single_node_main -s "$ARRAY_SIZE" -t "$THREADS" -r "$payload" --no-validate --csv --csv-file "$temp_file" --verbose
+    # Create a temporary log file to capture output while showing it
+    TEMP_LOG=$(mktemp)
 
-    # Append data rows (skip header) to main output file
-    tail -n +2 "$temp_file" >> "$OUTPUT"
-    rm -f "$temp_file"
+    # Run test, show output in real-time, and capture it for CSV filename extraction
+    ./bin/single_node_main -s "$ARRAY_SIZE" -t "$THREADS" -r "$payload" --no-validate --csv --verbose 2>&1 | tee "$TEMP_LOG"
+
+    # Extract the CSV filename from the captured output
+    CSV_FILE=$(grep "CSV output will be written to:" "$TEMP_LOG" | sed 's/.*CSV output will be written to: //')
+
+    # Clean up temp log
+    rm -f "$TEMP_LOG"
+
+    # Wait a moment for file to be fully written
+    sleep 0.2
+
+    # Append CSV data from the generated file (skip header line)
+    if [ -f "$CSV_FILE" ] && [ -s "$CSV_FILE" ]; then
+        tail -n +2 "$CSV_FILE" >> "$OUTPUT"
+        rm -f "$CSV_FILE"  # Clean up the temporary file
+    else
+        echo "Warning: Expected CSV file $CSV_FILE not found or empty"
+    fi
+
+    echo # Add blank line between tests
 done
+
+# Clean up any remaining CSV files that might have been left behind
+echo "Cleaning up temporary files..."
+rm -f results_single_node_*.csv
 
 echo
 echo "Benchmark completed successfully!"
 echo "Results: $OUTPUT"
-echo "CSV contains standardized performance metrics with comprehensive speedup analysis."
-echo
-echo "Sample output:"
-echo "$(head -n 4 "$OUTPUT")"
-echo "... ($(wc -l < "$OUTPUT") total records)"

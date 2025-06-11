@@ -12,7 +12,7 @@
 # ============================================================================
 
 # Default parameters (can be overridden via command line)
-DEFAULT_FF_THREADS=16
+DEFAULT_FF_THREADS=10
 DEFAULT_RECORDS_SIZE_M=100
 DEFAULT_PAYLOAD_SIZE_B=16
 DEFAULT_CSV_FILENAME="hybrid_performance_results.csv"
@@ -125,7 +125,7 @@ srun --nodes=1 \
 BASELINE_OUTPUT=$(srun --ntasks=1 \
                        --nodes=1 \
                        --cpus-per-task=${FF_THREADS} \
-                       --time=00:08:00 \
+                       --time=00:10:00 \
                        --mpi=pmix \
                        bin/test_hybrid_performance ${FF_THREADS} ${RECORDS_SIZE_M} ${PAYLOAD_SIZE_B} ${CSV_FILENAME} --quiet 2>/dev/null)
 
@@ -171,7 +171,7 @@ for nodes in "${NODES_ARRAY[@]}"; do
          --ntasks=${nodes} \
          --ntasks-per-node=1 \
          --cpus-per-task=${FF_THREADS} \
-         --time=00:08:00 \
+         --time=00:10:00 \
          --mpi=pmix \
          bin/test_hybrid_performance ${FF_THREADS} ${RECORDS_SIZE_M} ${PAYLOAD_SIZE_B} ${CSV_FILENAME} --quiet --skip-baselines --baseline-time=${BASELINE_TIME}
 

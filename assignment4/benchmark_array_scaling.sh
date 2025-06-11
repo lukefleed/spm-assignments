@@ -9,7 +9,7 @@ set -e  # Exit on any error
 THREADS=${1:-16}
 OUTPUT=${2:-"benchmark_array_scaling_results.csv"}
 
-SIZES=("200K" "400K" "800K" "1M" "2M" "4M" "8M" "16M" "32M" "64M" "100M")
+SIZES=("200K" "400K" "800K" "1M" "2M" "4M" "8M" "16M" "32M" "64M")
 PAYLOAD_SIZE=16
 
 if [ ! -f "./bin/single_node_main" ]; then
@@ -25,25 +25,25 @@ echo "Array sizes: ${SIZES[*]}"
 echo "Output file: $OUTPUT"
 echo
 
-# Remove existing output file to start fresh
+# Create CSV with header
 rm -f "$OUTPUT"
+echo "Test_Type,Implementation,Data_Size,Payload_Size_Bytes,Threads,Execution_Time_ms,Throughput_MRec_per_sec,Speedup_vs_StdSort,Speedup_vs_Sequential,Efficiency_Percent,Valid" > "$OUTPUT"
 
-# Initialize CSV with header by running first test
-echo "Testing ${SIZES[0]}..."
-./bin/single_node_main -s "${SIZES[0]}" -t "$THREADS" -r "$PAYLOAD_SIZE" --no-validate --csv --csv-file "$OUTPUT" --verbose
-
-# Run remaining tests, appending to the same CSV file
-for ((i=1; i<${#SIZES[@]}; i++)); do
-    size="${SIZES[i]}"
+for size in "${SIZES[@]}"; do
     echo "Testing $size..."
 
-    # Create temporary file for this test
-    temp_file=$(mktemp)
-    ./bin/single_node_main -s "$size" -t "$THREADS" -r "$PAYLOAD_SIZE" --no-validate --csv --csv-file "$temp_file" --verbose
+    # Run test (CSV will be written to timestamped file)
+    ./bin/single_node_main -s "$size" -t "$THREADS" -r "$PAYLOAD_SIZE" --csv --verbose
 
-    # Append data rows (skip header) to main output file
-    tail -n +2 "$temp_file" >> "$OUTPUT"
-    rm -f "$temp_file"
+    # Find the most recently created CSV file and append its data (skip header)
+    LATEST_CSV=$(ls -t results_single_node_*.csv | head -1)
+    if [ -f "$LATEST_CSV" ]; then
+        tail -n +2 "$LATEST_CSV" >> "$OUTPUT"
+        rm -f "$LATEST_CSV"  # Clean up temporary file
+    else
+        echo "Error: Could not find generated CSV file for size $size"
+        exit 1
+    fi
 done
 
 echo
@@ -53,4 +53,4 @@ echo "CSV contains standardized performance metrics with comprehensive speedup a
 echo
 echo "Sample output:"
 echo "$(head -n 4 "$OUTPUT")"
-echo "... ($(wc -l < "$OUTPUT") total records)"
+echo "... ($(tail -n +2 "$OUTPUT" | wc -l) data records)"

@@ -1,0 +1,8 @@
+Test_Type,Implementation,Data_Size,Payload_Size_Bytes,Threads,Execution_Time_ms,Throughput_MRec_per_sec,Speedup_vs_StdSort,Speedup_vs_Sequential,Efficiency_Percent,Valid
+performance_test,std::sort,100000000,16,1,13292.272,7.523,1.000,1.000,100.0,true
+performance_test,Sequential,100000000,16,1,33367.166,2.997,1.000,1.000,100.0,true
+performance_test,Parallel,100000000,16,2,9577.324,10.441,1.388,3.484,69.4,true
+performance_test,Parallel,100000000,16,4,5997.111,16.675,2.216,5.564,55.4,true
+performance_test,Parallel,100000000,16,8,5150.853,19.414,2.581,6.478,32.3,true
+performance_test,Parallel,100000000,16,16,4962.079,20.153,2.679,6.724,16.7,true
+performance_test,Parallel,100000000,16,32,5419.906,18.451,2.452,6.156,7.7,true
