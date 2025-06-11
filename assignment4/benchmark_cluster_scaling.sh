@@ -12,7 +12,7 @@
 # ============================================================================
 
 # Default parameters (can be overridden via command line)
-DEFAULT_FF_THREADS=10
+DEFAULT_FF_THREADS=16
 DEFAULT_RECORDS_SIZE_M=100
 DEFAULT_PAYLOAD_SIZE_B=16
 DEFAULT_CSV_FILENAME="hybrid_performance_results.csv"

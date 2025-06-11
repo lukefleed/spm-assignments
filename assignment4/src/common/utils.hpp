@@ -55,6 +55,8 @@ struct Config {
   DataPattern pattern = DataPattern::RANDOM;
   bool validate = true;
   bool verbose = false;
+  bool csv_output = false;
+  std::string csv_filename = "";
 };
 
 /**

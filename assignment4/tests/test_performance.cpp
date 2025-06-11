@@ -3,6 +3,7 @@
  * @brief Performance benchmarking suite for mergesort implementations
  */
 
+#include "../include/csv_format.h"
 #include "../src/common/record.hpp"
 #include "../src/common/timer.hpp"
 #include "../src/common/utils.hpp"
@@ -34,22 +35,30 @@ struct TestResult {
 };
 
 /**
- * @brief Write CSV header for benchmark results
+ * @brief Convert TestResult to standardized CSV format and write to file
  */
-void write_csv_header(std::ofstream &file) {
-  file << "implementation,array_size,payload_size,num_threads,execution_time_"
-          "ms,throughput_mb_per_sec,speedup\n";
-}
+void write_standardized_csv_row(std::ofstream &file, const TestResult &result,
+                                double sequential_time_ms) {
+  // Calculate metrics for standardized format
+  double throughput_mrec_per_sec =
+      (static_cast<double>(result.array_size) / 1000000.0) /
+      (result.execution_time_ms / 1000.0);
 
-/**
- * @brief Write test result to CSV file
- */
-void write_csv_row(std::ofstream &file, const TestResult &result) {
-  file << result.implementation << "," << result.array_size << ","
-       << result.payload_size << "," << result.num_threads << "," << std::fixed
-       << std::setprecision(3) << result.execution_time_ms << ","
-       << std::setprecision(2) << result.throughput_mb_per_sec << ","
-       << std::setprecision(3) << result.speedup << "\n";
+  // For efficiency calculation (only meaningful for parallel implementations)
+  double efficiency = result.num_threads > 1
+                          ? (result.speedup / result.num_threads) * 100.0
+                          : 100.0;
+
+  // Calculate speedup vs sequential
+  double speedup_vs_sequential =
+      sequential_time_ms > 0.0 ? sequential_time_ms / result.execution_time_ms
+                               : 1.0;
+
+  csv_format::write_single_node_csv_row(
+      file, "performance_test", result.implementation, result.array_size,
+      result.payload_size, result.num_threads, result.execution_time_ms,
+      throughput_mrec_per_sec, result.speedup, speedup_vs_sequential,
+      efficiency, true);
 }
 
 /**
@@ -145,7 +154,7 @@ void run_thread_scaling_test(std::ofstream &csv_file,
   // Benchmark std::sort (baseline)
   auto std_sort_result =
       run_performance_test("std::sort", array_size, payload_size, 1);
-  write_csv_row(csv_file, std_sort_result);
+  write_standardized_csv_row(csv_file, std_sort_result, 0.0);
 
   std::cout << std::setw(w_impl) << "std::sort" << std::setw(w_threads) << "1"
             << std::setw(w_time) << std::fixed << std::setprecision(1)
@@ -157,7 +166,8 @@ void run_thread_scaling_test(std::ofstream &csv_file,
   // Benchmark sequential mergesort
   auto sequential_result =
       run_performance_test("Sequential", array_size, payload_size, 1);
-  write_csv_row(csv_file, sequential_result);
+  write_standardized_csv_row(csv_file, sequential_result,
+                             sequential_result.execution_time_ms);
 
   double seq_vs_std =
       std_sort_result.execution_time_ms / sequential_result.execution_time_ms;
@@ -176,7 +186,8 @@ void run_thread_scaling_test(std::ofstream &csv_file,
   for (size_t threads : thread_counts) {
     auto ff_result =
         run_performance_test("Parallel", array_size, payload_size, threads);
-    write_csv_row(csv_file, ff_result);
+    write_standardized_csv_row(csv_file, ff_result,
+                               sequential_result.execution_time_ms);
 
     double ff_vs_std =
         std_sort_result.execution_time_ms / ff_result.execution_time_ms;
@@ -238,7 +249,7 @@ void run_array_size_test(std::ofstream &csv_file) {
 
     // std::sort baseline
     auto std_result = run_performance_test("std::sort", size, payload_size, 1);
-    write_csv_row(csv_file, std_result);
+    write_standardized_csv_row(csv_file, std_result, 0.0);
 
     std::cout << std::setw(w_impl) << "std::sort" << std::setw(w_size)
               << size_info.first << std::setw(w_time) << std::fixed
@@ -249,7 +260,8 @@ void run_array_size_test(std::ofstream &csv_file) {
 
     // Sequential mergesort
     auto seq_result = run_performance_test("Sequential", size, payload_size, 1);
-    write_csv_row(csv_file, seq_result);
+    write_standardized_csv_row(csv_file, seq_result,
+                               seq_result.execution_time_ms);
 
     double seq_vs_std =
         std_result.execution_time_ms / seq_result.execution_time_ms;
@@ -268,7 +280,8 @@ void run_array_size_test(std::ofstream &csv_file) {
     // Parallel mergesort
     auto ff_result =
         run_performance_test("Parallel", size, payload_size, num_threads);
-    write_csv_row(csv_file, ff_result);
+    write_standardized_csv_row(csv_file, ff_result,
+                               seq_result.execution_time_ms);
 
     double ff_vs_std =
         std_result.execution_time_ms / ff_result.execution_time_ms;
@@ -330,7 +343,7 @@ void run_payload_size_test(std::ofstream &csv_file) {
   for (size_t payload : payload_sizes) {
     // std::sort baseline
     auto std_result = run_performance_test("std::sort", array_size, payload, 1);
-    write_csv_row(csv_file, std_result);
+    write_standardized_csv_row(csv_file, std_result, 0.0);
 
     std::cout << std::setw(w_impl) << "std::sort" << std::setw(w_payload)
               << payload << std::setw(w_time) << std::fixed
@@ -342,7 +355,8 @@ void run_payload_size_test(std::ofstream &csv_file) {
     // Sequential mergesort
     auto seq_result =
         run_performance_test("Sequential", array_size, payload, 1);
-    write_csv_row(csv_file, seq_result);
+    write_standardized_csv_row(csv_file, seq_result,
+                               seq_result.execution_time_ms);
 
     double seq_vs_std =
         std_result.execution_time_ms / seq_result.execution_time_ms;
@@ -360,7 +374,8 @@ void run_payload_size_test(std::ofstream &csv_file) {
     // Parallel mergesort
     auto ff_result =
         run_performance_test("Parallel", array_size, payload, num_threads);
-    write_csv_row(csv_file, ff_result);
+    write_standardized_csv_row(csv_file, ff_result,
+                               seq_result.execution_time_ms);
 
     double ff_vs_std =
         std_result.execution_time_ms / ff_result.execution_time_ms;
@@ -395,8 +410,6 @@ struct TestConfig {
   std::vector<size_t> thread_counts;
   size_t array_size;
   size_t payload_size;
-  bool run_size_scaling;
-  bool run_payload_scaling;
 };
 
 /**
@@ -409,31 +422,25 @@ TestConfig parse_test_args(int argc, char *argv[]) {
   config.thread_counts = {2, 4, 6, 8, 10, 12, 24};
   config.array_size = 10000000; // 10M records
   config.payload_size = 64;     // 64B payload
-  config.run_size_scaling = false;
-  config.run_payload_scaling = false;
 
   // Check for help
   for (int i = 1; i < argc; ++i) {
     std::string arg = argv[i];
     if (arg == "--help" || arg == "-h") {
-      std::cout
-          << "Usage: " << argv[0]
-          << " [THREAD_COUNTS] [ARRAY_SIZE_M] [PAYLOAD_SIZE_B] [OPTIONS]\n";
+      std::cout << "Usage: " << argv[0]
+                << " [THREAD_COUNTS] [ARRAY_SIZE_M] [PAYLOAD_SIZE_B]\n";
       std::cout << "\nParameters:\n";
       std::cout << "  THREAD_COUNTS    Space-separated list of thread counts "
                    "(e.g., \"2 4 8 12\")\n";
       std::cout << "  ARRAY_SIZE_M     Array size in millions of records "
                    "(default: 10)\n";
       std::cout << "  PAYLOAD_SIZE_B   Payload size in bytes (default: 64)\n";
-      std::cout << "\nOptions:\n";
-      std::cout << "  --size-scaling   Enable array size scaling test\n";
-      std::cout << "  --payload-scaling Enable payload size scaling test\n";
-      std::cout << "  --help, -h       Show this help message\n";
       std::cout << "\nExamples:\n";
       std::cout << "  " << argv[0] << " \"1 2 4 8\" 10 64\n";
-      std::cout << "  " << argv[0] << " \"2 4 8\" 5 32 --size-scaling\n";
-      std::cout << "  " << argv[0]
-                << " \"1 2 4 8 12\" 10 64 --size-scaling --payload-scaling\n";
+      std::cout << "  " << argv[0] << " \"2 4 8\" 5 32\n";
+      std::cout << "\nNote: For array size and payload scaling tests, use:\n";
+      std::cout << "  make benchmark_array_scaling\n";
+      std::cout << "  make benchmark_payload_scaling\n";
       exit(0);
     }
   }
@@ -478,20 +485,6 @@ TestConfig parse_test_args(int argc, char *argv[]) {
     }
   }
 
-  // Parse options
-  for (int i = 4; i < argc; ++i) {
-    std::string arg = argv[i];
-    if (arg == "--size-scaling") {
-      config.run_size_scaling = true;
-    } else if (arg == "--payload-scaling") {
-      config.run_payload_scaling = true;
-    } else {
-      std::cerr << "Unknown option: " << arg << std::endl;
-      std::cerr << "Use --help for usage information" << std::endl;
-      exit(1);
-    }
-  }
-
   return config;
 }
 
@@ -511,25 +504,20 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  write_csv_header(csv_file);
+  csv_format::write_single_node_csv_header(csv_file);
 
   // Execute core thread scaling benchmark
   run_thread_scaling_test(csv_file, config.thread_counts, config.array_size,
                           config.payload_size);
 
-  // Execute optional scaling tests
-  if (config.run_size_scaling) {
-    run_array_size_test(csv_file);
-  }
-
-  if (config.run_payload_scaling) {
-    run_payload_size_test(csv_file);
-  }
-
   csv_file.close();
 
   std::cout << "\n=== Performance Testing Complete ===" << std::endl;
   std::cout << "Results saved to: performance_results.csv" << std::endl;
+  std::cout << "\nFor array size and payload scaling analysis, use:"
+            << std::endl;
+  std::cout << "  make benchmark_array_scaling" << std::endl;
+  std::cout << "  make benchmark_payload_scaling" << std::endl;
 
   return 0;
 }

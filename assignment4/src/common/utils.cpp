@@ -107,6 +107,12 @@ Config parse_args(int argc, char *argv[]) {
       config.validate = false;
     else if (arg == "-v" || arg == "--verbose")
       config.verbose = true;
+    else if (arg == "--csv")
+      config.csv_output = true;
+    else if (arg == "--csv-file" && i + 1 < argc) {
+      config.csv_output = true;
+      config.csv_filename = argv[++i];
+    }
   }
   return config;
 }

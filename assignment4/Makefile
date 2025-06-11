@@ -127,7 +127,7 @@ clean:
 	@rm -f .baseline_time_hybrid_*.tmp
 
 # Phony targets
-.PHONY: all clean test_perf_hybrid test_correctness_single_node test_perf_single_node test_correctness_hybrid help
+.PHONY: all clean test_perf_hybrid test_correctness_single_node test_perf_single_node benchmark_single_node benchmark_array_scaling benchmark_payload_scaling test_correctness_hybrid help
 
 # Single node correctness test
 test_correctness_single_node: $(TARGET_CORRECT)
@@ -148,19 +148,46 @@ test_perf_single_node: $(TARGET_PERF)
 	@echo "------------------------------------------------------------------------------"
 	@echo " Config: $(ARRAY_SIZE_M)M records, $(PAYLOAD_SIZE_B)B payload"
 	@echo " Threads: $(THREAD_LIST)"
-	@echo " Optional tests: --size-scaling --payload-scaling"
 	@echo "=============================================================================="
-	$(TARGET_PERF) "$(THREAD_LIST)" $(ARRAY_SIZE_M) $(PAYLOAD_SIZE_B) $(EXTRA_FLAGS)
+	$(TARGET_PERF) "$(THREAD_LIST)" $(ARRAY_SIZE_M) $(PAYLOAD_SIZE_B)
 	@echo "------------------------------------------------------------------------------"
 	@echo " Analysis Complete. Results saved to: performance_results.csv"
+	@echo " For scaling analysis, use: make benchmark_array_scaling | benchmark_payload_scaling"
 	@echo "=============================================================================="
+
+# Single node performance benchmark with standardized metrics output
+SINGLE_NODE_THREADS ?= 8
+SINGLE_NODE_OUTPUT ?= results_single_node_performance.csv
+
+benchmark_single_node: $(TARGET_SINGLE_NODE)
+	@echo "=============================================================================="
+	@echo "                    Single Node Performance Benchmark                        "
+	@echo "------------------------------------------------------------------------------"
+	@echo " Config: $(ARRAY_SIZE_M)M records, $(PAYLOAD_SIZE_B)B payload, $(SINGLE_NODE_THREADS) threads"
+	@echo " Output: $(SINGLE_NODE_OUTPUT)"
+	@echo "=============================================================================="
+	$(TARGET_SINGLE_NODE) -s $(ARRAY_SIZE_M)M -r $(PAYLOAD_SIZE_B) -t $(SINGLE_NODE_THREADS) --no-validate --csv --csv-file $(SINGLE_NODE_OUTPUT) --verbose
+	@echo "------------------------------------------------------------------------------"
+	@echo " Benchmark Complete. Results saved to: $(SINGLE_NODE_OUTPUT)"
+	@echo " CSV contains standardized performance metrics with proper speedup analysis."
+	@echo "=============================================================================="
+
+# Array size scaling benchmark
+benchmark_array_scaling: $(TARGET_SINGLE_NODE)
+	@echo "Executing array size scaling benchmark..."
+	@./benchmark_array_scaling.sh $(SINGLE_NODE_THREADS) benchmark_array_scaling_results.csv
+
+# Payload size scaling benchmark
+benchmark_payload_scaling: $(TARGET_SINGLE_NODE)
+	@echo "Executing payload size scaling benchmark..."
+	@./benchmark_payload_scaling.sh $(SINGLE_NODE_THREADS) benchmark_payload_scaling_results.csv
 
 # Hybrid correctness test
 test_correctness_hybrid: $(TARGET_HYBRID_CORRECT)
 	@echo "Running hybrid MPI+parallel correctness tests..."
 	mpirun --oversubscribe -np 2 $(TARGET_HYBRID_CORRECT)
 
-# Help target with enhanced information
+# Help target
 help:
 	@echo "Hybrid MPI+Parallel Mergesort Build System"
 	@echo "==========================================="
@@ -176,19 +203,58 @@ help:
 	@echo "Testing Targets:"
 	@echo "  test_correctness_single_node - Verify single-node implementation correctness"
 	@echo "  test_correctness_hybrid      - Verify hybrid MPI+parallel correctness"
-	@echo "  test_perf_single_node        - Single-node performance analysis"
-	@echo "  test_perf_hybrid             - Dual-baseline hybrid performance analysis"
+	@echo "  test_perf_single_node        - Thread scaling performance analysis (console output)"
+	@echo "                                 Usage: make test_perf_single_node THREAD_LIST=\"2 4 8\" ARRAY_SIZE_M=10 PAYLOAD_SIZE_B=64"
+	@echo "                                 Outputs: performance_results.csv with detailed metrics"
+	@echo "  test_perf_hybrid             - MPI scaling performance analysis with dual-baseline comparison"
+	@echo "                                 Usage: make test_perf_hybrid MPI_NODES_LIST=\"1 2 4\" FF_THREADS=4"
+	@echo "                                 Outputs: hybrid_performance_results.csv with scaling analysis"
 	@echo ""
-	@echo "Hybrid Performance Test Configuration:"
+	@echo "Benchmark Targets:"
+	@echo "  benchmark_single_node        - Single configuration comprehensive benchmark"
+	@echo "                                 Usage: make benchmark_single_node ARRAY_SIZE_M=50 SINGLE_NODE_THREADS=8"
+	@echo "  benchmark_array_scaling      - Array size scaling analysis (200K to 100M records)"
+	@echo "                                 Usage: make benchmark_array_scaling SINGLE_NODE_THREADS=4"
+	@echo "  benchmark_payload_scaling    - Payload size scaling analysis (2 to 512 bytes)"
+	@echo "                                 Usage: make benchmark_payload_scaling SINGLE_NODE_THREADS=6"
+	@echo ""
+	@echo "Configuration Parameters:"
+	@echo ""
+	@echo "Single-Node Performance:"
+	@echo "  THREAD_LIST=\"2 4 8 16\"       - Thread counts for scaling tests (default: powers of 2 up to nproc)"
+	@echo "  SINGLE_NODE_THREADS=8        - Thread count for single configuration benchmarks"
+	@echo "  ARRAY_SIZE_M=100             - Dataset size in millions of records"
+	@echo "  PAYLOAD_SIZE_B=16            - Record payload size in bytes"
+	@echo "  SINGLE_NODE_OUTPUT=file.csv  - Output CSV file for single-node benchmark"
+	@echo ""
+	@echo "Hybrid MPI Performance:"
 	@echo "  MPI_NODES_LIST=\"1 2 4 8\"     - MPI process counts to test"
 	@echo "  FF_THREADS=4                 - FastFlow threads per MPI process"
 	@echo "  RECORDS_SIZE_M=10            - Dataset size in millions of records"
 	@echo "  PAYLOAD_SIZE_B=64            - Record payload size in bytes"
 	@echo "  HYBRID_CSV_FILE=results.csv  - Output CSV file for detailed analysis"
 	@echo ""
-	@echo "Example Usage:"
-	@echo "  make test_perf_hybrid MPI_NODES_LIST=\"1 2 4\" FF_THREADS=8"
-	@echo "  make test_perf_hybrid RECORDS_SIZE_M=50 PAYLOAD_SIZE_B=128"
+	@echo "Common Usage Examples:"
+	@echo ""
+	@echo "Quick correctness verification:"
+	@echo "  make test_correctness_single_node"
+	@echo "  make test_correctness_hybrid"
+	@echo ""
+	@echo "Thread scaling analysis:"
+	@echo "  make test_perf_single_node"
+	@echo "  make test_perf_single_node THREAD_LIST=\"1 2 4 8 16\" ARRAY_SIZE_M=50"
+	@echo ""
+	@echo "Single configuration benchmarks:"
+	@echo "  make benchmark_single_node"
+	@echo "  make benchmark_single_node ARRAY_SIZE_M=100 SINGLE_NODE_THREADS=12"
+	@echo ""
+	@echo "Scaling analysis:"
+	@echo "  make benchmark_array_scaling SINGLE_NODE_THREADS=8"
+	@echo "  make benchmark_payload_scaling SINGLE_NODE_THREADS=4"
+	@echo ""
+	@echo "MPI hybrid performance:"
+	@echo "  make test_perf_hybrid"
+	@echo "  make test_perf_hybrid MPI_NODES_LIST=\"1 2 4 8\" FF_THREADS=8 RECORDS_SIZE_M=50"
 
 # Hybrid MPI+Parallel performance test with dual baseline analysis
 MPI_NODES_LIST ?= 1 2 4 8
