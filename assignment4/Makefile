@@ -127,7 +127,7 @@ clean:
 	@rm -f .baseline_time_hybrid_*.tmp
 
 # Phony targets
-.PHONY: all clean test_perf_hybrid test_correctness_single_node test_perf_single_node benchmark_single_node benchmark_array_scaling benchmark_payload_scaling test_correctness_hybrid help
+.PHONY: all clean test_perf_hybrid test_correctness_single_node test_perf_single_node benchmark_single_node benchmark_array_scaling benchmark_payload_scaling benchmark_cluster_scaling benchmark_cluster_weak_scaling test_correctness_hybrid help
 
 # Single node correctness test
 test_correctness_single_node: $(TARGET_CORRECT)
@@ -181,6 +181,15 @@ benchmark_array_scaling: $(TARGET_SINGLE_NODE)
 benchmark_payload_scaling: $(TARGET_SINGLE_NODE)
 	@echo "Executing payload size scaling benchmark..."
 	@./benchmark_payload_scaling.sh $(SINGLE_NODE_THREADS) benchmark_payload_scaling_results.csv
+
+# Cluster scaling benchmarks
+benchmark_cluster_scaling: $(TARGET_MULTI_NODE) $(TARGET_HYBRID_PERF)
+	@echo "Executing cluster strong scaling benchmark..."
+	@./benchmark_cluster_scaling.sh "1 2 4 8" 10 100 16 cluster_strong_scaling_results.csv
+
+benchmark_cluster_weak_scaling: $(TARGET_MULTI_NODE) $(TARGET_HYBRID_PERF)
+	@echo "Executing cluster weak scaling benchmark..."
+	@./benchmark_cluster_weak_scaling.sh "1 2 4 8" 10 10 16 cluster_weak_scaling_results.csv
 
 # Hybrid correctness test
 test_correctness_hybrid: $(TARGET_HYBRID_CORRECT)
