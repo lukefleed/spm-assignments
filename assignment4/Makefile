@@ -169,7 +169,6 @@ benchmark_single_node: $(TARGET_SINGLE_NODE)
 	$(TARGET_SINGLE_NODE) -s $(ARRAY_SIZE_M)M -r $(PAYLOAD_SIZE_B) -t $(SINGLE_NODE_THREADS) --no-validate --csv --csv-file $(SINGLE_NODE_OUTPUT) --verbose
 	@echo "------------------------------------------------------------------------------"
 	@echo " Benchmark Complete. Results saved to: $(SINGLE_NODE_OUTPUT)"
-	@echo " CSV contains standardized performance metrics with proper speedup analysis."
 	@echo "=============================================================================="
 
 # Array size scaling benchmark
@@ -256,14 +255,14 @@ help:
 	@echo "  make test_perf_hybrid"
 	@echo "  make test_perf_hybrid MPI_NODES_LIST=\"1 2 4 8\" FF_THREADS=8 RECORDS_SIZE_M=50"
 
-# Hybrid MPI+Parallel performance test with dual baseline analysis
+# Hybrid MPI+Parallel performance test
 MPI_NODES_LIST ?= 1 2 4 8
 FF_THREADS ?= 4
 RECORDS_SIZE_M ?= 10
 PAYLOAD_SIZE_B ?= 64
 HYBRID_CSV_FILE ?= hybrid_performance_results.csv
 
-# Hybrid MPI+Parallel performance test with dual baseline analysis
+# Hybrid MPI+Parallel performance test
 test_perf_hybrid: $(TARGET_HYBRID_PERF)
 	@echo "=============================================================================="
 	@echo "                 Hybrid MPI+Parallel Performance Test                        "

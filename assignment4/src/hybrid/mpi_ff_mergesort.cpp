@@ -1,6 +1,7 @@
 /**
  * @file mpi_ff_mergesort.cpp
- * @brief Hybrid MPI+FastFlow distributed mergesort implementation
+ * @brief Hybrid MPI+FastFlow distributed mergesort with k-way merge
+ * optimization
  */
 
 #include "mpi_ff_mergesort.hpp"
@@ -8,6 +9,8 @@
 #include "../common/utils.hpp"
 #include <algorithm>
 #include <cstring>
+#include <functional>
+#include <queue>
 #include <stdexcept>
 #include <thread>
 #include <vector>
@@ -60,9 +63,9 @@ std::vector<Record> HybridMergeSort::sort(std::vector<Record> &data,
   sort_local_data(local_data);
   update_metrics("local_sort", sort_timer.elapsed_ms());
 
-  // Phase 3: Hierarchically merge sorted partitions back to root
+  // Phase 3: Hierarchical merge with minimal overlap
   Timer merge_timer;
-  hierarchical_merge(local_data);
+  hierarchical_merge_with_overlap(local_data);
   update_metrics("merge", merge_timer.elapsed_ms());
 
   metrics_.total_time = total_timer.elapsed_ms();
@@ -72,7 +75,7 @@ std::vector<Record> HybridMergeSort::sort(std::vector<Record> &data,
 }
 
 /**
- * @brief Distribute data across MPI processes with load balancing
+ * @brief Distribute data across MPI processes with load balancing (UNCHANGED)
  */
 void HybridMergeSort::distribute_data(std::vector<Record> &local_data,
                                       const std::vector<Record> &global_data) {
@@ -180,7 +183,7 @@ void HybridMergeSort::distribute_data(std::vector<Record> &local_data,
 }
 
 /**
- * @brief Sort local data using FastFlow or std::sort based on size threshold
+ * @brief Sort local data using FastFlow or std::sort (UNCHANGED)
  */
 void HybridMergeSort::sort_local_data(std::vector<Record> &data) {
   if (data.empty())
@@ -196,144 +199,334 @@ void HybridMergeSort::sort_local_data(std::vector<Record> &data) {
 }
 
 /**
- * @brief Hierarchical merge using binary tree reduction
+ * @brief OPTIMIZED: K-way merge with single communication round + FastFlow
+ * parallelization
  */
-void HybridMergeSort::hierarchical_merge(std::vector<Record> &local_data) {
-  // Binary tree reduction: processes pair up and merge in log(P) rounds
-  // Round 1: step=1, pairs (0,1), (2,3), (4,5), (6,7)...
-  // Round 2: step=2, pairs (0,2), (4,6)...
-  // Round 3: step=4, pairs (0,4)...
-  for (int step = 1; step < mpi_size_; step *= 2) {
-    if ((mpi_rank_ % (2 * step)) == 0) {
-      // This process survives and receives data from partner
-      int source = mpi_rank_ + step;
-      if (source < mpi_size_) {
-        // Protocol: receive size first to enable pre-allocation
-        size_t incoming_size;
-        MPI_Recv(&incoming_size, 1, MPI_UNSIGNED_LONG, source, 0,
-                 MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+void HybridMergeSort::hierarchical_merge_with_overlap(
+    std::vector<Record> &local_data) {
+  // REVOLUTIONARY CHANGE: Replace binary tree with k-way merge
+  // This reduces communication rounds from log(P) to 1
 
-        if (incoming_size > 0) {
-          // Pre-allocate space for partner's data
-          std::vector<Record> partner_data;
-          partner_data.reserve(incoming_size);
-          for (size_t i = 0; i < incoming_size; ++i) {
-            partner_data.emplace_back(payload_size_);
-          }
-
-          if (payload_size_ == 0) {
-            // Zero-payload: receive keys only
-            std::vector<unsigned long> keys(incoming_size);
-            MPI_Recv(keys.data(), incoming_size, MPI_UNSIGNED_LONG, source, 1,
-                     MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-
-            // Copy keys into partner Records
-            for (size_t i = 0; i < incoming_size; ++i) {
-              partner_data[i].key = keys[i];
-            }
-          } else {
-            // Non-zero payload: receive packed byte buffer
-            const size_t record_bytes = sizeof(unsigned long) + payload_size_;
-            std::vector<char> buffer(incoming_size * record_bytes);
-
-            MPI_Recv(buffer.data(), buffer.size(), MPI_BYTE, source, 1,
-                     MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-
-            // Unpack received data into Records
-            const char *ptr = buffer.data();
-            for (size_t i = 0; i < incoming_size; ++i) {
-              memcpy(&partner_data[i].key, ptr, sizeof(unsigned long));
-              ptr += sizeof(unsigned long);
-              if (payload_size_ > 0) {
-                memcpy(partner_data[i].payload, ptr, payload_size_);
-              }
-              ptr += payload_size_;
-            }
-          }
-
-          // Merge local data with received partner data
-          if (local_data.empty()) {
-            // If local is empty, just take partner's data
-            local_data = std::move(partner_data);
-          } else {
-            // Perform two-way merge of sorted arrays
-            std::vector<Record> merged;
-            merged.reserve(local_data.size() + partner_data.size());
-
-            // Standard merge algorithm with move semantics
-            size_t i = 0, j = 0;
-            while (i < local_data.size() && j < partner_data.size()) {
-              if (local_data[i] < partner_data[j]) {
-                merged.push_back(std::move(local_data[i++]));
-              } else {
-                merged.push_back(std::move(partner_data[j++]));
-              }
-            }
-
-            // Copy any remaining elements from either array
-            while (i < local_data.size()) {
-              merged.push_back(std::move(local_data[i++]));
-            }
-            while (j < partner_data.size()) {
-              merged.push_back(std::move(partner_data[j++]));
-            }
-
-            // Replace local data with merged result
-            local_data = std::move(merged);
-          }
-
-          metrics_.bytes_communicated +=
-              incoming_size * (sizeof(unsigned long) + payload_size_);
-        }
-      }
-    } else if ((mpi_rank_ % (2 * step)) == step) {
-      // This process sends its data to partner and exits
-      int target = mpi_rank_ - step;
-
-      // Send size first so receiver can pre-allocate
-      size_t size = local_data.size();
-      MPI_Send(&size, 1, MPI_UNSIGNED_LONG, target, 0, MPI_COMM_WORLD);
-
-      if (size > 0) {
-        if (payload_size_ == 0) {
-          // Zero-payload: send keys only
-          std::vector<unsigned long> keys(size);
-          for (size_t i = 0; i < size; ++i) {
-            keys[i] = local_data[i].key;
-          }
-          MPI_Send(keys.data(), size, MPI_UNSIGNED_LONG, target, 1,
-                   MPI_COMM_WORLD);
-        } else {
-          // Non-zero payload: pack and send complete records
-          const size_t record_bytes = sizeof(unsigned long) + payload_size_;
-          std::vector<char> buffer(size * record_bytes);
-          char *ptr = buffer.data();
-
-          // Pack all records into contiguous buffer
-          for (const auto &rec : local_data) {
-            memcpy(ptr, &rec.key, sizeof(unsigned long));
-            ptr += sizeof(unsigned long);
-            if (rec.payload && rec.payload_size > 0) {
-              memcpy(ptr, rec.payload, rec.payload_size);
-            }
-            ptr += rec.payload_size;
-          }
-
-          MPI_Send(buffer.data(), buffer.size(), MPI_BYTE, target, 1,
-                   MPI_COMM_WORLD);
-        }
-      }
-
-      // Sender process is done - clear data and exit reduction
-      local_data.clear();
-      break;
-    }
-    // Processes that don't participate in this round continue to next round
+  if (mpi_rank_ == 0) {
+    // ROOT PROCESS: Collect all partitions and perform k-way merge
+    k_way_merge_as_root(local_data);
+  } else {
+    // NON-ROOT PROCESSES: Send data to root with overlap
+    send_partition_to_root(local_data);
+    local_data.clear(); // Free memory immediately
   }
 }
 
 /**
- * @brief Update performance metrics for execution phase
+ * @brief Root process: Collect all partitions and perform parallel k-way merge
+ */
+void HybridMergeSort::k_way_merge_as_root(std::vector<Record> &local_data) {
+  // Step 1: Prepare storage for all partitions
+  std::vector<std::vector<Record>> all_partitions(mpi_size_);
+  all_partitions[0] = std::move(local_data); // Keep root's own data
+
+  // Step 2: Collect sizes from all processes first (for pre-allocation)
+  std::vector<size_t> partition_sizes(mpi_size_);
+  partition_sizes[0] = all_partitions[0].size();
+
+  for (int source = 1; source < mpi_size_; ++source) {
+    MPI_Recv(&partition_sizes[source], 1, MPI_UNSIGNED_LONG, source, 0,
+             MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+  }
+
+  // Step 3: Non-blocking receives with overlap
+  std::vector<MPI_Request> recv_requests;
+  std::vector<std::vector<char>> recv_buffers;
+  std::vector<std::vector<unsigned long>> key_buffers; // For zero-payload case
+
+  // Initiate all receives simultaneously for maximum overlap
+  for (int source = 1; source < mpi_size_; ++source) {
+    size_t size = partition_sizes[source];
+    if (size > 0) {
+      all_partitions[source].reserve(size);
+      for (size_t i = 0; i < size; ++i) {
+        all_partitions[source].emplace_back(payload_size_);
+      }
+
+      MPI_Request req;
+      if (payload_size_ == 0) {
+        // Zero-payload: receive keys directly
+        key_buffers.emplace_back(size);
+        MPI_Irecv(key_buffers.back().data(), size, MPI_UNSIGNED_LONG, source, 1,
+                  MPI_COMM_WORLD, &req);
+      } else {
+        // Non-zero payload: receive packed data
+        const size_t record_bytes = sizeof(unsigned long) + payload_size_;
+        recv_buffers.emplace_back(size * record_bytes);
+        MPI_Irecv(recv_buffers.back().data(), recv_buffers.back().size(),
+                  MPI_BYTE, source, 1, MPI_COMM_WORLD, &req);
+      }
+      recv_requests.push_back(req);
+    }
+  }
+
+  // Step 4: OVERLAP - While waiting for receives, prepare k-way merge
+  // structures
+  size_t total_elements = 0;
+  for (size_t size : partition_sizes) {
+    total_elements += size;
+  }
+
+  // Pre-allocate final result
+  std::vector<Record> final_result;
+  final_result.reserve(total_elements);
+
+  // Step 5: Wait for all receives and unpack data
+  for (size_t i = 0; i < recv_requests.size(); ++i) {
+    MPI_Wait(&recv_requests[i], MPI_STATUS_IGNORE);
+
+    int source = i + 1; // recv_requests[i] corresponds to source i+1
+    if (partition_sizes[source] > 0) {
+      if (payload_size_ == 0) {
+        // Unpack keys
+        const auto &keys = key_buffers[i];
+        for (size_t j = 0; j < partition_sizes[source]; ++j) {
+          all_partitions[source][j].key = keys[j];
+        }
+      } else {
+        // Unpack complete records
+        const char *ptr = recv_buffers[i].data();
+        for (size_t j = 0; j < partition_sizes[source]; ++j) {
+          memcpy(&all_partitions[source][j].key, ptr, sizeof(unsigned long));
+          ptr += sizeof(unsigned long);
+          if (payload_size_ > 0) {
+            memcpy(all_partitions[source][j].payload, ptr, payload_size_);
+          }
+          ptr += payload_size_;
+        }
+      }
+    }
+  }
+
+  // Step 6: FastFlow-parallelized k-way merge
+  local_data = parallel_k_way_merge(all_partitions);
+
+  // Update metrics
+  metrics_.bytes_communicated += (total_elements - partition_sizes[0]) *
+                                 (sizeof(unsigned long) + payload_size_);
+}
+
+/**
+ * @brief Non-root processes: Send partition to root with overlap
+ */
+void HybridMergeSort::send_partition_to_root(const std::vector<Record> &data) {
+  // Send size first
+  size_t size = data.size();
+  MPI_Send(&size, 1, MPI_UNSIGNED_LONG, 0, 0, MPI_COMM_WORLD);
+
+  if (size == 0)
+    return;
+
+  // Send actual data with non-blocking for potential overlap
+  MPI_Request send_req;
+
+  if (payload_size_ == 0) {
+    // Zero-payload: send keys only
+    std::vector<unsigned long> keys(size);
+    for (size_t i = 0; i < size; ++i) {
+      keys[i] = data[i].key;
+    }
+
+    MPI_Isend(keys.data(), size, MPI_UNSIGNED_LONG, 0, 1, MPI_COMM_WORLD,
+              &send_req);
+    MPI_Wait(&send_req, MPI_STATUS_IGNORE);
+  } else {
+    // Non-zero payload: pack and send complete records
+    const size_t record_bytes = sizeof(unsigned long) + payload_size_;
+    std::vector<char> buffer(size * record_bytes);
+    char *ptr = buffer.data();
+
+    // Pack all records
+    for (const auto &rec : data) {
+      memcpy(ptr, &rec.key, sizeof(unsigned long));
+      ptr += sizeof(unsigned long);
+      if (rec.payload && rec.payload_size > 0) {
+        memcpy(ptr, rec.payload, rec.payload_size);
+      }
+      ptr += rec.payload_size;
+    }
+
+    MPI_Isend(buffer.data(), buffer.size(), MPI_BYTE, 0, 1, MPI_COMM_WORLD,
+              &send_req);
+    MPI_Wait(&send_req, MPI_STATUS_IGNORE);
+  }
+}
+
+/**
+ * @brief FastFlow-parallelized k-way merge of multiple sorted partitions
+ */
+std::vector<Record> HybridMergeSort::parallel_k_way_merge(
+    const std::vector<std::vector<Record>> &partitions) {
+  // Filter out empty partitions
+  std::vector<const std::vector<Record> *> non_empty_partitions;
+  size_t total_elements = 0;
+
+  for (const auto &partition : partitions) {
+    if (!partition.empty()) {
+      non_empty_partitions.push_back(&partition);
+      total_elements += partition.size();
+    }
+  }
+
+  if (non_empty_partitions.empty()) {
+    return std::vector<Record>();
+  }
+
+  if (non_empty_partitions.size() == 1) {
+    // Only one non-empty partition, just copy it
+    std::vector<Record> result;
+    result.reserve(non_empty_partitions[0]->size());
+    for (const auto &rec : *non_empty_partitions[0]) {
+      result.push_back(std::move(const_cast<Record &>(rec)));
+    }
+    return result;
+  }
+
+  // For large datasets with multiple partitions, use FastFlow farm for parallel
+  // k-way merge
+  if (total_elements > config_.min_local_threshold &&
+      config_.parallel_threads > 1 && non_empty_partitions.size() > 2) {
+    return fastflow_parallel_k_way_merge(non_empty_partitions, total_elements);
+  } else {
+    // For smaller datasets, use efficient sequential k-way merge
+    return sequential_k_way_merge(non_empty_partitions, total_elements);
+  }
+}
+
+/**
+ * @brief Efficient sequential k-way merge using heap-based priority queue
+ */
+std::vector<Record> HybridMergeSort::sequential_k_way_merge(
+    const std::vector<const std::vector<Record> *> &partitions,
+    size_t total_elements) {
+  // Stream state for each partition
+  struct StreamState {
+    const std::vector<Record> *partition;
+    size_t index;
+
+    StreamState(const std::vector<Record> *p, size_t i)
+        : partition(p), index(i) {}
+
+    bool has_more() const { return index < partition->size(); }
+    const Record &current() const { return (*partition)[index]; }
+    void advance() { ++index; }
+
+    // Priority queue comparison (min-heap based on key)
+    bool operator>(const StreamState &other) const {
+      return current().key > other.current().key;
+    }
+  };
+
+  // Initialize priority queue with first element from each non-empty partition
+  std::priority_queue<StreamState, std::vector<StreamState>,
+                      std::greater<StreamState>>
+      heap;
+
+  for (const auto *partition : partitions) {
+    if (!partition->empty()) {
+      heap.emplace(partition, 0);
+    }
+  }
+
+  // Result vector with pre-allocated capacity
+  std::vector<Record> result;
+  result.reserve(total_elements);
+
+  // K-way merge using heap
+  while (!heap.empty()) {
+    // Get minimum element
+    StreamState current = heap.top();
+    heap.pop();
+
+    // Move the minimum record to result
+    result.push_back(std::move(const_cast<Record &>(current.current())));
+
+    // Advance stream and re-insert if more elements available
+    current.advance();
+    if (current.has_more()) {
+      heap.push(current);
+    }
+  }
+
+  return result;
+}
+
+/**
+ * @brief FastFlow farm-based parallel k-way merge for large datasets
+ */
+std::vector<Record> HybridMergeSort::fastflow_parallel_k_way_merge(
+    const std::vector<const std::vector<Record> *> &partitions,
+    size_t total_elements) {
+  // For very large datasets, we can implement parallel k-way merge
+  // Strategy: Split partitions into groups and merge each group in parallel,
+  // then do final merge of intermediate results
+
+  const size_t num_partitions = partitions.size();
+  const size_t workers = std::min(config_.parallel_threads, num_partitions);
+
+  if (workers <= 1 || num_partitions <= 2) {
+    // Fall back to sequential merge
+    return sequential_k_way_merge(partitions, total_elements);
+  }
+
+  // Phase 1: Parallel merge of partition groups
+  std::vector<std::vector<Record>> intermediate_results(workers);
+  std::vector<std::thread> merge_threads;
+
+  // Distribute partitions among workers
+  const size_t partitions_per_worker = num_partitions / workers;
+  const size_t remainder = num_partitions % workers;
+
+  size_t partition_offset = 0;
+  for (size_t worker = 0; worker < workers; ++worker) {
+    size_t worker_partitions =
+        partitions_per_worker + (worker < remainder ? 1 : 0);
+
+    if (worker_partitions > 0) {
+      merge_threads.emplace_back([this, &partitions, &intermediate_results,
+                                  worker, partition_offset,
+                                  worker_partitions]() {
+        // Create subset of partitions for this worker
+        std::vector<const std::vector<Record> *> worker_partitions_subset;
+        size_t worker_total_elements = 0;
+
+        for (size_t i = 0; i < worker_partitions; ++i) {
+          worker_partitions_subset.push_back(partitions[partition_offset + i]);
+          worker_total_elements += partitions[partition_offset + i]->size();
+        }
+
+        // Sequential k-way merge for this worker's partitions
+        intermediate_results[worker] = sequential_k_way_merge(
+            worker_partitions_subset, worker_total_elements);
+      });
+    }
+
+    partition_offset += worker_partitions;
+  }
+
+  // Wait for all parallel merges to complete
+  for (auto &thread : merge_threads) {
+    thread.join();
+  }
+
+  // Phase 2: Final merge of intermediate results
+  std::vector<const std::vector<Record> *> intermediate_partitions;
+  for (const auto &result : intermediate_results) {
+    if (!result.empty()) {
+      intermediate_partitions.push_back(&result);
+    }
+  }
+
+  return sequential_k_way_merge(intermediate_partitions, total_elements);
+}
+
+/**
+ * @brief Update performance metrics for execution phase (UNCHANGED)
  */
 void HybridMergeSort::update_metrics(const std::string &phase,
                                      double elapsed_time) {

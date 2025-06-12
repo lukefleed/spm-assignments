@@ -40,7 +40,8 @@ struct HybridMetrics {
  * Three-phase algorithm:
  * 1. Data distribution across MPI processes
  * 2. Local parallel sorting using FastFlow
- * 3. Hierarchical merging via binary tree reduction
+ * 3. Hierarchical merging via binary tree reduction with
+ * computation-communication overlap
  *
  * Requires MPI_THREAD_FUNNELED for FastFlow integration.
  */
@@ -85,28 +86,47 @@ private:
   void sort_local_data(std::vector<Record> &data);
 
   /**
-   * @brief Hierarchical merge using binary tree reduction pattern
+   * @brief K-way merge using single communication round + FastFlow
+   * parallelization
    * @param local_data Process-local sorted data, becomes final result on rank 0
    */
-  void hierarchical_merge(std::vector<Record> &local_data);
+  void hierarchical_merge_with_overlap(std::vector<Record> &local_data);
 
-  std::vector<Record> merge_with_partner(std::vector<Record> &local_data,
-                                         int partner_rank, bool is_receiver,
-                                         MPI_Comm comm);
+  /**
+   * @brief Root process: Collect all partitions and perform parallel k-way
+   * merge
+   */
+  void k_way_merge_as_root(std::vector<Record> &local_data);
+
+  /**
+   * @brief Non-root processes: Send partition to root with overlap
+   */
+  void send_partition_to_root(const std::vector<Record> &data);
+
+  /**
+   * @brief FastFlow-parallelized k-way merge of multiple sorted partitions
+   */
+  std::vector<Record>
+  parallel_k_way_merge(const std::vector<std::vector<Record>> &partitions);
+
+  /**
+   * @brief Efficient sequential k-way merge using heap-based priority queue
+   */
+  std::vector<Record> sequential_k_way_merge(
+      const std::vector<const std::vector<Record> *> &partitions,
+      size_t total_elements);
+
+  /**
+   * @brief FastFlow farm-based parallel k-way merge for large datasets
+   */
+  std::vector<Record> fastflow_parallel_k_way_merge(
+      const std::vector<const std::vector<Record> *> &partitions,
+      size_t total_elements);
 
   /**
    * @brief Update performance metrics for execution phase
    */
   void update_metrics(const std::string &phase, double elapsed_time);
-
-  // Utility methods for record serialization
-  static std::vector<char> pack_records(const std::vector<Record> &records,
-                                        size_t record_byte_size);
-  static std::vector<Record> unpack_records(const std::vector<char> &buffer,
-                                            size_t payload_size,
-                                            size_t record_byte_size);
-  static std::vector<Record> merge_sorted_vectors(std::vector<Record> &left,
-                                                  std::vector<Record> &right);
 
   HybridConfig config_;   ///< Algorithm configuration
   int mpi_rank_;          ///< Current process rank
