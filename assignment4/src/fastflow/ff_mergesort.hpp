@@ -6,20 +6,10 @@
 #include <vector>
 
 /**
- * @brief Sorts a vector of Records in parallel using a pipelined FastFlow
- * mergesort implementation.
- *
- * This implementation uses an ff_pipeline to orchestrate the sorting process.
- * An initial stage uses an ff_farm to sort sub-chunks of the data concurrently.
- * A subsequent stage iteratively merges these sorted chunks in parallel, also
- * using an ff_farm within a loop, until the entire vector is sorted. This
- * approach encapsulates the entire logic within a single, integrated parallel
- * execution flow.
- *
- * @param data The vector of Records to be sorted. The vector will be modified
- * in place.
- * @param num_threads The number of threads to use for the parallel operations.
+ * @brief Parallel merge sort using FastFlow framework
+ * @param data Vector to sort in-place by key
+ * @param num_threads Worker thread count
  */
 void parallel_mergesort(std::vector<Record> &data, const size_t num_threads);
 
-#endif
+#endif // FF_MERGESORT_HPP
