@@ -5,161 +5,216 @@ import plotly.express as px
 import plotly.graph_objects as go
 import argparse
 import os
-from pathlib import Path
 
-def plot_strong_scaling():
-    """Plot strong scaling (fixed array size, varying threads)"""
-    df = pd.read_csv('../results/performance_results.csv')
+def plot_strong_scaling_analysis():
+    """Plots strong scaling analysis for the single-node parallel implementation."""
+    try:
+        df = pd.read_csv('../results/performance_results.csv')
+    except FileNotFoundError:
+        print("Warning: '../results/performance_results.csv' not found. Skipping strong scaling plot.")
+        return
 
-    # Filter only Parallel implementation
     df = df[df['Implementation'] == 'Parallel'].copy()
+    if df.empty:
+        print("Warning: No 'Parallel' implementation data in 'performance_results.csv'.")
+        return
 
-    # Get fixed parameters for title
     array_size = df['Data_Size'].iloc[0]
     payload = df['Payload_Size_Bytes'].iloc[0]
 
     fig = go.Figure()
-
-    # Add speedup vs Sequential
     fig.add_trace(go.Scatter(x=df['Threads'], y=df['Speedup_vs_Sequential'],
-                            mode='lines+markers', name='Speedup vs Sequential',
-                            line=dict(color='blue')))
-
-    # Add speedup vs std::sort
+                            mode='lines+markers', name='Speedup vs. Sequential'))
     fig.add_trace(go.Scatter(x=df['Threads'], y=df['Speedup_vs_StdSort'],
-                            mode='lines+markers', name='Speedup vs std::sort',
-                            line=dict(color='red')))
+                            mode='lines+markers', name='Speedup vs. std::sort'))
 
     fig.update_layout(
-        title=f'Strong Scaling - Array Size: {array_size:,}, Payload: {payload} bytes',
-        xaxis_title='Number of Threads',
+        title=f'Single-Node Strong Scaling Analysis<br><sup>N = {array_size:,}, Payload = {payload} bytes</sup>',
+        xaxis_title='Number of Threads (T)',
         yaxis_title='Speedup',
-        width=1000, height=800,
-        # xaxis_type="log",  # Uncomment for log scale on x-axis
-        # yaxis_type="log"   # Uncomment for log scale on y-axis
+        legend_title_text='Baseline Comparison',
+        width=1000, height=800
     )
 
     fig.write_image('plots/strong_scaling.pdf')
-    print("Strong scaling plot saved to plots/strong_scaling.pdf")
+    print("Generated 'plots/strong_scaling.pdf'")
 
-def plot_payload_scaling():
-    """Plot payload scaling (fixed threads and array, varying payload)"""
-    df = pd.read_csv('../results/benchmark_payload_scaling_results.csv')
+def plot_payload_sensitivity_analysis():
+    """Plots the impact of payload size on performance."""
+    try:
+        df = pd.read_csv('../results/benchmark_payload_scaling_results.csv')
+    except FileNotFoundError:
+        print("Warning: '../results/benchmark_payload_scaling_results.csv' not found. Skipping payload scaling plot.")
+        return
 
-    # Filter only FastFlow Parallel implementation
     df = df[df['Implementation'] == 'FF_Parallel_MergeSort'].copy()
+    if df.empty:
+        print("Warning: No 'FF_Parallel_MergeSort' data in 'benchmark_payload_scaling_results.csv'.")
+        return
 
-    # Get fixed parameters for title
     threads = df['Threads'].iloc[0]
     array_size = df['Data_Size'].iloc[0]
 
     fig = go.Figure()
-
-    # Add speedup vs Sequential
-    fig.add_trace(go.Scatter(x=df['Payload_Size_Bytes'], y=df['Speedup_vs_Sequential'],
-                            mode='lines+markers', name='Speedup vs Sequential',
-                            line=dict(color='blue')))
-
-    # Add speedup vs std::sort
-    fig.add_trace(go.Scatter(x=df['Payload_Size_Bytes'], y=df['Speedup_vs_StdSort'],
-                            mode='lines+markers', name='Speedup vs std::sort',
-                            line=dict(color='red')))
+    fig.add_trace(go.Scatter(x=df['Payload_Size_Bytes'], y=df['Execution_Time_ms'],
+                            mode='lines+markers', name='Execution Time'))
 
     fig.update_layout(
-        title=f'Payload Scaling - Threads: {threads}, Array Size: {array_size:,}',
+        title=f'Payload Size Sensitivity Analysis<br><sup>N = {array_size:,}, T = {threads}</sup>',
         xaxis_title='Payload Size (bytes)',
-        yaxis_title='Speedup',
-        width=1000, height=800,
-        # xaxis_type="log",  # Uncomment for log scale on x-axis
-        # yaxis_type="log"   # Uncomment for log scale on y-axis
+        yaxis_title='Execution Time (ms)',
+        width=1000, height=800
     )
 
     fig.write_image('plots/payload_scaling.pdf')
-    print("Payload scaling plot saved to plots/payload_scaling.pdf")
+    print("Generated 'plots/payload_scaling.pdf'")
 
-def plot_weak_scaling():
-    """Plot weak scaling (fixed threads, varying array size)"""
-    df = pd.read_csv('../results/benchmark_array_scaling_results.csv')
+def plot_problem_size_scaling_analysis():
+    """Plots performance scaling with problem size for a fixed number of threads."""
+    try:
+        df = pd.read_csv('../results/benchmark_array_scaling_results.csv')
+    except FileNotFoundError:
+        print("Warning: '../results/benchmark_array_scaling_results.csv' not found. Skipping problem size scaling plot.")
+        return
 
-    # Filter only FastFlow Parallel implementation
     df = df[df['Implementation'] == 'FF_Parallel_MergeSort'].copy()
+    if df.empty:
+        print("Warning: No 'FF_Parallel_MergeSort' data in 'benchmark_array_scaling_results.csv'.")
+        return
 
-    # Get fixed parameters for title
     threads = df['Threads'].iloc[0]
     payload = df['Payload_Size_Bytes'].iloc[0]
 
     fig = go.Figure()
-
-    # Add speedup vs Sequential
     fig.add_trace(go.Scatter(x=df['Data_Size'], y=df['Speedup_vs_Sequential'],
-                            mode='lines+markers', name='Speedup vs Sequential',
-                            line=dict(color='blue')))
-
-    # Add speedup vs std::sort
+                            mode='lines+markers', name='Speedup vs. Sequential'))
     fig.add_trace(go.Scatter(x=df['Data_Size'], y=df['Speedup_vs_StdSort'],
-                            mode='lines+markers', name='Speedup vs std::sort',
-                            line=dict(color='red')))
+                            mode='lines+markers', name='Speedup vs. std::sort'))
 
     fig.update_layout(
-        title=f'Weak Scaling - Fixed Threads: {threads}, Payload: {payload} bytes',
-        xaxis_title='Array Size (elements)',
+        title=f'Single-Node Problem Size Scaling Analysis<br><sup>T = {threads}, Payload = {payload} bytes</sup>',
+        xaxis_title='Problem Size (N)',
         yaxis_title='Speedup',
-        width=1000, height=800,
-        xaxis_type="log"  # Log scale for array size
+        xaxis_type="log",
+        legend_title_text='Baseline Comparison',
+        width=1000, height=800
     )
 
     fig.write_image('plots/weak_scaling.pdf')
-    print("Weak scaling plot saved to plots/weak_scaling.pdf")
+    print("Generated 'plots/weak_scaling.pdf'")
 
-def plot_cluster_scaling():
-    """Plot cluster/hybrid scaling (varying MPI nodes)"""
-    df = pd.read_csv('../results/hybrid_performance_results.csv')
+def plot_cluster_strong_scaling_analysis():
+    """Plots strong scaling for the hybrid MPI+FastFlow implementation."""
+    try:
+        df = pd.read_csv('../results/hybrid_performance_results.csv')
+    except FileNotFoundError:
+        print("Warning: '../results/hybrid_performance_results.csv' not found. Skipping cluster strong scaling plot.")
+        return
 
-    # Filter only hybrid runs (not baseline)
-    df = df[df['Test_Name'] == 'Hybrid_MPI_Parallel'].copy()
+    # Filter only hybrid runs, exclude baseline
+    df_hybrid = df[df['Test_Name'] == 'Hybrid_MPI_Parallel'].copy()
+    # Get baseline time
+    baseline_time_series = df[df['Test_Name'] == 'Parallel_Baseline']['Total_Time_ms']
+    if baseline_time_series.empty:
+        print("Warning: Baseline data not found for cluster strong scaling.")
+        return
+    baseline_time = baseline_time_series.iloc[0]
 
-    # Use existing speedup column
-    df['speedup'] = df['Parallel_Speedup']
+    if df_hybrid.empty:
+        print("Warning: No 'Hybrid_MPI_Parallel' data in 'hybrid_performance_results.csv'.")
+        return
 
-    # Get fixed parameters for title
-    threads = df['Parallel_Threads'].iloc[0]
-    array_size = df['Data_Size'].iloc[0]
-    payload = df['Payload_Size'].iloc[0]
+    df_hybrid['Speedup'] = baseline_time / df_hybrid['Total_Time_ms']
 
-    fig = px.line(df, x='MPI_Processes', y='speedup',
-                  title=f'Hybrid MPI+Fastflow Scaling - Threads/Node: {threads}, Array Size: {array_size:,}, Payload: {payload} bytes',
-                  labels={'MPI_Processes': 'Number of MPI Processes', 'speedup': 'Speedup vs Baseline'},
-                  markers=True)
+    threads_per_node = df_hybrid['Parallel_Threads'].iloc[0]
+    array_size = df_hybrid['Data_Size'].iloc[0]
+    payload = df_hybrid['Payload_Size'].iloc[0]
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=df_hybrid['MPI_Processes'], y=df_hybrid['Speedup'],
+                            mode='lines+markers', name='Measured Speedup'))
+    # Ideal speedup line removed as requested
 
     fig.update_layout(
-        width=1000, height=800,
-        # xaxis_type="log",  # Uncomment for log scale on x-axis
-        # yaxis_type="log"   # Uncomment for log scale on y-axis
+        title=f'Cluster Strong Scaling Analysis (MPI)<br><sup>N = {array_size:,}, T/Node = {threads_per_node}, Payload = {payload} bytes</sup>',
+        xaxis_title='Number of MPI Processes (P)',
+        yaxis_title='Speedup (vs. 1-Node Parallel)',
+        width=1000, height=800
     )
+
     fig.write_image('plots/cluster_scaling.pdf')
-    print("Cluster scaling plot saved to plots/cluster_scaling.pdf")
+    print("Generated 'plots/cluster_scaling.pdf'")
+
+def plot_cluster_weak_scaling_analysis():
+    """Plots weak scaling efficiency for the hybrid MPI+FastFlow implementation."""
+    try:
+        df = pd.read_csv('../results/cluster_weak_scaling_results.csv')
+    except FileNotFoundError:
+        print("Warning: '../results/cluster_weak_scaling_results.csv' not found. Skipping cluster weak scaling plot.")
+        return
+
+    if df.empty:
+        print("Warning: 'cluster_weak_scaling_results.csv' is empty.")
+        return
+
+    # Baseline time is for the first entry (smallest number of processes)
+    baseline_time = df['Total_Time_ms'].iloc[0]
+
+    # Calculate weak scaling efficiency: E = T_baseline / T_p
+    df['Efficiency'] = baseline_time / df['Total_Time_ms']
+
+    threads_per_node = df['Parallel_Threads'].iloc[0]
+    payload = df['Payload_Size'].iloc[0]
+    records_per_node = df['Data_Size'].iloc[0] // df['MPI_Processes'].iloc[0]
+
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=df['MPI_Processes'], y=df['Efficiency'],
+                            mode='lines+markers', name='Measured Efficiency'))
+    # Add ideal efficiency line at 1.0
+    fig.add_hline(y=1.0, line_dash="dash", line_color="grey", annotation_text="Ideal Efficiency")
+
+    fig.update_layout(
+        title=f'Cluster Weak Scaling Analysis (MPI)<br><sup>N/P = {records_per_node:,}, T/Node = {threads_per_node}, Payload = {payload} bytes</sup>',
+        xaxis_title='Number of MPI Processes (P)',
+        yaxis_title='Weak Scaling Efficiency (T_baseline / T_p)',
+        yaxis=dict(range=[0, df['Efficiency'].max() * 1.1]),
+        width=1000, height=800
+    )
+
+    fig.write_image('plots/cluster_weak_scaling.pdf')
+    print("Generated 'plots/cluster_weak_scaling.pdf'")
+
 
 def main():
-    parser = argparse.ArgumentParser(description='Plot HPC scaling results')
-    parser.add_argument('plot_type', choices=['strong', 'payload', 'weak', 'cluster', 'all'],
-                       help='Type of plot to generate')
+    parser = argparse.ArgumentParser(description='Plot HPC scaling results and analyses.')
+    parser.add_argument('plot_type',
+                       choices=['strong', 'payload', 'problem_size', 'cluster_strong', 'cluster_weak', 'all'],
+                       help='Type of plot to generate.')
 
     args = parser.parse_args()
 
-    # Create plots directory
     os.makedirs('plots', exist_ok=True)
 
-    if args.plot_type == 'strong' or args.plot_type == 'all':
-        plot_strong_scaling()
+    plot_map = {
+        'strong': plot_strong_scaling_analysis,
+        'payload': plot_payload_sensitivity_analysis,
+        'problem_size': plot_problem_size_scaling_analysis,
+        'cluster_strong': plot_cluster_strong_scaling_analysis,
+        'cluster_weak': plot_cluster_weak_scaling_analysis
+    }
 
-    if args.plot_type == 'payload' or args.plot_type == 'all':
-        plot_payload_scaling()
-
-    if args.plot_type == 'weak' or args.plot_type == 'all':
-        plot_weak_scaling()
-
-    if args.plot_type == 'cluster' or args.plot_type == 'all':
-        plot_cluster_scaling()
+    if args.plot_type == 'all':
+        for plot_func in plot_map.values():
+            try:
+                plot_func()
+            except Exception as e:
+                print(f"Error generating plot for {plot_func.__name__}: {e}")
+    elif args.plot_type in plot_map:
+        try:
+            plot_map[args.plot_type]()
+        except Exception as e:
+            print(f"Error generating plot for {args.plot_type}: {e}")
 
 if __name__ == '__main__':
     main()

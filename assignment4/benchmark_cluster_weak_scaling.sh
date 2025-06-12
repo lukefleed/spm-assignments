@@ -154,16 +154,16 @@ if [ ${BASELINE_NODES} -eq 1 ]; then
                            --cpus-per-task=${FF_THREADS} \
                            --time=00:10:00 \
                            --mpi=pmix \
-                           bin/test_hybrid_performance ${FF_THREADS} ${BASELINE_RECORDS_M} ${PAYLOAD_SIZE_B} ${CSV_FILENAME} --quiet 2>/dev/null)
+                           bin/test_hybrid_performance ${FF_THREADS} ${BASELINE_RECORDS_M} ${PAYLOAD_SIZE_B} ${CSV_FILENAME} 2>/dev/null)
 else
-    # Multi-node: use multi_node_main
+    # Multi-node: use test_hybrid_performance with MPI
     BASELINE_OUTPUT=$(srun --nodes=${BASELINE_NODES} \
                            --ntasks=${BASELINE_NODES} \
                            --ntasks-per-node=1 \
                            --cpus-per-task=${FF_THREADS} \
                            --time=00:10:00 \
                            --mpi=pmix \
-                           bin/multi_node_main -s "${BASELINE_RECORDS_M}M" -r ${PAYLOAD_SIZE_B} -t ${FF_THREADS} --csv --filename ${CSV_FILENAME} 2>/dev/null | tail -1)
+                           bin/test_hybrid_performance ${FF_THREADS} ${BASELINE_RECORDS_M} ${PAYLOAD_SIZE_B} ${CSV_FILENAME} 2>/dev/null)
 fi
 
 if [ $? -ne 0 ]; then
@@ -189,18 +189,19 @@ echo ""
 #                          RESULTS HEADER
 # ============================================================================
 
-echo "Nodes   Total Records   Time (ms)      Throughput (MRec/s)   Efficiency (%)"
-echo "------- --------------- -------------- --------------------- --------------"
+echo "Nodes   Total Records   Time (ms)      Throughput (MRec/s)   Speedup    Efficiency (%)"
+echo "------- --------------- -------------- --------------------- ---------- --------------"
 
 # Display baseline result
 if [ ${BASELINE_NODES} -eq 1 ]; then
-    echo "$BASELINE_OUTPUT" | grep "^Mergesort FF" | awk -v nodes="$BASELINE_NODES" -v records="${BASELINE_RECORDS_M}M" '{
-        printf "%-7s %-15s %-14s %-21s 100.0\n", nodes, records, $3, $4
+    echo "$BASELINE_OUTPUT" | grep -E "^[0-9]" | awk -v nodes="$BASELINE_NODES" -v records="${BASELINE_RECORDS_M}M" '{
+        printf "%-7s %-15s %-14s %-21s %-10s 100.0\n", nodes, records, $2, $3, $4
     }'
 else
-    # Parse multi-node output differently
-    BASELINE_THROUGHPUT=$(echo "${BASELINE_OUTPUT}" | awk -F',' '{print $8}' 2>/dev/null || echo "N/A")
-    printf "%-7s %-15s %-14s %-21s 100.0\n" "${BASELINE_NODES}" "${BASELINE_RECORDS_M}M" "${BASELINE_TIME}" "${BASELINE_THROUGHPUT}"
+    # Parse multi-node output (same format as single node when using test_hybrid_performance)
+    echo "$BASELINE_OUTPUT" | grep -E "^[0-9]" | awk -v nodes="$BASELINE_NODES" -v records="${BASELINE_RECORDS_M}M" '{
+        printf "%-7s %-15s %-14s %-21s %-10s 100.0\n", nodes, records, $2, $3, $4
+    }'
 fi
 
 # ============================================================================
@@ -234,7 +235,7 @@ for nodes in "${NODES_ARRAY[@]}"; do
                            --cpus-per-task=${FF_THREADS} \
                            --time=00:10:00 \
                            --mpi=pmix \
-                           bin/test_hybrid_performance ${FF_THREADS} ${TOTAL_RECORDS_M} ${PAYLOAD_SIZE_B} ${CSV_FILENAME} --quiet --skip-baselines --baseline-time=${BASELINE_TIME} 2>/dev/null)
+                           bin/test_hybrid_performance ${FF_THREADS} ${TOTAL_RECORDS_M} ${PAYLOAD_SIZE_B} ${CSV_FILENAME} --skip-baselines --baseline-time=${BASELINE_TIME} 2>/dev/null)
     else
         # Multi-node case
         TEST_OUTPUT=$(srun --nodes=${nodes} \
@@ -243,7 +244,7 @@ for nodes in "${NODES_ARRAY[@]}"; do
                            --cpus-per-task=${FF_THREADS} \
                            --time=00:10:00 \
                            --mpi=pmix \
-                           bin/multi_node_main -s "${TOTAL_RECORDS_M}M" -r ${PAYLOAD_SIZE_B} -t ${FF_THREADS} --csv --filename ${CSV_FILENAME} 2>/dev/null | tail -1)
+                           bin/test_hybrid_performance ${FF_THREADS} ${TOTAL_RECORDS_M} ${PAYLOAD_SIZE_B} ${CSV_FILENAME} --skip-baselines --baseline-time=${BASELINE_TIME} 2>/dev/null)
     fi
 
     # Check for test failure
@@ -255,21 +256,14 @@ for nodes in "${NODES_ARRAY[@]}"; do
     # Extract and display results
     if [ ${nodes} -eq 1 ]; then
         # Parse single-node output
-        echo "$TEST_OUTPUT" | grep "^Mergesort FF" | awk -v nodes="$nodes" -v records="${TOTAL_RECORDS_M}M" '{
-            printf "%-7s %-15s %-14s %-21s %s\n", nodes, records, $3, $4, $7
+        echo "$TEST_OUTPUT" | grep -E "^[0-9]" | awk -v nodes="$nodes" -v records="${TOTAL_RECORDS_M}M" '{
+            printf "%-7s %-15s %-14s %-21s %-10s %-10s\n", nodes, records, $2, $3, $4, $6
         }'
     else
-        # Parse multi-node CSV output
-        if [ -f "${CSV_FILENAME}" ]; then
-            LAST_LINE=$(tail -n 1 "${CSV_FILENAME}")
-            TEST_TIME=$(echo "${LAST_LINE}" | cut -d',' -f6)
-            TEST_THROUGHPUT=$(echo "${LAST_LINE}" | cut -d',' -f8)
-            EFFICIENCY=$(echo "${LAST_LINE}" | cut -d',' -f10)
-
-            printf "%-7s %-15s %-14s %-21s %.1f\n" "${nodes}" "${TOTAL_RECORDS_M}M" "${TEST_TIME}" "${TEST_THROUGHPUT}" "${EFFICIENCY}"
-        else
-            echo "Error: Could not find CSV results for ${nodes} nodes" >&2
-        fi
+        # Parse multi-node output (same format as single node when using test_hybrid_performance)
+        echo "$TEST_OUTPUT" | grep -E "^[0-9]" | awk -v nodes="$nodes" -v records="${TOTAL_RECORDS_M}M" '{
+            printf "%-7s %-15s %-14s %-21s %-10s %-10s\n", nodes, records, $2, $3, $4, $6
+        }'
     fi
 done
 
@@ -282,11 +276,3 @@ TOTAL_TIME=$(($(date +%s) - START_TIME))
 echo "" >&2
 echo "Weak scaling test completed: ${TOTAL_TESTS} configurations in $(printf '%d:%02d' $((TOTAL_TIME/60)) $((TOTAL_TIME%60)))" >&2
 echo "Results saved to: ${CSV_FILENAME}" >&2
-echo "" >&2
-echo "Weak Scaling Analysis:" >&2
-echo "• Problem size per node: ${RECORDS_PER_NODE_M}M records" >&2
-echo "• Ideal efficiency: 100% (constant time per node)" >&2
-echo "• Efficiency drop indicates overhead from:" >&2
-echo "  - Inter-node communication" >&2
-echo "  - MPI coordination costs" >&2
-echo "  - Load balancing issues" >&2

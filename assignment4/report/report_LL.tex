@@ -95,7 +95,7 @@ For the shared-memory implementation, we adopted a pragmatic, performance-orient
 \subsubsection{Architectural Considerations and Discarded Alternatives}
 The assignment suggested exploring FastFlow's building blocks, including \code{ff\_pipeline} and \code{ff\_all2all}. We implemented and evaluated these alternatives but ultimately discarded them for sound performance and algorithmic reasons.
 
-\textbf{Why not \code{ff\_all2all}?} The \code{ff\_all2all} pattern is designed for data redistribution, where each worker sends a piece of its local data to every other worker. This is the core of algorithms like Radix Sort or Sample Sort, which partition data based on key values. MergeSort, however, relies on merging physically adjacent, sorted segments. Its communication pattern is strictly pairwise and hierarchical, not all-to-all. Forcing MergeSort into an all-to-all pattern would be algorithmically incorrect.
+\textbf{Why not \code{ff\_all2all}?} The \code{ff\_all2all} pattern is designed for data redistribution, where each worker sends a piece of its local data to every other worker. This is the core of algorithms like Radix Sort or Sample Sort, which partition data based on key values.MergeSort, however, relies on merging physically adjacent, sorted segments. Its communication pattern is strictly pairwise and hierarchical, not all-to-all. Forcing MergeSort into an all-to-all pattern would be algorithmically incorrect.
 
 \textbf{Why not \code{ff\_pipeline}?} An integrated pipeline architecture, such as \code{feeder -> sort\_stage -> merge\_stage}, seems theoretically elegant. We invested significant effort in implementing and benchmarking this alternative. However, it yielded a significant performance degradation, reducing the peak speedup of about 30\%. This counter-intuitive result stems from two main factors.
 First, MergeSort is fundamentally a bulk-synchronous parallel (BSP) algorithm: the merge phase cannot begin until the entire sort phase is complete. There is no opportunity for true, overlapping pipelining.
@@ -175,43 +175,52 @@ We benchmarked our implementations to evaluate their strong and weak scaling pro
     \centering
     \begin{subfigure}{0.49\textwidth}
         \includegraphics[width=\linewidth]{../python/plots/strong_scaling.pdf}
-        \caption{Strong scaling on a single node (100M records).}
+        \caption{Single-node strong scaling analysis.}
         \label{fig:strong_scaling}
     \end{subfigure}
     \hfill
     \begin{subfigure}{0.49\textwidth}
-        \includegraphics[width=\linewidth]{../python/plots/weak_scaling.pdf}
-        \caption{Weak scaling on a single node (fixed 16 threads).}
-        \label{fig:weak_scaling}
+        \includegraphics[width=\linewidth]{../python/plots/payload_scaling.pdf}
+        \caption{Payload size sensitivity analysis.}
+        \label{fig:payload_scaling}
     \end{subfigure}
-    \caption{Single-node performance analysis. Speedup is relative to our sequential MergeSort and the standard library's \code{std::sort}.}
-    \label{fig:scaling_single_node}
+    \caption{Performance characterization on a single node.}
+    \label{fig:single_node_analysis}
 \end{figure}
 
-\textbf{Single-Node Strong Scaling.} Figure \ref{fig:strong_scaling} shows the strong scaling of our FastFlow implementation. The speedup increases significantly up to 16 threads, reaching a peak of approximately 6.8x against our sequential implementation and 2.7x against \code{std::sort}. Beyond 16 threads, performance begins to degrade. This behavior is expected and illustrates a more realistic version of Amdahl's Law, where parallel overhead is not negligible. As more threads are added, the overhead of synchronization, thread management, and contention on the memory bus starts to dominate the gains from parallel computation. The curve suggests that for this problem size and hardware, 16 threads is near the optimal point of diminishing returns.
+\textbf{Single-Node Strong Scaling.} Figure \ref{fig:strong_scaling} shows the strong scaling of our FastFlow implementation. The speedup increases significantly up to 16 threads, reaching a peak of approximately 6.8x against our sequential implementation and 2.7x against \code{std::sort}. Beyond 16 threads, performance begins to degrade. This behavior is expected and illustrates a more realistic version of Amdahl's Law, where parallel overhead is not negligible. As more threads are added, the overhead of synchronization, thread management, and contention on the memory bus starts to dominate the gains from parallel computation.
 
-\textbf{Single-Node Weak Scaling.} Figure \ref{fig:weak_scaling} presents a weak scaling analysis where the number of threads is fixed at 16, and the total problem size is increased. The speedup continues to grow almost linearly with the problem size. This aligns with Gustafson's Law: by increasing the problem size along with the computational resources, the serial fraction of the work becomes less significant, and the performance scales well. With more data to process, the initial costs of setting up farms and threads are amortized over a longer execution time, leading to better efficiency.
+\textbf{Payload Scaling.} The impact of payload size is shown in Figure \ref{fig:payload_scaling}. The execution time remains relatively stable for payloads from 8 to 512 bytes. This indicates that the algorithm's performance is heavily influenced by memory bandwidth. The primary cost in the merge phase is moving data, and this cost scales linearly with the record size. For very small payloads, the algorithm may be more sensitive to memory latency and cache effects, explaining the initial volatility. As the payload grows, the problem becomes firmly memory-bandwidth bound, as the time spent in computation (key comparisons) becomes negligible compared to the time spent in \code{std::move}.
 
 \begin{figure}[H]
     \centering
     \begin{subfigure}{0.49\textwidth}
-        \includegraphics[width=\linewidth]{../python/plots/payload_scaling.pdf}
-        \caption{Impact of record payload size (10M records).}
-        \label{fig:payload_scaling}
+        \includegraphics[width=\linewidth]{../python/plots/weak_scaling.pdf}
+        \caption{Single-node problem size scaling.}
+        \label{fig:problem_size_scaling}
     \end{subfigure}
     \hfill
     \begin{subfigure}{0.49\textwidth}
         \includegraphics[width=\linewidth]{../python/plots/cluster_scaling.pdf}
-        \caption{Hybrid MPI+FastFlow scaling vs. single-node baseline.}
-        \label{fig:cluster_scaling}
+        \caption{Cluster strong scaling (MPI).}
+        \label{fig:cluster_strong_scaling}
     \end{subfigure}
-    \caption{Payload and multi-node scaling analysis.}
-    \label{fig:scaling_cluster}
+    \caption{Problem size and distributed strong scaling analysis.}
+    \label{fig:size_and_strong_scaling}
 \end{figure}
 
-\textbf{Payload Scaling.} The impact of payload size is shown in Figure \ref{fig:payload_scaling}. The speedup is somewhat volatile for very small payloads but remains relatively stable for payloads from 8 to 512 bytes. This indicates that the algorithm's performance is heavily influenced by memory bandwidth. The primary cost in the merge phase is moving data, and this cost scales linearly with the record size. For very small payloads, the algorithm may be more sensitive to memory latency and cache effects, explaining the initial volatility. As the payload grows, the problem becomes firmly memory-bandwidth bound, as the time spent in computation (key comparisons) becomes negligible compared to the time spent in \code{std::move}.
+\textbf{Single-Node Problem Size Scaling.} Figure \ref{fig:problem_size_scaling} presents a scaling analysis where the number of threads is fixed, and the total problem size is increased. The speedup continues to grow almost linearly with the problem size. This aligns with Gustafson's Law: by increasing the problem size along with the computational resources, the serial fraction of the work becomes less significant, and the performance scales well. With more data to process, the initial costs of setting up farms and threads are amortized over a longer execution time, leading to better efficiency.
 
-\textbf{Hybrid MPI Scaling and Communication Overhead.} Figure \ref{fig:cluster_scaling} provides an instructive view into the performance characteristics of the hybrid algorithm. The y-axis shows speedup relative to the optimized single-node parallel baseline (1 MPI process with 16 threads). The results show that while the two-process run is slower due to initial communication overhead, the hybrid implementation achieves a positive speedup with four and eight processes. This demonstrates that for a sufficiently large problem size, distributing the computational load across multiple nodes can effectively overcome the high cost of network communication. The primary sources of overhead remain the initial data distribution via \code{MPI\_Scatterv} and the subsequent transmission of sorted partitions during the hierarchical merge. However, the performance data indicates that the time saved by parallelizing the local sort and the initial merge steps across multiple nodes is greater than the time spent on network transfers, once a certain threshold of parallelism is reached. The diminishing returns in efficiency as more nodes are added are expected, following Amdahl's law, as communication and synchronization costs begin to represent a larger fraction of the total execution time. Achieving a positive speedup confirms the viability of the hybrid approach for large-scale datasets.
+\textbf{Cluster Strong Scaling.} Figure \ref{fig:cluster_strong_scaling} provides an instructive view into the strong scaling characteristics of the hybrid algorithm. The speedup is measured relative to the optimized single-node parallel baseline. The results show that while the two-process run is slower due to initial communication overhead, the hybrid implementation achieves a positive speedup with four and eight processes. This demonstrates that for a sufficiently large problem size, distributing the computational load can effectively overcome the high cost of network communication. The diminishing returns in efficiency as more nodes are added are expected, as communication and synchronization costs begin to represent a larger fraction of the total execution time.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.5\linewidth]{../python/plots/cluster_weak_scaling.pdf}
+    \caption{Cluster weak scaling analysis, showing efficiency relative to the single-node baseline. An efficiency of 1.0 represents ideal scaling.}
+    \label{fig:cluster_weak_scaling}
+\end{figure}
+
+\textbf{Cluster Weak Scaling.} To complete the performance study, we conducted a weak scaling test on the cluster. In this test, the problem size per node was kept constant, while the number of nodes was increased. Figure \ref{fig:cluster_weak_scaling} plots the weak scaling efficiency, where an ideal algorithm would maintain an efficiency of 1.0. Our results show a significant drop in efficiency as more nodes are added. This behavior is characteristic of algorithms with non-scalable communication patterns, such as our distributed MergeSort. The primary reason for this poor scaling lies in the hierarchical merge phase. While the local sort phase scales perfectly, the communication costs do not. In each step of the binary tree reduction, processes must transmit increasingly large, already-merged partitions to their partners. The total volume of data communicated and the sequential dependency of the final merge steps grow with the number of processes. This communication overhead dominates the execution time, demonstrating the inherent scalability limits of this MergeSort algorithm in a distributed-memory environment.
 
 
 \end{document}
