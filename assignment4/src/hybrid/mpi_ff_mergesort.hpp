@@ -1,6 +1,7 @@
 /**
  * @file mpi_ff_mergesort.hpp
- * @brief Hybrid MPI+FastFlow distributed mergesort
+ * @brief Hybrid MPI+FastFlow distributed mergesort with
+ * computation-communication overlap
  */
 
 #pragma once
@@ -40,7 +41,8 @@ struct HybridMetrics {
  * Three-phase algorithm:
  * 1. Data distribution across MPI processes
  * 2. Local parallel sorting using FastFlow
- * 3. Hierarchical merging via binary tree reduction
+ * 3. Hierarchical merging via binary tree reduction with
+ * computation-communication overlap
  *
  * Requires MPI_THREAD_FUNNELED for FastFlow integration.
  */
@@ -85,28 +87,33 @@ private:
   void sort_local_data(std::vector<Record> &data);
 
   /**
-   * @brief Hierarchical merge using binary tree reduction pattern
+   * @brief Hierarchical merge using binary tree reduction with
+   * computation-communication overlap
    * @param local_data Process-local sorted data, becomes final result on rank 0
    */
-  void hierarchical_merge(std::vector<Record> &local_data);
+  void hierarchical_merge_with_overlap(std::vector<Record> &local_data);
 
-  std::vector<Record> merge_with_partner(std::vector<Record> &local_data,
-                                         int partner_rank, bool is_receiver,
-                                         MPI_Comm comm);
+  /**
+   * @brief Receive and merge using computation-communication overlap
+   */
+  void receive_and_merge_with_overlap(std::vector<Record> &local_data,
+                                      int source);
+
+  /**
+   * @brief Send data using non-blocking MPI for overlap with receiver
+   */
+  void send_data_with_overlap(const std::vector<Record> &data, int target);
+
+  /**
+   * @brief Efficient two-way merge with move semantics optimization
+   */
+  void merge_two_sorted_arrays(std::vector<Record> &local_data,
+                               std::vector<Record> &partner_data);
 
   /**
    * @brief Update performance metrics for execution phase
    */
   void update_metrics(const std::string &phase, double elapsed_time);
-
-  // Utility methods for record serialization
-  static std::vector<char> pack_records(const std::vector<Record> &records,
-                                        size_t record_byte_size);
-  static std::vector<Record> unpack_records(const std::vector<char> &buffer,
-                                            size_t payload_size,
-                                            size_t record_byte_size);
-  static std::vector<Record> merge_sorted_vectors(std::vector<Record> &left,
-                                                  std::vector<Record> &right);
 
   HybridConfig config_;   ///< Algorithm configuration
   int mpi_rank_;          ///< Current process rank

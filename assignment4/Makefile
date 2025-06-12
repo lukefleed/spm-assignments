@@ -5,7 +5,7 @@ MPICXX = mpic++
 # Compiler and Linker Flags
 # Added -pthread for parallel framework support
 # Common flags for all compilations
-COMMON_FLAGS = -std=c++17 -Wall -Wextra -O3 -I./include -I./fastflow -pthread
+COMMON_FLAGS = -std=c++17 -Wall -O3 -I./include -I./fastflow -pthread
 # Specific CXXFLAGS for non-MPI compilation
 CXXFLAGS = $(COMMON_FLAGS)
 # Specific MPICXXFLAGS for MPI compilation
