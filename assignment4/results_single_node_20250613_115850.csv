@@ -1,0 +1,4 @@
+Test_Type,Implementation,Data_Size,Payload_Size_Bytes,Threads,Execution_Time_ms,Throughput_MRec_per_sec,Speedup_vs_StdSort,Speedup_vs_Sequential,Efficiency_Percent,Valid
+single_node,std::sort,1000,8,1,0.037,27.046,1.000,0.000,100.0,true
+single_node,Sequential_MergeSort,1000,8,1,0.091,11.006,0.407,1.000,100.0,true
+single_node,FF_Parallel_MergeSort,1000,8,2,0.043,23.089,0.854,2.098,104.9,true
