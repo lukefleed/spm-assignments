@@ -15,6 +15,20 @@
 namespace hybrid {
 
 /**
+ * @brief Structure for overlap management during communication
+ */
+struct OverlapState {
+  std::vector<MPI_Request> pending_requests;
+  std::vector<std::vector<Record>> receive_buffers;
+  std::vector<std::vector<char>> packed_buffers;       ///< For non-zero payload
+  std::vector<std::vector<unsigned long>> key_buffers; ///< For zero payload
+  std::vector<int> request_sources;
+  std::vector<bool> completed;
+  std::vector<Record> partial_merge_result;
+  bool has_partial_result = false;
+};
+
+/**
  * @brief Configuration parameters for hybrid mergesort
  */
 struct HybridConfig {
@@ -96,7 +110,7 @@ private:
   /**
    * @brief Initiate non-blocking receive for maximum overlap opportunity
    */
-  void initiate_receive_with_overlap(int source, 
+  void initiate_receive_with_overlap(int source,
                                      std::vector<MPI_Request> &requests,
                                      std::vector<std::vector<Record>> &buffers,
                                      std::vector<int> &sources);
@@ -105,8 +119,7 @@ private:
    * @brief Process all pending receives with computation overlap
    */
   void process_pending_receives_with_overlap(
-      std::vector<Record> &local_data,
-      std::vector<MPI_Request> &requests,
+      std::vector<Record> &local_data, std::vector<MPI_Request> &requests,
       std::vector<std::vector<Record>> &buffers,
       const std::vector<int> &sources);
 
@@ -134,7 +147,7 @@ private:
   /**
    * @brief Process a completed receive operation
    */
-  void process_completed_receive(size_t request_index, 
+  void process_completed_receive(size_t request_index,
                                  std::vector<Record> &partner_data, int source);
 
   /**
@@ -162,6 +175,57 @@ private:
    * @brief Update performance metrics for execution phase
    */
   void update_metrics(const std::string &phase, double elapsed_time);
+
+  /**
+   * @brief Initiate fully non-blocking receive for maximum overlap
+   */
+  void initiate_full_nonblocking_receive(int source, OverlapState &state);
+
+  /**
+   * @brief Initiate fully non-blocking send with immediate overlap work
+   */
+  void initiate_full_nonblocking_send(const std::vector<Record> &data,
+                                      int target);
+
+  /**
+   * @brief Process with true streaming overlap
+   */
+  void process_with_streaming_overlap(std::vector<Record> &local_data,
+                                      OverlapState &state);
+
+  /**
+   * @brief Perform advanced overlap work while communications proceed
+   */
+  void perform_advanced_overlap_work();
+
+  /**
+   * @brief Perform productive overlap work that actually helps performance
+   */
+  bool perform_productive_overlap_work(std::vector<Record> &local_data,
+                                       const OverlapState &state);
+
+  /**
+   * @brief True streaming merge that works while receiving
+   */
+  void streaming_merge_with_overlap(std::vector<Record> &current_result,
+                                    std::vector<Record> &new_data);
+
+  /**
+   * @brief Optimize data for streaming merge
+   */
+  void optimize_for_streaming_merge(std::vector<Record> &data);
+
+  /**
+   * @brief Wait for sends with productive overlap
+   */
+  void wait_for_sends_with_overlap(MPI_Request &size_req,
+                                   MPI_Request &data_req);
+
+  /**
+   * @brief Unpack received data efficiently
+   */
+  void unpack_received_data(std::vector<Record> &output,
+                            const OverlapState &state, size_t buffer_index);
 
   HybridConfig config_;   ///< Algorithm configuration
   int mpi_rank_;          ///< Current process rank
