@@ -3,7 +3,6 @@
 #include <atomic>    // For std::atomic, memory orders
 #include <iostream>  // For verbose/error output
 #include <limits>    // For std::numeric_limits
-#include <numeric>   // Potentially useful, though not directly used here
 #include <optional>  // For std::optional return types
 #include <thread>    // For std::thread, std::this_thread::yield
 #include <vector>    // For std::vector

@@ -470,6 +470,8 @@ void softmax_avx_small(const float *input, float *output, size_t K,
 // original code.
 // --------------------------------------------------------------------------//
 
+// ...existing code...
+
 /**
  * @brief Custom C++17 aligned memory allocator for AVX operations
  *
