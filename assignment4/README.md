@@ -42,15 +42,15 @@ make help
 
 ### 1. Single-Node Application (`single_node_main`)
 
-**Purpose**: Interactive single-node parallel mergesort with performance comparison and CSV output capabilities.
+**Purpose**: Interactive single-node parallel mergesort.
 
 ```bash
 ./bin/single_node_main [OPTIONS]
 
 Options:
-  -s SIZE      Array size (e.g., 10M, 100M, 1G)
-  -r BYTES     Record payload size in bytes (default: 8)
-  -t THREADS   Number of FastFlow threads (default: 4)
+  -s SIZE            Array size (e.g., 10M, 100M, 1G)
+  -r BYTES           Record payload size in bytes (default: 8)
+  -t THREADS         Number of FastFlow threads (default: 4)
   --pattern PATTERN  Data pattern: random, sorted, reverse, nearly (default: random)
   --no-validate      Skip correctness validation for faster benchmarking
   --csv              Enable CSV output mode
@@ -87,8 +87,8 @@ Pattern: Random
 Implementation      Time (ms)    Speedup    Valid
 ----------------------------------------------------
 std::sort              2847.23      1.00x      ✓
-Sequential MergeSort   3156.89      0.90x      ✓
-FF Parallel MergeSort   891.45      3.19x      ✓
+Sequential MergeSort   3156.89      0.40x      ✓
+FF Parallel MergeSort   891.45      2.19x      ✓
 ```
 
 **CSV Output:**
@@ -100,20 +100,20 @@ Test_Type,Implementation,Data_Size,Payload_Size_Bytes,Threads,Execution_Time_ms,
 
 ### 2. Multi-Node Application (`multi_node_main`)
 
-**Purpose**: Distributed hybrid MPI+FastFlow mergesort with comprehensive performance metrics.
+**Purpose**: Distributed hybrid MPI+FastFlow mergesort.
 
 ```bash
 mpirun -np <processes> ./bin/multi_node_main [OPTIONS]
 
 Options:
-  -s SIZE      Array size (e.g., 10M, 100M)
-  -r BYTES     Record payload size in bytes (default: 64)
-  -t THREADS   FastFlow threads per MPI process (default: 4)
-  -p PATTERN   Data pattern: random, sorted, reverse, nearly
-  --no-validate        Skip correctness validation
-  -v, --verbose        Enable verbose output
-  -b, --benchmark      Run comprehensive benchmark suite
-  -h, --help           Show help message
+  -s SIZE            Array size (e.g., 10M, 100M)
+  -r BYTES           Record payload size in bytes (default: 64)
+  -t THREADS         Number of parallel threads per node (default: 4)
+  -p PATTERN         Data pattern: random, sorted, reverse, nearly
+  --no-validate      Disable result validation
+  --verbose          Enable verbose output
+  --benchmark        Enable benchmark mode
+  --help             Show this help message
 ```
 
 **Example Usage:**
@@ -200,7 +200,7 @@ mpirun -np 2 ./bin/test_hybrid_correctness
 
 #### Single-Node Performance Analysis (`test_perf_single_node`)
 
-Comprehensive thread scaling analysis with dual-baseline comparison (std::sort and sequential mergesort). Generates both console output and CSV files for detailed analysis.
+Comprehensive thread scaling analysis with dual-baseline comparison (std::sort and sequential mergesort). Generates both console output and CSV files.
 
 ```bash
 # Basic thread scaling test (default configuration)
@@ -230,7 +230,7 @@ make test_perf_single_node THREAD_LIST="1 2 4" ARRAY_SIZE_M=5 PAYLOAD_SIZE_B=32
 
 #### Hybrid MPI Performance Analysis (`test_perf_hybrid`)
 
-Dual-baseline performance analysis measuring both parallel and MPI scaling efficiency with comprehensive metrics.
+Dual-baseline performance analysis measuring both parallel and MPI scaling efficiency.
 
 ```bash
 # Basic hybrid performance test
@@ -251,25 +251,9 @@ make test_perf_hybrid RECORDS_SIZE_M=100 PAYLOAD_SIZE_B=256 FF_THREADS=12
 - `PAYLOAD_SIZE_B`: Payload size in bytes (default: 64)
 - `HYBRID_CSV_FILE`: Output CSV filename (default: hybrid_performance_results.csv)
 
-**Output:** Creates detailed CSV with parallel baseline establishment and MPI scaling analysis.
+**Output:** CSV file `hybrid_performance_results.csv`
 
-#### Professional Benchmark Targets
-
-For production-quality benchmarking with proper CSV output:
-
-##### Single Configuration Benchmark
-
-```bash
-# Comprehensive single-configuration analysis
-make benchmark_single_node ARRAY_SIZE_M=50 SINGLE_NODE_THREADS=8
-
-# Custom CSV output
-make benchmark_single_node SINGLE_NODE_OUTPUT=my_benchmark.csv
-```
-
-**Output:** `benchmark_single_node_results.csv` with detailed metrics including efficiency calculations.
-
-##### Array Size Scaling Analysis
+#### Array Size Scaling Analysis
 
 ```bash
 # Array size scaling (200K to 100M records)
@@ -279,86 +263,22 @@ make benchmark_array_scaling SINGLE_NODE_THREADS=4
 make benchmark_array_scaling SINGLE_NODE_THREADS=8
 ```
 
-**Output:** `benchmark_array_scaling_results.csv` with size-dependent performance characteristics.
+**Output:** `benchmark_array_scaling_results.csv`
 
-##### Payload Size Scaling Analysis
+#### Payload Size Scaling Analysis
 
 ```bash
 # Payload size scaling (2 to 512 bytes)
 make benchmark_payload_scaling SINGLE_NODE_THREADS=6
-
-# Custom configuration
-make benchmark_payload_scaling SINGLE_NODE_THREADS=4
 ```
 
-**Output:** `benchmark_payload_scaling_results.csv` with memory hierarchy impact analysis.
+**Output:** `benchmark_payload_scaling_results.csv`
 
-### CSV Output Format
+### Cluster MPI Scaling
 
-All benchmark targets generate standardized CSV files with the following format:
+For distributed cluster testing with strong and weak scaling analysis:
 
-```csv
-Test_Type,Implementation,Data_Size,Payload_Size_Bytes,Threads,Execution_Time_ms,Throughput_MRec_per_sec,Speedup_vs_StdSort,Speedup_vs_Sequential,Efficiency_Percent,Valid
-```
-
-**Key Metrics Explained:**
-
-- **Speedup_vs_StdSort**: Performance relative to std::sort baseline
-- **Speedup_vs_Sequential**: Performance relative to sequential mergesort
-- **Efficiency_Percent**: Thread utilization efficiency (Speedup / Thread_Count \* 100)
-- **Throughput_MRec_per_sec**: Million records processed per second
-
-## Cluster Deployment
-
-### Automated Benchmark Scripts
-
-The project includes professional benchmark scripts for comprehensive performance analysis.
-
-#### Array Size Scaling Analysis
-
-Tests performance characteristics across different dataset sizes (200K to 100M records):
-
-```bash
-# Basic array scaling with default settings (16 threads)
-./benchmark_array_scaling.sh
-
-# Custom thread count and output file
-./benchmark_array_scaling.sh 8 my_array_results.csv
-
-# Via Makefile (recommended)
-make benchmark_array_scaling SINGLE_NODE_THREADS=12
-```
-
-**Configuration:**
-
-- **Dataset sizes:** 200K, 400K, 800K, 1M, 2M, 4M, 8M, 16M, 32M, 64M, 100M records
-- **Fixed payload:** 16 bytes
-- **Output:** Standardized CSV with size-dependent performance metrics
-
-#### Payload Size Scaling Analysis
-
-Tests memory hierarchy impact across different record sizes (2 to 512 bytes):
-
-```bash
-# Basic payload scaling with default settings (16 threads, 10M records)
-./benchmark_payload_scaling.sh
-
-# Custom configuration
-./benchmark_payload_scaling.sh 8 my_payload_results.csv
-
-# Via Makefile (recommended)
-make benchmark_payload_scaling SINGLE_NODE_THREADS=6
-```
-
-**Configuration:**
-
-- **Payload sizes:** 2, 4, 8, 16, 32, 64, 128, 256, 512 bytes
-- **Fixed dataset:** 10M records
-- **Output:** Standardized CSV with memory hierarchy analysis
-
-#### Cluster MPI Scaling
-
-For distributed cluster testing with the renamed professional script:
+**Strong Scaling** (fixed problem size, increasing nodes):
 
 ```bash
 # Make script executable
@@ -368,60 +288,55 @@ chmod +x benchmark_cluster_scaling.sh
 ./benchmark_cluster_scaling.sh "1 2 4 8"
 
 # Custom configuration
-./benchmark_cluster_scaling.sh "1 2 4" 16 50 64
+./benchmark_cluster_scaling.sh "1 2 4" 16 100 64
 
 # Full parameter specification
-./benchmark_cluster_scaling.sh "1 2 4 8" 10 100 16 "scaling_results.csv"
+./benchmark_cluster_scaling.sh "1 2 4 8" 10 100 16 "strong_scaling_results.csv"
 ```
 
-**Script Parameters:**
+**Weak Scaling** (problem size per node constant):
+
+```bash
+# Make script executable
+chmod +x benchmark_cluster_weak_scaling.sh
+
+# Basic weak scaling test
+./benchmark_cluster_weak_scaling.sh "1 2 4 8"
+
+# Custom configuration (10M records per node)
+./benchmark_cluster_weak_scaling.sh "1 2 4" 16 10 64
+
+# Full parameter specification
+./benchmark_cluster_weak_scaling.sh "1 2 4 8" 10 10 16 "weak_scaling_results.csv"
+```
+
+**Strong Scaling Script Parameters:**
 
 ```bash
 ./benchmark_cluster_scaling.sh "node_list" [ff_threads] [records_m] [payload_b] [csv_filename]
 ```
 
-| Parameter      | Description                          | Default                          |
-| -------------- | ------------------------------------ | -------------------------------- |
-| `node_list`    | Space-separated node counts (quoted) | Required                         |
-| `ff_threads`   | FastFlow threads per MPI process     | 10                               |
-| `records_m`    | Dataset size in millions             | 100                              |
-| `payload_b`    | Payload size in bytes                | 16                               |
-| `csv_filename` | Output CSV file                      | `hybrid_performance_results.csv` |
+| Parameter      | Description                          | Default                              |
+| -------------- | ------------------------------------ | ------------------------------------ |
+| `node_list`    | Space-separated node counts (quoted) | Required                             |
+| `ff_threads`   | FastFlow threads per MPI process     | 10                                   |
+| `records_m`    | Total dataset size in millions       | 100                                  |
+| `payload_b`    | Payload size in bytes                | 16                                   |
+| `csv_filename` | Output CSV file                      | `cluster_strong_scaling_results.csv` |
 
-### Batch Analysis Examples
-
-**Comprehensive Thread Scaling Study:**
+**Weak Scaling Script Parameters:**
 
 ```bash
-#!/bin/bash
-echo "=== Thread Scaling Study ==="
-for threads in 4 8 12 16 24; do
-    echo "Testing $threads threads..."
-    ./benchmark_array_scaling.sh $threads "array_scaling_${threads}t.csv"
-    ./benchmark_payload_scaling.sh $threads "payload_scaling_${threads}t.csv"
-done
+./benchmark_cluster_weak_scaling.sh "node_list" [ff_threads] [records_per_node_m] [payload_b] [csv_filename]
 ```
 
-**Multi-Configuration Analysis:**
-
-```bash
-#!/bin/bash
-echo "=== Performance Matrix Analysis ==="
-
-# Array scaling across different thread counts
-for threads in 8 16 24; do
-    make benchmark_array_scaling SINGLE_NODE_THREADS=$threads
-    mv benchmark_array_scaling_results.csv "array_${threads}threads.csv"
-done
-
-# Payload scaling analysis
-for threads in 8 16 24; do
-    make benchmark_payload_scaling SINGLE_NODE_THREADS=$threads
-    mv benchmark_payload_scaling_results.csv "payload_${threads}threads.csv"
-done
-
-echo "Analysis complete. Generated multiple CSV files for comparison."
-```
+| Parameter            | Description                          | Default                            |
+| -------------------- | ------------------------------------ | ---------------------------------- |
+| `node_list`          | Space-separated node counts (quoted) | Required                           |
+| `ff_threads`         | FastFlow threads per MPI process     | 10                                 |
+| `records_per_node_m` | Dataset size per node in millions    | 10                                 |
+| `payload_b`          | Payload size in bytes                | 16                                 |
+| `csv_filename`       | Output CSV file                      | `cluster_weak_scaling_results.csv` |
 
 ### Manual SLURM Commands
 
@@ -440,163 +355,3 @@ srun --nodes=8 --ntasks=8 --ntasks-per-node=1 --cpus-per-task=16 --time=00:15:00
 srun --nodes=4 --ntasks-per-node=1 --time=00:02:00 --mpi=pmix \
      bash -c "cd fastflow/ff && echo 'y' | ./mapping_string.sh"
 ```
-
-## Command Reference
-
-### Complete Makefile Targets
-
-**Build Targets:**
-
-- `make all` - Build all executables
-- `make single_node_main` - Single-node application only
-- `make multi_node_main` - Multi-node application only
-- `make clean` - Clean build artifacts
-- `make help` - Display comprehensive help
-
-**Testing Targets:**
-
-- `make test_correctness_single_node` - Single-node correctness verification
-- `make test_correctness_hybrid` - Hybrid MPI correctness verification
-- `make test_perf_single_node` - Thread scaling analysis with console output
-- `make test_perf_hybrid` - MPI scaling analysis with dual baselines
-
-**Benchmark Targets:**
-
-- `make benchmark_single_node` - Single configuration comprehensive benchmark
-- `make benchmark_array_scaling` - Array size scaling analysis (200K-100M)
-- `make benchmark_payload_scaling` - Payload size scaling analysis (2-512B)
-
-### Configuration Parameters
-
-**Single-Node Parameters:**
-
-- `THREAD_LIST="2 4 8"` - Thread counts for scaling tests
-- `SINGLE_NODE_THREADS=8` - Single configuration thread count
-- `ARRAY_SIZE_M=100` - Dataset size in millions
-- `PAYLOAD_SIZE_B=16` - Record payload size in bytes
-- `SINGLE_NODE_OUTPUT=file.csv` - CSV output filename
-
-**Hybrid MPI Parameters:**
-
-- `MPI_NODES_LIST="1 2 4 8"` - MPI process counts
-- `FF_THREADS=4` - FastFlow threads per process
-- `RECORDS_SIZE_M=10` - Dataset size in millions
-- `PAYLOAD_SIZE_B=64` - Record payload size
-- `HYBRID_CSV_FILE=results.csv` - CSV output filename
-
-## Performance Analysis Guidelines
-
-### Interpreting Results
-
-**Speedup Metrics:**
-
-- Values > 1.0 indicate performance improvement over baseline
-- Linear scaling: speedup ≈ thread/process count
-- Sublinear scaling: common due to synchronization overhead
-- Superlinear scaling: rare, typically due to cache effects
-
-**Efficiency Analysis:**
-
-- Efficiency = (Speedup / Resource_Count) × 100%
-- Values > 80% indicate excellent scaling
-- Values 60-80% show good scaling
-- Values < 60% suggest optimization opportunities
-
-**Throughput Interpretation:**
-
-- Higher throughput indicates better performance
-- Compare across different configurations for scaling analysis
-- Consider memory bandwidth limitations at high thread counts
-
-### Best Practices
-
-1. **Baseline Establishment:** Always run single-threaded baseline for accurate speedup calculation
-2. **Multiple Runs:** For production analysis, average results across multiple runs
-3. **Resource Monitoring:** Monitor CPU utilization and memory usage during benchmarks
-4. **Configuration Documentation:** Document system specifications and compiler flags used
-5. **Data Validation:** Enable correctness checking for critical benchmarks
-
-## Troubleshooting
-
-### Common Issues
-
-**Build Problems:**
-
-```bash
-# Missing FastFlow
-git submodule update --init --recursive
-
-# Compilation errors
-make clean && make all
-
-# Missing MPI
-# Install OpenMPI: sudo apt install libopenmpi-dev
-```
-
-**Runtime Issues:**
-
-```bash
-# Segmentation faults with large datasets
-ulimit -s unlimited  # Increase stack size
-
-# MPI communication failures
-export OMPI_MCA_btl_base_warn_component_unused=0
-
-# FastFlow topology issues
-cd fastflow/ff && ./mapping_string.sh
-```
-
-**Performance Issues:**
-
-- Ensure system has sufficient memory for large datasets
-- Check CPU governor settings (performance vs powersave)
-- Verify thread affinity and NUMA topology
-- Monitor for thermal throttling during long benchmarks
-
-## Project Structure
-
-### Key Files and Directories
-
-**Executables (bin/):**
-
-- `single_node_main` - Interactive single-node mergesort with CSV output
-- `multi_node_main` - Distributed hybrid MPI+FastFlow implementation
-- `test_performance` - Thread scaling analysis tool
-- `test_hybrid_performance` - MPI scaling analysis tool
-- `test_correctness` - Single-node correctness verification
-- `test_hybrid_correctness` - Multi-node correctness verification
-
-**Benchmark Scripts:**
-
-- `benchmark_array_scaling.sh` - Array size scaling (200K-100M records)
-- `benchmark_payload_scaling.sh` - Payload size scaling (2-512 bytes)
-- `benchmark_cluster_scaling.sh` - MPI cluster scaling analysis
-
-**Core Libraries:**
-
-- `include/csv_format.h` - Standardized CSV output format functions
-- `src/common/utils.hpp` - Configuration parsing and utility functions
-- `src/fastflow/ff_mergesort.hpp` - FastFlow parallel implementation
-- `src/hybrid/mpi_ff_mergesort.hpp` - MPI+FastFlow hybrid implementation
-- `src/sequential/sequential_mergesort.hpp` - Reference sequential implementation
-
-**Configuration:**
-
-- `Makefile` - Comprehensive build system with professional targets
-- `fastflow/` - FastFlow parallel patterns library (git submodule)
-
-### Output Files
-
-**CSV Results:**
-
-- `performance_results.csv` - Thread scaling test results
-- `hybrid_performance_results.csv` - MPI scaling test results
-- `benchmark_single_node_results.csv` - Single configuration benchmark
-- `benchmark_array_scaling_results.csv` - Array size scaling results
-- `benchmark_payload_scaling_results.csv` - Payload size scaling results
-
-All CSV files follow the standardized format with dual-baseline speedup calculations and efficiency metrics for comprehensive performance analysis.
-
-## License and Attribution
-
-This implementation uses the FastFlow parallel patterns library for intra-node parallelization and OpenMPI for inter-node communication. Performance testing follows academic benchmarking best practices with proper statistical analysis and baseline comparisons.

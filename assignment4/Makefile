@@ -3,15 +3,13 @@ CXX = g++
 MPICXX = mpic++
 
 # Compiler and Linker Flags
-# Added -pthread for parallel framework support
-# Common flags for all compilations
 COMMON_FLAGS = -std=c++17 -Wall -O3 -I./include -I./fastflow -pthread
 # Specific CXXFLAGS for non-MPI compilation
 CXXFLAGS = $(COMMON_FLAGS)
 # Specific MPICXXFLAGS for MPI compilation
 MPICXXFLAGS = $(COMMON_FLAGS)
 
-# Linker flags - ensure pthreads is linked for parallel framework
+# Linker flags
 LDFLAGS = -pthread
 
 # Directories
@@ -20,7 +18,7 @@ OBJ_DIR = obj
 BIN_DIR = bin
 TEST_DIR = tests
 
-# Common source files (adjust as needed)
+# Common source files
 COMMON_SRC = $(wildcard $(SRC_DIR)/common/*.cpp)
 COMMON_OBJ = $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(COMMON_SRC))
 
@@ -36,7 +34,7 @@ HYBRID_OBJ = $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(HYBRID_SRC))
 FF_SRC = $(wildcard $(SRC_DIR)/fastflow/*.cpp)
 FF_OBJ = $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(FF_SRC))
 
-# Main application sources and objects (if any, e.g., main.cpp)
+# Main application sources and objects
 MAIN_SRC = $(wildcard $(SRC_DIR)/main/*.cpp)
 MAIN_OBJ = $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(MAIN_SRC))
 
@@ -76,10 +74,6 @@ $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp | $(OBJ_DIR)
 	@mkdir -p $(dir $@) # Ensure the target directory for the object file exists
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-# Rule to create object files from test directory (if any are compiled directly, usually not needed)
-# $(OBJ_DIR)/%.o: $(TEST_DIR)/%.cpp | $(OBJ_DIR)
-# 	$(CXX) $(CXXFLAGS) -c $< -o $@
-
 # Create directories if they don't exist
 $(OBJ_DIR) $(BIN_DIR):
 	@mkdir -p $@
@@ -92,23 +86,19 @@ $(OBJ_DIR)/common $(OBJ_DIR)/sequential $(OBJ_DIR)/hybrid $(OBJ_DIR)/main $(OBJ_
 $(TARGET_SEQ): $(OBJ_DIR) $(BIN_DIR) $(COMMON_OBJ) $(SEQ_OBJ) $(TEST_SEQ_SRC)
 	$(CXX) $(CXXFLAGS) $(TEST_SEQ_SRC) $(COMMON_OBJ) $(SEQ_OBJ) -o $@ $(LDFLAGS)
 
-# Link test_performance (assuming it might use MPI, adjust if not)
-# Added $(FF_OBJ) to the dependencies and linking command
+# Link test_performance
 $(TARGET_PERF): $(OBJ_DIR) $(BIN_DIR) $(COMMON_OBJ) $(SEQ_OBJ) $(FF_OBJ) $(TEST_PERF_SRC)
 	$(MPICXX) $(MPICXXFLAGS) $(TEST_PERF_SRC) $(COMMON_OBJ) $(SEQ_OBJ) $(FF_OBJ) -o $@ $(LDFLAGS)
 
-# Link test_correctness (assuming it might use MPI)
-# Added $(FF_OBJ) to the dependencies and linking command
+# Link test_correctness
 $(TARGET_CORRECT): $(OBJ_DIR) $(BIN_DIR) $(COMMON_OBJ) $(SEQ_OBJ) $(HYBRID_OBJ) $(FF_OBJ) $(TEST_CORRECT_SRC)
 	$(MPICXX) $(MPICXXFLAGS) $(TEST_CORRECT_SRC) $(COMMON_OBJ) $(SEQ_OBJ) $(HYBRID_OBJ) $(FF_OBJ) -o $@ $(LDFLAGS)
 
 # Link test_hybrid_correctness
-# Added $(FF_OBJ) to the dependencies and linking command (HYBRID_OBJ likely includes ff_mergesort from its own cpp, but good to be explicit if it might be separate)
 $(TARGET_HYBRID_CORRECT): $(OBJ_DIR) $(BIN_DIR) $(COMMON_OBJ) $(HYBRID_OBJ) $(FF_OBJ) $(TEST_HYBRID_CORRECT_SRC)
 	$(MPICXX) $(MPICXXFLAGS) $(TEST_HYBRID_CORRECT_SRC) $(COMMON_OBJ) $(HYBRID_OBJ) $(FF_OBJ) -o $@ $(LDFLAGS)
 
 # Link test_hybrid_performance
-# Added $(FF_OBJ) to the dependencies and linking command
 $(TARGET_HYBRID_PERF): $(OBJ_DIR) $(BIN_DIR) $(COMMON_OBJ) $(HYBRID_OBJ) $(FF_OBJ) $(TEST_HYBRID_PERF_SRC)
 	$(MPICXX) $(MPICXXFLAGS) $(TEST_HYBRID_PERF_SRC) $(COMMON_OBJ) $(HYBRID_OBJ) $(FF_OBJ) -o $@ $(LDFLAGS)
 
@@ -127,7 +117,7 @@ clean:
 	@rm -f .baseline_time_hybrid_*.tmp
 
 # Phony targets
-.PHONY: all clean test_perf_hybrid test_correctness_single_node test_perf_single_node benchmark_single_node benchmark_array_scaling benchmark_payload_scaling benchmark_cluster_scaling benchmark_cluster_weak_scaling test_correctness_hybrid help
+.PHONY: all clean test_perf_hybrid test_correctness_single_node test_perf_single_node benchmark_array_scaling benchmark_payload_scaling benchmark_cluster_scaling benchmark_cluster_weak_scaling test_correctness_hybrid help
 
 # Single node correctness test
 test_correctness_single_node: $(TARGET_CORRECT)
@@ -155,41 +145,24 @@ test_perf_single_node: $(TARGET_PERF)
 	@echo " For scaling analysis, use: make benchmark_array_scaling | benchmark_payload_scaling"
 	@echo "=============================================================================="
 
-# Single node performance benchmark with standardized metrics output
-SINGLE_NODE_THREADS ?= 8
-SINGLE_NODE_OUTPUT ?= results_single_node_performance.csv
-
-benchmark_single_node: $(TARGET_SINGLE_NODE)
-	@echo "=============================================================================="
-	@echo "                    Single Node Performance Benchmark                        "
-	@echo "------------------------------------------------------------------------------"
-	@echo " Config: $(ARRAY_SIZE_M)M records, $(PAYLOAD_SIZE_B)B payload, $(SINGLE_NODE_THREADS) threads"
-	@echo " Output: $(SINGLE_NODE_OUTPUT)"
-	@echo "=============================================================================="
-	$(TARGET_SINGLE_NODE) -s $(ARRAY_SIZE_M)M -r $(PAYLOAD_SIZE_B) -t $(SINGLE_NODE_THREADS) --no-validate --csv --csv-file $(SINGLE_NODE_OUTPUT) --verbose
-	@echo "------------------------------------------------------------------------------"
-	@echo " Benchmark Complete. Results saved to: $(SINGLE_NODE_OUTPUT)"
-	@echo " CSV contains standardized performance metrics with proper speedup analysis."
-	@echo "=============================================================================="
-
 # Array size scaling benchmark
 benchmark_array_scaling: $(TARGET_SINGLE_NODE)
 	@echo "Executing array size scaling benchmark..."
-	@./benchmark_array_scaling.sh $(SINGLE_NODE_THREADS) benchmark_array_scaling_results.csv
+	@./benchmark_array_scaling.sh $(shell echo $(THREAD_LIST) | awk '{print $$1}') benchmark_array_scaling_results.csv
 
 # Payload size scaling benchmark
 benchmark_payload_scaling: $(TARGET_SINGLE_NODE)
 	@echo "Executing payload size scaling benchmark..."
-	@./benchmark_payload_scaling.sh $(SINGLE_NODE_THREADS) benchmark_payload_scaling_results.csv
+	@./benchmark_payload_scaling.sh $(shell echo $(THREAD_LIST) | awk '{print $$1}') benchmark_payload_scaling_results.csv
 
 # Cluster scaling benchmarks
 benchmark_cluster_scaling: $(TARGET_MULTI_NODE) $(TARGET_HYBRID_PERF)
 	@echo "Executing cluster strong scaling benchmark..."
-	@./benchmark_cluster_scaling.sh "1 2 4 8" 10 100 16 cluster_strong_scaling_results.csv
+	@./benchmark_cluster_scaling.sh "1 2 4 8" 10 100 16
 
 benchmark_cluster_weak_scaling: $(TARGET_MULTI_NODE) $(TARGET_HYBRID_PERF)
 	@echo "Executing cluster weak scaling benchmark..."
-	@./benchmark_cluster_weak_scaling.sh "1 2 4 8" 10 10 16 cluster_weak_scaling_results.csv
+	@./benchmark_cluster_weak_scaling.sh "1 2 4 8" 10 10 16
 
 # Hybrid correctness test
 test_correctness_hybrid: $(TARGET_HYBRID_CORRECT)
@@ -212,7 +185,7 @@ help:
 	@echo "Testing Targets:"
 	@echo "  test_correctness_single_node - Verify single-node implementation correctness"
 	@echo "  test_correctness_hybrid      - Verify hybrid MPI+parallel correctness"
-	@echo "  test_perf_single_node        - Thread scaling performance analysis (console output)"
+	@echo "  test_perf_single_node        - Thread scaling performance analysis"
 	@echo "                                 Usage: make test_perf_single_node THREAD_LIST=\"2 4 8\" ARRAY_SIZE_M=10 PAYLOAD_SIZE_B=64"
 	@echo "                                 Outputs: performance_results.csv with detailed metrics"
 	@echo "  test_perf_hybrid             - MPI scaling performance analysis with dual-baseline comparison"
@@ -220,21 +193,21 @@ help:
 	@echo "                                 Outputs: hybrid_performance_results.csv with scaling analysis"
 	@echo ""
 	@echo "Benchmark Targets:"
-	@echo "  benchmark_single_node        - Single configuration comprehensive benchmark"
-	@echo "                                 Usage: make benchmark_single_node ARRAY_SIZE_M=50 SINGLE_NODE_THREADS=8"
 	@echo "  benchmark_array_scaling      - Array size scaling analysis (200K to 100M records)"
-	@echo "                                 Usage: make benchmark_array_scaling SINGLE_NODE_THREADS=4"
+	@echo "                                 Usage: make benchmark_array_scaling THREAD_LIST=\"4\""
 	@echo "  benchmark_payload_scaling    - Payload size scaling analysis (2 to 512 bytes)"
-	@echo "                                 Usage: make benchmark_payload_scaling SINGLE_NODE_THREADS=6"
+	@echo "                                 Usage: make benchmark_payload_scaling THREAD_LIST=\"6\""
+	@echo "  benchmark_cluster_scaling    - MPI strong scaling benchmark"
+	@echo "                                 Usage: make benchmark_cluster_scaling"
+	@echo "  benchmark_cluster_weak_scaling - MPI weak scaling benchmark"
+	@echo "                                 Usage: make benchmark_cluster_weak_scaling"
 	@echo ""
 	@echo "Configuration Parameters:"
 	@echo ""
 	@echo "Single-Node Performance:"
 	@echo "  THREAD_LIST=\"2 4 8 16\"       - Thread counts for scaling tests (default: powers of 2 up to nproc)"
-	@echo "  SINGLE_NODE_THREADS=8        - Thread count for single configuration benchmarks"
 	@echo "  ARRAY_SIZE_M=100             - Dataset size in millions of records"
 	@echo "  PAYLOAD_SIZE_B=16            - Record payload size in bytes"
-	@echo "  SINGLE_NODE_OUTPUT=file.csv  - Output CSV file for single-node benchmark"
 	@echo ""
 	@echo "Hybrid MPI Performance:"
 	@echo "  MPI_NODES_LIST=\"1 2 4 8\"     - MPI process counts to test"
@@ -253,26 +226,23 @@ help:
 	@echo "  make test_perf_single_node"
 	@echo "  make test_perf_single_node THREAD_LIST=\"1 2 4 8 16\" ARRAY_SIZE_M=50"
 	@echo ""
-	@echo "Single configuration benchmarks:"
-	@echo "  make benchmark_single_node"
-	@echo "  make benchmark_single_node ARRAY_SIZE_M=100 SINGLE_NODE_THREADS=12"
-	@echo ""
 	@echo "Scaling analysis:"
-	@echo "  make benchmark_array_scaling SINGLE_NODE_THREADS=8"
+	@echo "  make benchmark_array_scaling THREAD_LIST=\"8\""
+	@echo "  make benchmark_payload_scaling THREAD_LIST=\"8\""
 	@echo "  make benchmark_payload_scaling SINGLE_NODE_THREADS=4"
 	@echo ""
 	@echo "MPI hybrid performance:"
 	@echo "  make test_perf_hybrid"
 	@echo "  make test_perf_hybrid MPI_NODES_LIST=\"1 2 4 8\" FF_THREADS=8 RECORDS_SIZE_M=50"
 
-# Hybrid MPI+Parallel performance test with dual baseline analysis
+# Hybrid MPI+Parallel performance test
 MPI_NODES_LIST ?= 1 2 4 8
 FF_THREADS ?= 4
 RECORDS_SIZE_M ?= 10
 PAYLOAD_SIZE_B ?= 64
 HYBRID_CSV_FILE ?= hybrid_performance_results.csv
 
-# Hybrid MPI+Parallel performance test with dual baseline analysis
+# Hybrid MPI+Parallel performance test
 test_perf_hybrid: $(TARGET_HYBRID_PERF)
 	@echo "=============================================================================="
 	@echo "                 Hybrid MPI+Parallel Performance Test                        "
@@ -285,7 +255,7 @@ test_perf_hybrid: $(TARGET_HYBRID_PERF)
 	@# Run baseline establishment first (single-node parallel)
 	@baseline_time=$$(mpirun --oversubscribe -np 1 $(TARGET_HYBRID_PERF) $(FF_THREADS) $(RECORDS_SIZE_M) $(PAYLOAD_SIZE_B) $(HYBRID_CSV_FILE) --quiet 2>&1 | grep "Mergesort FF" | awk '{print $$3}'); \
 	echo ""; \
-	echo "MPI Procs       Time (ms)Throughput (MRec/s) 	    Speedup    MPI Eff (%)  Total Eff (%)"; \
+	echo "MPI Procs       Time (ms) Throughput (MRec/s) 	    Speedup    MPI Eff (%)  Total Eff (%)"; \
 	echo "--------------------------------------------------------------------------------------------"; \
 	for nodes in $(MPI_NODES_LIST); do \
 		if [ $$nodes -eq 1 ]; then \

@@ -1,9 +1,3 @@
-/**
- * @file mpi_ff_mergesort.cpp
- * @brief Hybrid MPI+FastFlow distributed mergesort with
- * computation-communication overlap
- */
-
 #include "mpi_ff_mergesort.hpp"
 #include "../common/timer.hpp"
 #include "../common/utils.hpp"
@@ -14,16 +8,13 @@
 #include <thread>
 #include <vector>
 
-/**
- * @brief External FastFlow parallel mergesort implementation
- */
 void parallel_mergesort(std::vector<Record> &data, size_t num_threads);
 
 namespace hybrid {
 
 HybridMergeSort::HybridMergeSort(const HybridConfig &config)
-    : config_(config), mpi_rank_(-1), mpi_size_(-1), payload_size_(0),
-      metrics_{} {
+    : config_(config), mpi_rank_(-1), mpi_size_(-1),
+      payload_size_(0), metrics_{} {
   // Verify MPI threading support for FastFlow integration
   int provided;
   MPI_Query_thread(&provided);
@@ -64,7 +55,7 @@ std::vector<Record> HybridMergeSort::sort(std::vector<Record> &data,
 
   // Phase 3: Hierarchical merge with computation-communication overlap
   Timer merge_timer;
-  hierarchical_merge_with_overlap(local_data);
+  hierarchical_merge(local_data);
   update_metrics("merge", merge_timer.elapsed_ms());
 
   metrics_.total_time = total_timer.elapsed_ms();
@@ -201,52 +192,52 @@ void HybridMergeSort::sort_local_data(std::vector<Record> &data) {
  * @brief Hierarchical merge with true computation-communication overlap
  * Overlaps communication with merge preparation and partial merging
  */
-void HybridMergeSort::hierarchical_merge_with_overlap(
-    std::vector<Record> &local_data) {
+void HybridMergeSort::hierarchical_merge(std::vector<Record> &local_data) {
   // Pre-start communications for maximum overlap opportunity
   std::vector<MPI_Request> pending_requests;
   std::vector<std::vector<Record>> incoming_buffers;
   std::vector<int> request_sources;
-  
-  // Binary tree reduction with overlapped communication initiation
+
+  // Binary tree reduction
   for (int step = 1; step < mpi_size_; step *= 2) {
     if ((mpi_rank_ % (2 * step)) == 0) {
       // Receiver: start non-blocking receive immediately
       int source = mpi_rank_ + step;
       if (source < mpi_size_) {
-        initiate_receive_with_overlap(source, pending_requests, 
-                                      incoming_buffers, request_sources);
+        initiate_receive(source, pending_requests, incoming_buffers,
+                         request_sources);
       }
     } else if ((mpi_rank_ % (2 * step)) == step) {
-      // Sender: send data with overlap and exit
+      // Sender: send data and exit
       int target = mpi_rank_ - step;
-      send_data_with_overlap(local_data, target);
+      send_data(local_data, target);
       local_data.clear();
       break;
     }
   }
-  
-  // Process all pending receives with maximum computation overlap
-  process_pending_receives_with_overlap(local_data, pending_requests,
-                                        incoming_buffers, request_sources);
+
+  // Process all pending receives
+  process_pending_receives(local_data, pending_requests, incoming_buffers,
+                           request_sources);
 }
 
 /**
  * @brief Initiate non-blocking receive for maximum overlap opportunity
  * Starts communication early to maximize computation-communication overlap
  */
-void HybridMergeSort::initiate_receive_with_overlap(
+void HybridMergeSort::initiate_receive(
     int source, std::vector<MPI_Request> &requests,
     std::vector<std::vector<Record>> &buffers, std::vector<int> &sources) {
-  
-  // Step 1: Receive size with minimal blocking (size is small)
+
+  // Step 1: Receive size
   size_t incoming_size;
   MPI_Recv(&incoming_size, 1, MPI_UNSIGNED_LONG, source, 0, MPI_COMM_WORLD,
            MPI_STATUS_IGNORE);
 
-  if (incoming_size == 0) return;
+  if (incoming_size == 0)
+    return;
 
-  // Step 2: Prepare buffer and initiate non-blocking receive immediately
+  // Step 2: Prepare buffer and initiate receive immediately
   buffers.emplace_back();
   auto &partner_data = buffers.back();
   partner_data.reserve(incoming_size);
@@ -254,7 +245,7 @@ void HybridMergeSort::initiate_receive_with_overlap(
     partner_data.emplace_back(payload_size_);
   }
 
-  // Step 3: Start non-blocking receive - this is where overlap begins
+  // Step 3: Start non-blocking receive (this is where overlap begins)
   requests.emplace_back();
   sources.push_back(source);
   MPI_Request &recv_req = requests.back();
@@ -264,87 +255,88 @@ void HybridMergeSort::initiate_receive_with_overlap(
     // We'll store the keys directly in the Record structures after completion
     static thread_local std::vector<std::vector<unsigned long>> key_buffers;
     key_buffers.emplace_back(incoming_size);
-    
-    MPI_Irecv(key_buffers.back().data(), incoming_size, MPI_UNSIGNED_LONG, 
+
+    MPI_Irecv(key_buffers.back().data(), incoming_size, MPI_UNSIGNED_LONG,
               source, 1, MPI_COMM_WORLD, &recv_req);
   } else {
     // Non-zero payload: create temporary buffer for packed data
     static thread_local std::vector<std::vector<char>> data_buffers;
     const size_t record_bytes = sizeof(unsigned long) + payload_size_;
     data_buffers.emplace_back(incoming_size * record_bytes);
-    
-    MPI_Irecv(data_buffers.back().data(), data_buffers.back().size(), 
-              MPI_BYTE, source, 1, MPI_COMM_WORLD, &recv_req);
+
+    MPI_Irecv(data_buffers.back().data(), data_buffers.back().size(), MPI_BYTE,
+              source, 1, MPI_COMM_WORLD, &recv_req);
   }
 
-  metrics_.bytes_communicated += 
+  metrics_.bytes_communicated +=
       incoming_size * (sizeof(unsigned long) + payload_size_);
 }
 
 /**
- * @brief Process pending receives with maximum computation overlap
- * Uses progressive completion to merge data as it becomes available
+ * @brief Process pending receives with progressive completion to merge data as
+ * it becomes available
  */
-void HybridMergeSort::process_pending_receives_with_overlap(
-    std::vector<Record> &local_data,
-    std::vector<MPI_Request> &requests,
+void HybridMergeSort::process_pending_receives(
+    std::vector<Record> &local_data, std::vector<MPI_Request> &requests,
     std::vector<std::vector<Record>> &buffers,
     const std::vector<int> &sources) {
-  
-  if (requests.empty()) return;
 
-  // Process completions progressively for maximum overlap
+  if (requests.empty())
+    return;
+
+  // Process completions progressively
   size_t completed_count = 0;
   std::vector<bool> completed(requests.size(), false);
-  
+
   while (completed_count < requests.size()) {
-    // Check for completed operations without blocking
+    // Check for completed operations
     for (size_t i = 0; i < requests.size(); ++i) {
-      if (completed[i]) continue;
-      
+      if (completed[i])
+        continue;
+
       int flag;
       MPI_Status status;
       MPI_Test(&requests[i], &flag, &status);
-      
+
       if (flag) {
         // Communication completed - start processing immediately
         process_completed_receive(i, buffers[i], sources[i]);
-        
-        // Merge with local data using optimized algorithm
+
+        // Merge with local data
         merge_two_sorted_arrays(local_data, buffers[i]);
-        
+
         completed[i] = true;
         completed_count++;
       } else {
-        // Communication still in progress - do useful computation
+        // Communication still in progress
         // Optimize local data structure while waiting
         optimize_local_data_structure(local_data);
-        
+
         // Prefetch memory for merge operations
         prefetch_merge_memory(local_data);
       }
     }
-    
+
     // Yield CPU briefly to allow MPI progress
     if (completed_count < requests.size()) {
       std::this_thread::yield();
     }
   }
-  
+
   // Cleanup: all requests are completed
   cleanup_completed_requests(requests);
 }
 
 /**
  * @brief Process a completed receive operation
- * Unpacks received data efficiently after communication completion
+ * Unpacks received data after communication completion
  */
 void HybridMergeSort::process_completed_receive(
     size_t request_index, std::vector<Record> &partner_data, int source) {
-  
+
   static thread_local std::vector<std::vector<unsigned long>> key_buffers;
   static thread_local std::vector<std::vector<char>> data_buffers;
-  
+
   if (payload_size_ == 0) {
     // Zero-payload: extract keys from temporary buffer
     if (request_index < key_buffers.size()) {
@@ -358,7 +350,7 @@ void HybridMergeSort::process_completed_receive(
     if (request_index < data_buffers.size()) {
       const auto &buffer = data_buffers[request_index];
       const char *ptr = buffer.data();
-      
+
       for (size_t i = 0; i < partner_data.size(); ++i) {
         memcpy(&partner_data[i].key, ptr, sizeof(unsigned long));
         ptr += sizeof(unsigned long);
@@ -373,17 +365,17 @@ void HybridMergeSort::process_completed_receive(
 
 /**
  * @brief Optimize local data structure during communication wait
- * Performs useful computation while waiting for MPI operations
+ * Performs computation while waiting for MPI operations
  */
 void HybridMergeSort::optimize_local_data_structure(
     std::vector<Record> &local_data) {
   // Ensure data is cache-friendly for upcoming merge
-  // This could include cache warming, memory prefetching, etc.
   if (!local_data.empty()) {
     // Access first and last elements to warm cache lines
     volatile auto first = local_data.front().key;
     volatile auto last = local_data.back().key;
-    (void)first; (void)last; // Suppress unused variable warnings
+    (void)first;
+    (void)last; // Suppress unused variable warnings
   }
 }
 
@@ -391,13 +383,14 @@ void HybridMergeSort::optimize_local_data_structure(
  * @brief Prefetch memory for merge operations
  * Prepares memory subsystem for efficient merging
  */
-void HybridMergeSort::prefetch_merge_memory(const std::vector<Record> &local_data) {
+void HybridMergeSort::prefetch_merge_memory(
+    const std::vector<Record> &local_data) {
   // Prefetch memory pages that will be accessed during merge
-  // This is a CPU-specific optimization that can improve merge performance
   if (!local_data.empty()) {
     const size_t prefetch_distance = std::min(local_data.size(), size_t(64));
     for (size_t i = 0; i < prefetch_distance; i += 8) {
-      __builtin_prefetch(&local_data[i], 0, 3); // Prefetch for read, high locality
+      __builtin_prefetch(&local_data[i], 0,
+                         3); // Prefetch for read, high locality
     }
   }
 }
@@ -405,46 +398,46 @@ void HybridMergeSort::prefetch_merge_memory(const std::vector<Record> &local_dat
 /**
  * @brief Cleanup completed MPI requests
  */
-void HybridMergeSort::cleanup_completed_requests(std::vector<MPI_Request> &requests) {
+void HybridMergeSort::cleanup_completed_requests(
+    std::vector<MPI_Request> &requests) {
   // All requests should be completed by now
-  // In a more complex implementation, we'd also cleanup any allocated buffers
   requests.clear();
 }
 
 /**
- * @brief Send data with true non-blocking overlap
+ * @brief Send data to a target process using non-blocking MPI
  * Initiates send and performs cleanup while operation completes
  */
-void HybridMergeSort::send_data_with_overlap(const std::vector<Record> &data,
-                                             int target) {
-  // Send size first (minimal blocking - just one size_t)
+void HybridMergeSort::send_data(const std::vector<Record> &data, int target) {
+  // Send size first (minimal blocking... just one size_t)
   size_t size = data.size();
   MPI_Send(&size, 1, MPI_UNSIGNED_LONG, target, 0, MPI_COMM_WORLD);
 
-  if (size == 0) return;
+  if (size == 0)
+    return;
 
   MPI_Request send_req;
-  
+
   if (payload_size_ == 0) {
-    // Zero-payload: send keys with non-blocking for true overlap
+    // Zero-payload: send keys as unsigned long array
     auto keys = std::make_unique<std::vector<unsigned long>>(size);
     for (size_t i = 0; i < size; ++i) {
       (*keys)[i] = data[i].key;
     }
 
-    // Initiate non-blocking send
+    // Initiate send
     MPI_Isend(keys->data(), size, MPI_UNSIGNED_LONG, target, 1, MPI_COMM_WORLD,
               &send_req);
 
     // OVERLAP: Perform useful work while send is in progress
     perform_sender_cleanup_work();
-    
+
     // Check completion with overlap opportunity
-    wait_for_send_completion_with_overlap(send_req);
-    
+    wait_for_send_completion(send_req);
+
     // Keep buffer alive until completion (handled by unique_ptr)
   } else {
-    // Non-zero payload: pack and send with true overlap
+    // Non-zero payload: pack and send records
     const size_t record_bytes = sizeof(unsigned long) + payload_size_;
     auto buffer = std::make_unique<std::vector<char>>(size * record_bytes);
     char *ptr = buffer->data();
@@ -460,15 +453,15 @@ void HybridMergeSort::send_data_with_overlap(const std::vector<Record> &data,
     }
 
     // Initiate non-blocking send
-    MPI_Isend(buffer->data(), buffer->size(), MPI_BYTE, target, 1, 
+    MPI_Isend(buffer->data(), buffer->size(), MPI_BYTE, target, 1,
               MPI_COMM_WORLD, &send_req);
 
     // OVERLAP: Perform useful work while send is in progress
     perform_sender_cleanup_work();
-    
+
     // Check completion with overlap opportunity
-    wait_for_send_completion_with_overlap(send_req);
-    
+    wait_for_send_completion(send_req);
+
     // Keep buffer alive until completion (handled by unique_ptr)
   }
 }
@@ -479,14 +472,15 @@ void HybridMergeSort::send_data_with_overlap(const std::vector<Record> &data,
  */
 void HybridMergeSort::perform_sender_cleanup_work() {
   // Perform memory cleanup, cache optimization, or other useful work
-  // This could include freeing temporary buffers, optimizing data structures, etc.
-  
+  // This could include freeing temporary buffers, optimizing data structures,
+  // etc.
+
   // Simulate useful work - in practice this could be:
   // - Cleaning up temporary data structures
-  // - Preparing for next computation phase  
+  // - Preparing for next computation phase
   // - Memory pool management
   // - Cache optimization
-  
+
   // Minimal work to demonstrate overlap without adding unnecessary computation
   volatile int dummy_work = 0;
   for (int i = 0; i < 100; ++i) {
@@ -499,17 +493,17 @@ void HybridMergeSort::perform_sender_cleanup_work() {
  * @brief Wait for send completion with continued overlap opportunities
  * Uses MPI_Test to avoid blocking and continue useful work
  */
-void HybridMergeSort::wait_for_send_completion_with_overlap(MPI_Request &request) {
+void HybridMergeSort::wait_for_send_completion(MPI_Request &request) {
   int completed = 0;
-  
+
   // Progressive completion check with overlap
   while (!completed) {
     MPI_Test(&request, &completed, MPI_STATUS_IGNORE);
-    
+
     if (!completed) {
       // Continue useful work while waiting
       perform_sender_cleanup_work();
-      
+
       // Brief yield to allow MPI progress
       std::this_thread::yield();
     }

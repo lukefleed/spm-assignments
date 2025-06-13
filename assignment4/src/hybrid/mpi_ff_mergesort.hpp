@@ -91,35 +91,32 @@ private:
    * true computation-communication overlap
    * @param local_data Process-local sorted data, becomes final result on rank 0
    */
-  void hierarchical_merge_with_overlap(std::vector<Record> &local_data);
+  void hierarchical_merge(std::vector<Record> &local_data);
 
   /**
    * @brief Initiate non-blocking receive for maximum overlap opportunity
    */
-  void initiate_receive_with_overlap(int source, 
-                                     std::vector<MPI_Request> &requests,
-                                     std::vector<std::vector<Record>> &buffers,
-                                     std::vector<int> &sources);
+  void initiate_receive(int source, std::vector<MPI_Request> &requests,
+                        std::vector<std::vector<Record>> &buffers,
+                        std::vector<int> &sources);
 
   /**
    * @brief Process all pending receives with computation overlap
    */
-  void process_pending_receives_with_overlap(
-      std::vector<Record> &local_data,
-      std::vector<MPI_Request> &requests,
-      std::vector<std::vector<Record>> &buffers,
-      const std::vector<int> &sources);
+  void process_pending_receives(std::vector<Record> &local_data,
+                                std::vector<MPI_Request> &requests,
+                                std::vector<std::vector<Record>> &buffers,
+                                const std::vector<int> &sources);
 
   /**
    * @brief Receive and merge using true computation-communication overlap
    */
-  void receive_and_merge_with_overlap(std::vector<Record> &local_data,
-                                      int source);
+  void receive_and_merge(std::vector<Record> &local_data, int source);
 
   /**
    * @brief Send data using true non-blocking MPI for maximum overlap
    */
-  void send_data_with_overlap(const std::vector<Record> &data, int target);
+  void send_data(const std::vector<Record> &data, int target);
 
   /**
    * @brief Perform useful work while send operation is in progress
@@ -129,12 +126,12 @@ private:
   /**
    * @brief Wait for send completion with continued overlap opportunities
    */
-  void wait_for_send_completion_with_overlap(MPI_Request &request);
+  void wait_for_send_completion(MPI_Request &request);
 
   /**
    * @brief Process a completed receive operation
    */
-  void process_completed_receive(size_t request_index, 
+  void process_completed_receive(size_t request_index,
                                  std::vector<Record> &partner_data, int source);
 
   /**
