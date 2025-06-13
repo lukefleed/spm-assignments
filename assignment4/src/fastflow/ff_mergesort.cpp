@@ -1,7 +1,3 @@
-/**
- * @file ff_mergesort.cpp
- * @brief FastFlow parallel mergesort implementation
- */
 #include "ff_mergesort.hpp"
 #include "../common/record.hpp"
 #include <algorithm>

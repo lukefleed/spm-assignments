@@ -158,11 +158,11 @@ benchmark_payload_scaling: $(TARGET_SINGLE_NODE)
 # Cluster scaling benchmarks
 benchmark_cluster_scaling: $(TARGET_MULTI_NODE) $(TARGET_HYBRID_PERF)
 	@echo "Executing cluster strong scaling benchmark..."
-	@./benchmark_cluster_scaling.sh "1 2 4 8" 10 100 16
+	@./benchmark_cluster_scaling.sh "1 2 4 8" 16 100 8
 
 benchmark_cluster_weak_scaling: $(TARGET_MULTI_NODE) $(TARGET_HYBRID_PERF)
 	@echo "Executing cluster weak scaling benchmark..."
-	@./benchmark_cluster_weak_scaling.sh "1 2 4 8" 10 10 16
+	@./benchmark_cluster_weak_scaling.sh "1 2 4 8" 16 10 8
 
 # Hybrid correctness test
 test_correctness_hybrid: $(TARGET_HYBRID_CORRECT)
@@ -187,7 +187,7 @@ help:
 	@echo "  test_correctness_hybrid      - Verify hybrid MPI+parallel correctness"
 	@echo "  test_perf_single_node        - Thread scaling performance analysis"
 	@echo "                                 Usage: make test_perf_single_node THREAD_LIST=\"2 4 8\" ARRAY_SIZE_M=10 PAYLOAD_SIZE_B=64"
-	@echo "                                 Outputs: performance_results.csv with detailed metrics"
+	@echo "                                 Outputs: performance_results.csv with metrics"
 	@echo "  test_perf_hybrid             - MPI scaling performance analysis with dual-baseline comparison"
 	@echo "                                 Usage: make test_perf_hybrid MPI_NODES_LIST=\"1 2 4\" FF_THREADS=4"
 	@echo "                                 Outputs: hybrid_performance_results.csv with scaling analysis"

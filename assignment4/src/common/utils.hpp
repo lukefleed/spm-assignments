@@ -1,8 +1,3 @@
-/**
- * @file utils.hpp
- * @brief Utility functions for parallel sorting benchmarks
- */
-
 #ifndef UTILS_HPP
 #define UTILS_HPP
 

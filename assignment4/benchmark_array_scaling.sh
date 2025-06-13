@@ -49,8 +49,3 @@ done
 echo
 echo "Benchmark completed successfully!"
 echo "Results: $OUTPUT"
-echo "CSV contains standardized performance metrics with comprehensive speedup analysis."
-echo
-echo "Sample output:"
-echo "$(head -n 4 "$OUTPUT")"
-echo "... ($(tail -n +2 "$OUTPUT" | wc -l) data records)"

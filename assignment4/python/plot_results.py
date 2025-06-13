@@ -133,7 +133,6 @@ def plot_cluster_strong_scaling_analysis():
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=df_hybrid['MPI_Processes'], y=df_hybrid['Speedup'],
                             mode='lines+markers', name='Measured Speedup'))
-    # Ideal speedup line removed as requested
 
     fig.update_layout(
         title=f'Cluster Strong Scaling Analysis (MPI)<br><sup>N = {array_size:,}, T/Node = {threads_per_node}, Payload = {payload} bytes</sup>',

@@ -7,8 +7,6 @@
 
 /**
  * @brief High-resolution timer for performance measurements
- *
- * Not thread-safe - use separate instances per thread.
  */
 class Timer {
 private:

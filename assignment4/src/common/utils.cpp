@@ -1,8 +1,3 @@
-/**
- * @file utils.cpp
- * @brief Utility functions implementation
- */
-
 #include "utils.hpp"
 #include <cctype>
 #include <climits>

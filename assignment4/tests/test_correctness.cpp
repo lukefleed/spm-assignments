@@ -1,8 +1,3 @@
-/**
- * @file test_correctness.cpp
- * @brief Correctness validation for mergesort implementations
- */
-
 #include "../src/common/record.hpp"
 #include "../src/common/timer.hpp"
 #include "../src/common/utils.hpp"
@@ -68,7 +63,6 @@ struct TestCase {
 
 /**
  * @brief Execute test case with cross-implementation verification
- * @param test Test configuration
  * @return true if both implementations pass and produce equivalent results
  */
 bool run_test_case(const TestCase &test) {

@@ -1,8 +1,3 @@
-/**
- * @file test_performance.cpp
- * @brief Performance benchmarking suite for mergesort implementations
- */
-
 #include "../include/csv_format.h"
 #include "../src/common/record.hpp"
 #include "../src/common/timer.hpp"

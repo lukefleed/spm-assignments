@@ -1,8 +1,3 @@
-/**
- * @file test_hybrid_correctness.cpp
- * @brief Correctness validation for hybrid MPI+FastFlow mergesort
- */
-
 #include "../src/common/record.hpp"
 #include "../src/common/timer.hpp"
 #include "../src/common/utils.hpp"
@@ -28,7 +23,6 @@ struct TestCase {
 
 /**
  * @brief Validate sorted array ordering
- * @param data Sorted record vector to validate
  * @return true if properly sorted by key in ascending order
  */
 bool verify_sorted(const std::vector<Record> &data) {

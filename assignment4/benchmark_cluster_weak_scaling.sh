@@ -1,16 +1,5 @@
 #!/bin/bash
 
-## @file benchmark_cluster_weak_scaling.sh
-## @brief Weak scaling test suite for hybrid MPI+FastFlow performance on cluster
-## @details Maintains constant problem size per node while increasing node count
-## @usage ./benchmark_cluster_weak_scaling.sh "1 2 4 8" [ff_threads] [records_per_node_m] [payload_b]
-## @example ./benchmark_cluster_weak_scaling.sh "1 2 4 8"
-## @example ./benchmark_cluster_weak_scaling.sh "1 2 4" 16 10 64
-
-# ============================================================================
-#                          CONFIGURATION PARAMETERS
-# ============================================================================
-
 # Default parameters (can be overridden via command line)
 DEFAULT_FF_THREADS=10
 DEFAULT_RECORDS_PER_NODE_M=10
@@ -34,20 +23,6 @@ Examples:
   $0 "1 2 4 8"                     # 10M, 20M, 40M, 80M records
   $0 "1 2 4" 16 5 64               # 5M, 10M, 20M records with custom params
   $0 "1 2" 8 15 8 "weak.csv"       # 15M, 30M records, all custom
-
-Weak Scaling Pattern:
-  • 1 node:  1 × ${DEFAULT_RECORDS_PER_NODE_M}M = ${DEFAULT_RECORDS_PER_NODE_M}M records
-  • 2 nodes: 2 × ${DEFAULT_RECORDS_PER_NODE_M}M = $((2 * DEFAULT_RECORDS_PER_NODE_M))M records
-  • 4 nodes: 4 × ${DEFAULT_RECORDS_PER_NODE_M}M = $((4 * DEFAULT_RECORDS_PER_NODE_M))M records
-  • etc.
-
-Features:
-  • Constant problem size per node (weak scaling)
-  • Sequential srun execution (cluster-friendly)
-  • Efficiency tracking vs single-node baseline
-  • Progress tracking and error handling
-  • Follows cluster guidelines (max 10min/job)
-
 EOF
 }
 
@@ -96,10 +71,6 @@ if ! [[ "$PAYLOAD_SIZE_B" =~ ^[0-9]+$ ]] || [ "$PAYLOAD_SIZE_B" -lt 1 ]; then
     exit 1
 fi
 
-# ============================================================================
-#                          EXECUTION SETUP
-# ============================================================================
-
 echo "=== Cluster Weak Scaling Test ==="
 echo "Node configuration: ${NODE_LIST}"
 echo "FastFlow threads/process: ${FF_THREADS}"
@@ -128,10 +99,6 @@ START_TIME=$(date +%s)
 
 echo "Starting tests at $(date)"
 echo ""
-
-# ============================================================================
-#                          BASELINE ESTABLISHMENT (1 NODE)
-# ============================================================================
 
 # Get the first (smallest) node count for baseline
 BASELINE_NODES=${NODES_ARRAY[0]}
@@ -185,10 +152,6 @@ fi
 echo "Baseline established: ${BASELINE_TIME} ms"
 echo ""
 
-# ============================================================================
-#                          RESULTS HEADER
-# ============================================================================
-
 echo "Nodes   Total Records   Time (ms)      Throughput (MRec/s)   Speedup    Efficiency (%)"
 echo "------- --------------- -------------- --------------------- ---------- --------------"
 
@@ -203,10 +166,6 @@ else
         printf "%-7s %-15s %-14s %-21s %-10s 100.0\n", nodes, records, $2, $3, $4
     }'
 fi
-
-# ============================================================================
-#                          MAIN EXECUTION LOOP
-# ============================================================================
 
 for nodes in "${NODES_ARRAY[@]}"; do
     CURRENT_TEST=$((CURRENT_TEST + 1))
@@ -266,10 +225,6 @@ for nodes in "${NODES_ARRAY[@]}"; do
         }'
     fi
 done
-
-# ============================================================================
-#                          COMPLETION SUMMARY
-# ============================================================================
 
 TOTAL_TIME=$(($(date +%s) - START_TIME))
 

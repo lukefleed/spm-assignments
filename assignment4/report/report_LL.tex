@@ -14,17 +14,17 @@
 \usepackage{float}
 \usepackage{caption}
 \usepackage{subcaption}
-\usepackage{adjustbox} % Good for image handling
+\usepackage{adjustbox}
 
 \usepackage{booktabs}
 
 \usepackage{etoolbox}
 \usepackage{siunitx}
-\usepackage{parskip} % Creates space between paragraphs instead of indentation
-\setlength{\parskip}{1em} % Adjust space between paragraphs
-\setlength{\parindent}{0pt} % No indentation
+\usepackage{parskip}
+\setlength{\parskip}{1em}
+\setlength{\parindent}{0pt}
 
-\usepackage{tikz} % For diagrams
+\usepackage{tikz}
 \usetikzlibrary{shapes.geometric, arrows, positioning}
 
 \usepackage{hyperref}
@@ -75,7 +75,6 @@
 \begin{document}
 
 \maketitle
-\vspace{-1.5em} % Reduce space after title block
 
 
 The goal of this project was to develop a scalable MergeSort algorithm for a large array of records, combining intra-node parallelism with FastFlow and inter-node parallelism with MPI.
@@ -103,16 +102,17 @@ To scale the algorithm beyond a single node, we designed a hybrid implementation
 
 The first phase is a load-balanced data distribution. The root process (rank 0) partitions the global dataset of size $N$ into $P$ contiguous blocks, where $P$ is the MPI world size. To handle cases where $N$ is not perfectly divisible by $P$, we calculate unique per-process element counts and memory displacements. This information is then used with the collective operation \code{MPI\_Scatterv}, which is more general than a simple \code{MPI\_Scatter} and ensures an even distribution of records. For efficiency, especially with non-trivial payloads, data is first serialized into a contiguous byte buffer. This strategy minimizes the number of discrete MPI calls and optimizes for network throughput by sending a single, large message chunk to each process.
 
-The second phase is local sorting. Upon receiving its data partition, each MPI process executes a multi-threaded parallel mergesort. This step performs a coarse-grained, computation-bound sort on the local data, leveraging all available cores on the node as configured. This transforms the global problem into a set of $P$ distributed, independently sorted arrays, preparing the data for the final merge phase.
+The second phase is local sorting. Upon receiving its data partition, each MPI process executes the multi-threaded parallel mergesort developed before. This step performs a coarse-grained, computation-bound sort on the local data, leveraging all available cores on the node as configured. This transforms the global problem into a set of $P$ distributed, independently sorted arrays, preparing the data for the final merge phase.
 
 The third and most complex phase is hierarchical merging. After local sorting, the distributed segments must be merged into a single, globally sorted array at the root. We chose a binary tree reduction pattern for this task, which completes in $\log_2(P)$ communication steps. At each step, active processes are paired: a "sender" transmits its data to a "receiver," which then performs a two-way merge. This pattern effectively distributes the merge workload across multiple nodes in the early stages, but progressively serializes the work toward the root process, which performs the final merge.
 
-A critical aspect of this phase is the communication strategy, designed to maximize computation-to-communication overlap. Our implementation employs a non-blocking model based on \code{MPI\_Isend} and \code{MPI\_Irecv}. This approach decouples the initiation of a data transfer from its completion, allowing the program to continue execution. A receiving process posts a non-blocking receive for an expected data chunk and then enters a progress-checking loop. By repeatedly polling the status of the transfer with \code{MPI\_Test}, the process can begin merging data from a completed transfer immediately, even while other network operations are still in flight. This design aims to hide the communication latency and bandwidth costs of one transfer behind the computational work of a concurrent merge operation, thereby improving overall resource utilization.
+A critical aspect of this phase is the communication strategy, designed to maximize computation-to-communication overlap. Our implementation employs a non-blocking model. Each receiving process determines all future merge partners upfront and posts non-blocking receives (\code{MPI\_Irecv}) for all of them immediately. It then enters a progress loop, using \code{MPI\_Waitany} to react as soon as any one of these data transfers completes. Upon completion, the received data is immediately processed and merged. This event-driven approach allows the computational cost of merging one data block to overlap with the network latency of other pending transfers, significantly improving resource utilization and hiding communication overhead.
 
 \subsubsection{Alternative Merge Strategy: Centralized K-Way Merge}
 We also evaluated an alternative strategy for the final merge phase: a centralized k-way merge. In this model, all $P-1$ non-root processes send their locally sorted data directly to the root process, which then performs a single, large k-way merge using a min-heap data structure.
 
 Theoretically, this approach is attractive as it reduces the number of communication rounds from $\log_2(P)$ to one. However, our benchmarks showed it to be less performant than the binary tree reduction. The primary reason is that it creates a massive communication and computation bottleneck at the root process. The root must handle incoming network traffic from all other processes simultaneously while also performing the entire merge. This serializes a large fraction of the work and leaves the other nodes idle after their initial send. In contrast, the binary tree approach distributes the merge workload across multiple nodes in the initial steps, leveraging the computational power of the entire system for a longer duration.
+
 
 \clearpage
 \section{Performance Analysis}
@@ -165,8 +165,7 @@ Figure \ref{fig:problem_size_scaling} presents a scaling analysis where the numb
     \label{fig:cluster_analysis}
 \end{figure}
 
-Figure \ref{fig:cluster_strong_scaling} provides an instructive view into the strong scaling characteristics of the hybrid algorithm. The speedup is measured relative to an optimized single-node parallel baseline, executed via the same framework but constrained to a single MPI process. The results show that for a problem size of 100 million records, the speedup remains sub-linear and below 1.0, indicating that the overhead of distributed execution surpasses the gains from parallel computation across nodes. This outcome stems from the algorithm's communication-to-computation ratio. The total execution time is dominated by two main communication phases: the initial data distribution via \code{MPI\_Scatterv} and, more critically, the iterative binary tree reduction. According to a simple linear cost model, each merge step introduces a latency component ($t_0$) and a bandwidth-dependent term ($n \cdot s$). In our hierarchical merge, the message size ($n$) grows exponentially at each step toward the root. Even with non-blocking primitives like \code{MPI\_Isend} and \code{MPI\_Irecv}, the sheer volume of data being serialized into byte buffers and transferred across the network creates a bandwidth bottleneck that the local computation phases cannot fully hide. The observed performance suggests that for this problem scale, the cumulative communication costs are not sufficiently amortized, leading to a performance penalty compared to the single-node execution.
+Figure \ref{fig:cluster_strong_scaling} provides an instructive view into the strong scaling characteristics of the hybrid algorithm. The speedup is measured relative to an optimized single-node parallel baseline (i.e., the same algorithm running on one MPI process with the same number of FastFlow threads). The results show a successful scaling behavior. While the two-process execution is slower than the baseline (speedup of approx. 0.8) due to the initial overhead of network communication, the implementation achieves a significant speedup with four processes (approx. 1.17x) and scales further to eight processes (approx. 1.53x). This demonstrates that for a large problem size of 100 million records, the benefits of distributing the computational load across multiple nodes effectively overcome the costs of data transfer and synchronization. The non-blocking communication strategy, which overlaps merge operations with data transfers, proves crucial in mitigating network latency. The diminishing efficiency returns as more nodes are added are expected in strong scaling scenarios, as communication costs inevitably begin to occupy a larger fraction of the total execution time, in accordance with Amdahl's Law.
 
-To complete the performance study, we conducted a weak scaling test on the cluster, where the computational load per node ($N/P$) was held constant. Figure \ref{fig:cluster_weak_scaling} plots the resulting efficiency, which ideally should remain at 1.0. Our results, however, demonstrate a rapid degradation in efficiency. While the local computation phase exhibits perfect weak scaling, the communication complexity of the hierarchical merge phase increases with $P$. Although each process participates in a logarithmic number of steps ($\log_2 P$), the volume of data transferred in the later stages of the reduction grows linearly with the number of nodes participating in a given subtree. This leads to increased network contention and serialization at the upper levels of the merge tree, where fewer processes are active but must handle larger data volumes. Consequently, the total execution time becomes dominated by communication.
-
+To complete the performance study, we conducted a weak scaling test on the cluster, where the problem size per node was held constant. Figure \ref{fig:cluster_weak_scaling} plots the resulting efficiency, where an ideal algorithm would maintain a value of 1.0. Our results demonstrate a sharp degradation in efficiency: from perfect efficiency at one node, it drops to approximately 0.4 at two nodes, and continues to decline to below 0.2 with eight nodes. This behavior is characteristic of algorithms with non-scalable communication patterns, such as distributed MergeSort. The primary cause for this poor weak scaling lies in the hierarchical merge phase. While the local sort phase exhibits perfect weak scaling, the communication complexity of the binary tree reduction increases with the number of processes $P$. In each of the $\log_2 P$ steps, processes must transmit increasingly large, already-merged partitions. The total volume of data communicated and the latency of the final, more sequential merge steps grow with $P$.
 \end{document}

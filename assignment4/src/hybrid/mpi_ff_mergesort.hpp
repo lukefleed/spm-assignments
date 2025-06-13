@@ -1,9 +1,3 @@
-/**
- * @file mpi_ff_mergesort.hpp
- * @brief Hybrid MPI+FastFlow distributed mergesort with
- * computation-communication overlap.
- */
-
 #pragma once
 
 #include "../common/record.hpp"
@@ -44,16 +38,11 @@ struct HybridMetrics {
  * 2. Local parallel sorting on each node using FastFlow.
  * 3. Hierarchical merging via a binary tree reduction pattern, employing
  *    non-blocking communication to overlap computation and data transfers.
- *
- * This class assumes MPI has been initialized with MPI_THREAD_FUNNELED support.
  */
 class HybridMergeSort {
 public:
   /**
    * @brief Initializes the hybrid sorter, verifying the MPI environment.
-   * @param config Algorithm configuration parameters.
-   * @throws std::runtime_error if MPI is not initialized or lacks thread
-   * support.
    */
   explicit HybridMergeSort(const HybridConfig &config);
   ~HybridMergeSort();
@@ -65,9 +54,6 @@ public:
 
   /**
    * @brief Executes the distributed hybrid sort.
-   * @param data Input dataset (meaningful only on the root process).
-   * @param payload_size Record payload size in bytes.
-   * @return Sorted dataset on the root process, empty on others.
    */
   std::vector<Record> sort(std::vector<Record> &data, size_t payload_size);
 

@@ -1,16 +1,5 @@
 #!/bin/bash
 
-## @file run_cluster_scaling.sh
-## @brief Automated cluster scaling test suite for hybrid MPI+FastFlow performance
-## @details Follows cluster guidelines: sequential srun jobs, max 10min per job
-## @usage ./run_cluster_scaling.sh "1 2 4 8" [ff_threads] [records_m] [payload_b]
-## @example ./run_cluster_scaling.sh "1 2 4 8"
-## @example ./run_cluster_scaling.sh "1 2 4" 16 50 64
-
-# ============================================================================
-#                          CONFIGURATION PARAMETERS
-# ============================================================================
-
 # Default parameters (can be overridden via command line)
 DEFAULT_FF_THREADS=10
 DEFAULT_RECORDS_SIZE_M=100
@@ -34,14 +23,6 @@ Examples:
   $0 "1 2 4 8"                    # Full scaling test with defaults
   $0 "1 2 4" 16 50 64             # Custom parameters
   $0 "1 2" 8 10 8 "test.csv"      # All custom parameters
-
-Features:
-  • Automatic CSV cleanup and baseline establishment
-  • Sequential srun execution (cluster-friendly)
-  • Comprehensive dual-baseline analysis
-  • Progress tracking and error handling
-  • Follows cluster guidelines (max 10min/job, no large sbatch)
-
 EOF
 }
 
@@ -90,10 +71,6 @@ if ! [[ "$PAYLOAD_SIZE_B" =~ ^[0-9]+$ ]] || [ "$PAYLOAD_SIZE_B" -lt 1 ]; then
     exit 1
 fi
 
-# ============================================================================
-#                          EXECUTION SETUP
-# ============================================================================
-
 echo "Scaling test: ${NODE_LIST} nodes, ${FF_THREADS} threads/proc, ${RECORDS_SIZE_M}M records"
 
 # Clean up previous results
@@ -110,9 +87,6 @@ START_TIME=$(date +%s)
 echo "Starting tests at $(date)"
 echo ""
 
-# ============================================================================
-#                          BASELINE ESTABLISHMENT
-# ============================================================================
 
 # Configure FastFlow topology for baseline
 srun --nodes=1 \
@@ -147,10 +121,6 @@ echo "----------- -------------- ------------------- ------------ ------------- 
 # Extract and display baseline with proper formatting
 echo "$BASELINE_OUTPUT" | grep "^Mergesort FF" | sed 's/^Mergesort FF/1          /'
 
-# ============================================================================
-#                          MAIN EXECUTION LOOP
-# ============================================================================
-
 for nodes in "${NODES_ARRAY[@]}"; do
     CURRENT_TEST=$((CURRENT_TEST + 1))
 
@@ -181,10 +151,6 @@ for nodes in "${NODES_ARRAY[@]}"; do
         exit 1
     fi
 done
-
-# ============================================================================
-#                          COMPLETION SUMMARY
-# ============================================================================
 
 TOTAL_TIME=$(($(date +%s) - START_TIME))
 

@@ -1,8 +1,3 @@
-/**
- * @file test_sequential.cpp
- * @brief Performance benchmarking for sequential mergesort implementation
- */
-
 #include "../src/common/record.hpp"
 #include "../src/common/timer.hpp"
 #include "../src/common/utils.hpp"

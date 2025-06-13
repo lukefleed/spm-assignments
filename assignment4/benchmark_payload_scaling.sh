@@ -25,7 +25,7 @@ echo "Payload sizes: ${PAYLOADS[*]} bytes"
 echo "Output file: $OUTPUT"
 echo
 
-# Create consolidated CSV with header
+# Create CSV with header
 rm -f "$OUTPUT"
 echo "Test_Type,Implementation,Data_Size,Payload_Size_Bytes,Threads,Execution_Time_ms,Throughput_MRec_per_sec,Speedup_vs_StdSort,Speedup_vs_Sequential,Efficiency_Percent,Valid" > "$OUTPUT"
 

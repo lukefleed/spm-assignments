@@ -1,8 +1,3 @@
-/**
- * @file test_hybrid_performance.cpp
- * @brief Performance benchmarking suite for hybrid MPI+parallel mergesort
- */
-
 #include "../src/common/record.hpp"
 #include "../src/common/timer.hpp"
 #include "../src/common/utils.hpp"
