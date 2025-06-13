@@ -81,146 +81,92 @@
 The goal of this project was to develop a scalable MergeSort algorithm for a large array of records, combining intra-node parallelism with FastFlow and inter-node parallelism with MPI.
 \section{Implementation Strategy}
 
-At the outset, a key design decision was made regarding the \code{Record} data structure. While the assignment specified a fixed-size payload array (\code{char rpayload[RPAYLOAD]}), we opted for a more flexible structure with a dynamically allocated payload (\code{char* payload}). This choice was motivated by the need for a versatile and robust benchmarking framework. Using a dynamic payload allows the record size to be configured at runtime via command-line arguments, which is essential for systematic performance analysis across various payload sizes without requiring code recompilation for each test. This design choice does not compromise the performance analysis. The memory for each record's payload is allocated once at the beginning of the tests and remains fixed throughout the sorting process. Within the core sorting algorithms, the cost of moving or comparing these records is dominated by the size of the payload, not by the fact that it is heap-allocated. The use of move semantics in our data structures ensures that during merge operations, only the pointer and size are transferred, not the payload data itself, preserving performance characteristics equivalent to those of a fixed-size struct for the purpose of this study.
-
-
+At the outset, a key design decision was made regarding the \code{Record} data structure. While the assignment specified a fixed-size payload array (\code{char rpayload[RPAYLOAD]}), we opted for a more flexible structure with a dynamically allocated payload (\code{char* payload}). This choice was motivated by the need for a versatile and robust benchmarking framework. Using a dynamic payload allows the record size to be configured at runtime via command-line arguments, which is very useful for systematic performance analysis across various payload sizes without requiring code recompilation for each test. This design choice does not compromise the performance analysis. The memory for each record's payload is allocated once at the beginning of the tests and remains fixed throughout the sorting process. Within the core sorting algorithms, the cost of moving or comparing these records is dominated by the size of the payload. While this approach introduces a single level of pointer indirection compared to a static array, its impact is negligible for a memory-bandwidth-bound streaming algorithm like MergeSort. The use of move semantics ensures that during merge operations, only the pointer and size are transferred, preserving performance characteristics equivalent to those of a fixed-size struct.
 
 \subsection{Single-Node Parallel Design (FastFlow)}
-For the shared-memory implementation, we adopted a pragmatic, performance-oriented approach. The MergeSort algorithm naturally decomposes into two distinct phases: an initial, highly parallel sorting of small data chunks, followed by a sequential series of merge passes. Our implementation mirrors this structure, using dedicated FastFlow farms for each phase to maximize performance.
+A classic MergeSort naturally decomposes into two distinct phases: an initial, highly parallel sorting of small data chunks, followed by a series of sequential merge passes. Our implementation mirrors this structure, employing dedicated FastFlow farms for each phase to optimize resource utilization.
 
-\textbf{Phase 1: Parallel Sorting.} The first challenge is to break down the massive initial array into manageable pieces. We split the array into numerous small, cache-friendly chunks. The sorting of these chunks is an embarrassingly parallel problem. For this task, we employed an \code{ff\_farm}. An emitter node decomposes the array into tasks, and a pool of worker threads processes them concurrently. Each worker sorts its assigned chunk in-place using \code{std::sort}, which is highly optimized for small-to-medium datasets.
+The first phase, parallel sorting, addresses the initial data partitioning. The array is divided into numerous small, cache-friendly chunks to maximize data locality. The sorting of these independent chunks represents an embarrassingly parallel problem, for which we employed an \code{ff\_farm}. An emitter node decomposes the array into tasks which are distributed to a pool of worker threads. Each worker leverages \code{std::sort} to sort its assigned chunk in-place.
 
-\textbf{Phase 2: Iterative Merging.} Once the initial chunks are sorted, they must be progressively merged. This is an inherently iterative process. We implemented this using a loop where, at each iteration, a new \code{ff\_farm} is created to perform a single merge pass in parallel. In each pass, pairs of adjacent sorted runs are merged into a new, larger sorted run. A critical optimization here is the use of a "ping-pong" buffer strategy. We allocate a single auxiliary buffer of the same size as the original data. In each merge pass, we read from a source buffer and write the merged results to a destination buffer. After the pass is complete, we simply swap the pointers, so the destination becomes the source for the next iteration. This avoids costly data copies between passes and is a standard, highly efficient technique for out-of-place merge algorithms.
+The second phase, iterative merging, progressively combines the sorted chunks. This process is inherently iterative and is implemented with a loop where, at each iteration, a new \code{ff\_farm} executes a single merge pass in parallel. A critical optimization in this stage is the use of a "ping-pong" buffer strategy. By allocating a single auxiliary buffer and swapping pointers between source and destination at the end of each pass, we eliminate the significant overhead of copying data between merge stages. This out-of-place merge technique is standard for maximizing memory throughput. The merge operation itself is optimized through \code{std::make\_move\_iterator}, ensuring that for our \code{Record} structure, only pointers are moved, not the potentially large payloads, thus minimizing data transfer costs on the memory bus.
 
 \subsubsection{Architectural Considerations and Discarded Alternatives}
-The assignment suggested exploring FastFlow's building blocks, including \code{ff\_pipeline} and \code{ff\_all2all}. We implemented and evaluated these alternatives but ultimately discarded them for sound performance and algorithmic reasons.
+The assignment suggested exploring FastFlow's building blocks, including \code{ff\_pipeline} and \code{ff\_all2all}. We evaluated these alternatives but ultimately discarded them for sound performance and algorithmic reasons.
 
-\textbf{Why not \code{ff\_all2all}?} The \code{ff\_all2all} pattern is designed for data redistribution, where each worker sends a piece of its local data to every other worker. This is the core of algorithms like Radix Sort or Sample Sort, which partition data based on key values.MergeSort, however, relies on merging physically adjacent, sorted segments. Its communication pattern is strictly pairwise and hierarchical, not all-to-all. Forcing MergeSort into an all-to-all pattern would be algorithmically incorrect.
+The \code{ff\_all2all} pattern is designed for data redistribution, where each worker sends a piece of its local data to every other worker. This communication pattern is fundamental to algorithms like Radix Sort or Sample Sort but is algorithmically incompatible with MergeSort, which relies on merging physically adjacent, sorted segments in a hierarchical, pairwise fashion.
 
-\textbf{Why not \code{ff\_pipeline}?} An integrated pipeline architecture, such as \code{feeder -> sort\_stage -> merge\_stage}, seems theoretically elegant. We invested significant effort in implementing and benchmarking this alternative. However, it yielded a significant performance degradation, reducing the peak speedup of about 30\%. This counter-intuitive result stems from two main factors.
-First, MergeSort is fundamentally a bulk-synchronous parallel (BSP) algorithm: the merge phase cannot begin until the entire sort phase is complete. There is no opportunity for true, overlapping pipelining.
-Second, the \code{ff\_pipeline} introduces communication and scheduling overhead between its stages. For a single, large task traversing the pipeline, this overhead outweighs any potential benefits, especially when compared to the lean approach of dedicating all parallel resources to a single, optimized farm for each distinct phase. We therefore concluded that the architecturally simpler two-farm approach was pragmatically superior for this specific problem.
+An integrated pipeline architecture, such as \code{feeder -> sort\_stage -> merge\_stage}, also proved suboptimal. Our benchmarks showed significant performance degradation. This is because MergeSort is fundamentally a Bulk-Synchronous Parallel (BSP) algorithm. There is a hard synchronization point after the initial sort phase; the merge phase cannot begin until all chunks are sorted, precluding any opportunity for true, overlapping pipelining. The inter-stage communication and scheduling overhead introduced by the \code{ff\_pipeline} outweighs any potential benefits compared to the lean approach of dedicating all parallel resources to a single, optimized farm for each distinct computational phase.
+
 
 \subsection{Hybrid Multi-Node Design (MPI + FastFlow)}
-To scale the algorithm beyond a single node, we designed a hybrid implementation that uses MPI for inter-node coordination and our optimized FastFlow MergeSort for intra-node computation. The overall process is divided into three main phases.
+To scale the algorithm beyond a single node, we designed a hybrid implementation that combines MPI for inter-node coordination with our optimized FastFlow MergeSort for intra-node computation. The overall process is structured into three distinct phases.
 
-\textbf{Phase 1: Data Distribution.} The root process (rank 0), holding the initial dataset, first partitions the global dataset into $P$ contiguous blocks, where $P$ is the number of MPI processes. The size of each block is calculated to ensure the workload is as balanced as possible. The root then uses \code{MPI\_Scatterv} to send each partition to its designated process. This is more robust than a simple \code{MPI\_Scatter} as it correctly handles cases where the total number of records is not perfectly divisible by $P$.
+The first phase is a load-balanced data distribution. The root process (rank 0) partitions the global dataset of size $N$ into $P$ contiguous blocks, where $P$ is the MPI world size. To handle cases where $N$ is not perfectly divisible by $P$, we calculate unique per-process element counts and memory displacements. This information is then used with the collective operation \code{MPI\_Scatterv}, which is more general than a simple \code{MPI\_Scatter} and ensures an even distribution of records. For efficiency, especially with non-trivial payloads, data is first serialized into a contiguous byte buffer. This strategy minimizes the number of discrete MPI calls and optimizes for network throughput by sending a single, large message chunk to each process.
 
-\textbf{Phase 2: Local Sorting.} Upon receiving its local data segment, each MPI process invokes the highly optimized, multi-threaded \code{parallel\_mergesort} function. This step agglomerates fine-grained comparison operations into a coarse-grained local sort, leveraging all available cores on the node. This phase is entirely computation-bound and transforms the global problem into a set of distributed, sorted arrays.
+The second phase is local sorting. Upon receiving its data partition, each MPI process executes a multi-threaded parallel mergesort. This step performs a coarse-grained, computation-bound sort on the local data, leveraging all available cores on the node as configured. This transforms the global problem into a set of $P$ distributed, independently sorted arrays, preparing the data for the final merge phase.
 
-\textbf{Phase 3: Hierarchical Merging.} After the local sort, the distributed sorted segments must be merged into a single, globally sorted array at the root. We chose a binary tree reduction pattern for this task, as illustrated in Figure \ref{fig:mpi_merge_tree}. The merging occurs in $\log_2(P)$ steps. In each step, active processes are paired up: one "sender" sends its data to a "receiver". The receiver merges its own data with the incoming data, and the sender then becomes idle. This pattern distributes the merge work effectively across multiple nodes in the early stages.
+The third and most complex phase is hierarchical merging. After local sorting, the distributed segments must be merged into a single, globally sorted array at the root. We chose a binary tree reduction pattern for this task, which completes in $\log_2(P)$ communication steps. At each step, active processes are paired: a "sender" transmits its data to a "receiver," which then performs a two-way merge. This pattern effectively distributes the merge workload across multiple nodes in the early stages, but progressively serializes the work toward the root process, which performs the final merge.
 
-A critical design decision in this phase concerned the communication strategy. The assignment suggested maximizing computation-to-communication overlap, which typically implies the use of non-blocking primitives like \code{MPI\_Irecv}. We thoroughly investigated this path and developed a prototype based on this pattern. However, our analysis and benchmarking led to a deliberate engineering choice to use a simpler, more robust model based on blocking communication (\code{MPI\_Recv}) for each merge step. This decision was based on two key findings. First, the MergeSort algorithm itself offers limited opportunities for meaningful overlap; the core merge logic cannot proceed until it has received the initial segments of data from its partner, making it difficult to hide communication latency behind computation. Second, the management of non-blocking requests within an iterative algorithm like the binary tree reduction introduced significant complexity and a measurable performance overhead that negated the theoretical benefits. Therefore, the final implementation prioritizes correctness and real-world performance over a theoretically optimal but practically less effective strategy.
-
-
-\begin{figure}[H]
-    \centering
-    \begin{tikzpicture}[
-            node distance=1.5cm and 0.8cm,
-            proc/.style={circle, draw, minimum size=0.8cm, font=\small},
-            arrow/.style={-stealth, thick}
-        ]
-        % Initial processes
-        \foreach \i in {0,...,7} {
-                \node[proc] (p\i) at (\i*1.5, 0) {$P_\i$};
-            }
-
-        % Step 1
-        \draw[arrow] (p1) to[bend left=15] (p0);
-        \draw[arrow] (p3) to[bend left=15] (p2);
-        \draw[arrow] (p5) to[bend left=15] (p4);
-        \draw[arrow] (p7) to[bend left=15] (p6);
-        \node[above=0.2cm of p0, font=\footnotesize] {Merge};
-        \node[above=0.2cm of p2, font=\footnotesize] {Merge};
-        \node[above=0.2cm of p4, font=\footnotesize] {Merge};
-        \node[above=0.2cm of p6, font=\footnotesize] {Merge};
-        \node[left=1cm of p0, font=\bfseries] {Step 1};
-
-        % Step 2
-        \node[proc, fill=gray!20] (p0_2) at (1*1.5, -2) {$P_0$};
-        \node[proc] (p2_2) at (3*1.5, -2) {$P_2$};
-        \node[proc, fill=gray!20] (p4_2) at (5*1.5, -2) {$P_4$};
-        \node[proc] (p6_2) at (7*1.5, -2) {$P_6$};
-        \draw[arrow] (p2_2) to[bend left=15] (p0_2);
-        \draw[arrow] (p6_2) to[bend left=15] (p4_2);
-        \node[above=0.2cm of p0_2, font=\footnotesize] {Merge};
-        \node[above=0.2cm of p4_2, font=\footnotesize] {Merge};
-        \node[left=1cm of p0_2, font=\bfseries] {Step 2};
-
-        % Step 3
-        \node[proc, fill=gray!20] (p0_3) at (3*1.5, -4) {$P_0$};
-        \node[proc] (p4_3) at (7*1.5, -4) {$P_4$};
-        \draw[arrow] (p4_3) to[bend left=15] (p0_3);
-        \node[above=0.2cm of p0_3, font=\footnotesize] {Final Merge};
-        \node[left=1cm of p0_3, font=\bfseries] {Step 3};
-
-        % Final result
-        \node[proc, fill=green!20] (p0_final) at (5*1.5, -6) {$P_0$};
-        \node[right=0.2cm of p0_final] {Global Sorted Array};
-        \node[left=1cm of p0_final, font=\bfseries] {Result};
-    \end{tikzpicture}
-    \caption{Illustration of the 8-process binary tree merge reduction. Active merging processes are shown in gray, with the final result in green.}
-    \label{fig:mpi_merge_tree}
-\end{figure}
+A critical aspect of this phase is the communication strategy, designed to maximize computation-to-communication overlap. Our implementation employs a non-blocking model based on \code{MPI\_Isend} and \code{MPI\_Irecv}. This approach decouples the initiation of a data transfer from its completion, allowing the program to continue execution. A receiving process posts a non-blocking receive for an expected data chunk and then enters a progress-checking loop. By repeatedly polling the status of the transfer with \code{MPI\_Test}, the process can begin merging data from a completed transfer immediately, even while other network operations are still in flight. This design aims to hide the communication latency and bandwidth costs of one transfer behind the computational work of a concurrent merge operation, thereby improving overall resource utilization.
 
 \subsubsection{Alternative Merge Strategy: Centralized K-Way Merge}
-We also implemented and evaluated an alternative strategy for the final merge phase: a centralized k-way merge. In this model, all non-root processes ($P-1$ of them) send their locally sorted data directly to the root process in a single communication round. The root process then performs a k-way merge on all $P$ partitions (including its own) using a min-heap.
+We also evaluated an alternative strategy for the final merge phase: a centralized k-way merge. In this model, all $P-1$ non-root processes send their locally sorted data directly to the root process, which then performs a single, large k-way merge using a min-heap data structure.
 
-Theoretically, this approach is attractive as it reduces the number of communication rounds from $\log_2(P)$ to one. However, our benchmarks showed it to be less performant than the binary tree reduction. The primary reason is that it creates a massive bottleneck at the root process. The root must handle incoming network traffic from all other processes simultaneously while also performing the entire k-way merge. This serializes a large portion of the work and underutilizes the other nodes. In contrast, the binary tree approach distributes the merge workload across multiple nodes in the initial steps, leveraging the computational power of the entire system for longer before idling processes. The higher parallelism of the binary tree approach outweighed the benefit of fewer communication rounds for the problem scales tested.
+Theoretically, this approach is attractive as it reduces the number of communication rounds from $\log_2(P)$ to one. However, our benchmarks showed it to be less performant than the binary tree reduction. The primary reason is that it creates a massive communication and computation bottleneck at the root process. The root must handle incoming network traffic from all other processes simultaneously while also performing the entire merge. This serializes a large fraction of the work and leaves the other nodes idle after their initial send. In contrast, the binary tree approach distributes the merge workload across multiple nodes in the initial steps, leveraging the computational power of the entire system for a longer duration.
 
+\clearpage
 \section{Performance Analysis}
-We benchmarked our implementations to evaluate their strong and weak scaling properties. We define "absolute speedup" as the ratio between the execution time of the best sequential algorithm (\code{std::sort}) and our parallel implementation. The analysis is based on the data collected and visualized below.
+We benchmarked our implementations to evaluate their strong and weak scaling properties. The analysis is based on the data collected and visualized below.
 
 \begin{figure}[H]
     \centering
-    \begin{subfigure}{0.49\textwidth}
-        \includegraphics[width=\linewidth]{../python/plots/strong_scaling.pdf}
-        \caption{Single-node strong scaling analysis.}
-        \label{fig:strong_scaling}
-    \end{subfigure}
-    \hfill
+    \includegraphics[width=0.6\linewidth]{../python/plots/strong_scaling.pdf}
+    \caption{Single-node strong scaling analysis.}
+    \label{fig:strong_scaling}
+\end{figure}
+
+Figure \ref{fig:strong_scaling} shows the strong scaling of our FastFlow implementation. The speedup increases significantly up to 16 threads, reaching a peak of approximately 6.8x against our sequential implementation. Beyond this point, performance saturates and then begins to degrade. This behavior is an expected illustration of Amdahl's Law, where the parallel overhead, including thread management, synchronization, and memory bus contention, becomes a dominant factor. As the number of threads grows, the marginal gain from additional parallelism diminishes until it is negated by these overheads, defining an optimal level of concurrency for this specific problem size and architecture.
+
+\begin{figure}[H]
+    \centering
     \begin{subfigure}{0.49\textwidth}
         \includegraphics[width=\linewidth]{../python/plots/payload_scaling.pdf}
         \caption{Payload size sensitivity analysis.}
         \label{fig:payload_scaling}
     \end{subfigure}
-    \caption{Performance characterization on a single node.}
-    \label{fig:single_node_analysis}
-\end{figure}
-
-\textbf{Single-Node Strong Scaling.} Figure \ref{fig:strong_scaling} shows the strong scaling of our FastFlow implementation. The speedup increases significantly up to 16 threads, reaching a peak of approximately 6.8x against our sequential implementation and 2.7x against \code{std::sort}. Beyond 16 threads, performance begins to degrade. This behavior is expected and illustrates a more realistic version of Amdahl's Law, where parallel overhead is not negligible. As more threads are added, the overhead of synchronization, thread management, and contention on the memory bus starts to dominate the gains from parallel computation.
-
-\textbf{Payload Scaling.} The impact of payload size is shown in Figure \ref{fig:payload_scaling}. The execution time remains relatively stable for payloads from 8 to 512 bytes. This indicates that the algorithm's performance is heavily influenced by memory bandwidth. The primary cost in the merge phase is moving data, and this cost scales linearly with the record size. For very small payloads, the algorithm may be more sensitive to memory latency and cache effects, explaining the initial volatility. As the payload grows, the problem becomes firmly memory-bandwidth bound, as the time spent in computation (key comparisons) becomes negligible compared to the time spent in \code{std::move}.
-
-\begin{figure}[H]
-    \centering
+    \hfill
     \begin{subfigure}{0.49\textwidth}
-        \includegraphics[width=\linewidth]{../python/plots/weak_scaling.pdf}
+        \includegraphics[width=\linewidth]{../python/plots/weak_scaling.pdf} % Note: this is actually Problem Size scaling
         \caption{Single-node problem size scaling.}
         \label{fig:problem_size_scaling}
     \end{subfigure}
-    \hfill
+    \caption{Single-node performance sensitivity to payload and problem size.}
+    \label{fig:single_node_sensitivity}
+\end{figure}
+
+The impact of payload size is shown in Figure \ref{fig:payload_scaling}. The execution time remains relatively stable for payloads from 8 to 512 bytes. This indicates that the algorithm's performance is heavily influenced by the system's memory bandwidth. The primary cost in the merge phase is data movement, which scales linearly with the record size. As the payload grows, the problem transitions from being potentially latency-sensitive to firmly memory-bandwidth-bound. The time spent in CPU-bound computation (key comparisons) becomes negligible compared to the time the memory subsystem spends satisfying data transfer requests.
+
+Figure \ref{fig:problem_size_scaling} presents a scaling analysis where the number of threads is fixed, and the total problem size is increased. It is important to note that the x-axis (Problem Size) is plotted on a logarithmic scale. The speedup exhibits strong growth with the problem size, appearing almost linear on this log-scale plot, which indicates a highly favorable scaling behavior. This aligns with the principles of Gustafson's Law: by increasing the problem size, the serial fraction of the work becomes less significant relative to the parallelizable portion. With more data to process, the initial fixed costs of setting up the FastFlow framework and threads are amortized over a longer execution time, leading to substantially better efficiency and speedup.
+
+\begin{figure}[H]
+    \centering
     \begin{subfigure}{0.49\textwidth}
         \includegraphics[width=\linewidth]{../python/plots/cluster_scaling.pdf}
         \caption{Cluster strong scaling (MPI).}
         \label{fig:cluster_strong_scaling}
     \end{subfigure}
-    \caption{Problem size and distributed strong scaling analysis.}
-    \label{fig:size_and_strong_scaling}
+    \hfill
+    \begin{subfigure}{0.49\textwidth}
+        \includegraphics[width=\linewidth]{../python/plots/cluster_weak_scaling.pdf}
+        \caption{Cluster weak scaling (MPI).}
+        \label{fig:cluster_weak_scaling}
+    \end{subfigure}
+    \caption{Distributed performance analysis: strong and weak scaling on the cluster.}
+    \label{fig:cluster_analysis}
 \end{figure}
 
-\textbf{Single-Node Problem Size Scaling.} Figure \ref{fig:problem_size_scaling} presents a scaling analysis where the number of threads is fixed, and the total problem size is increased. The speedup continues to grow almost linearly with the problem size. This aligns with Gustafson's Law: by increasing the problem size along with the computational resources, the serial fraction of the work becomes less significant, and the performance scales well. With more data to process, the initial costs of setting up farms and threads are amortized over a longer execution time, leading to better efficiency.
+Figure \ref{fig:cluster_strong_scaling} provides an instructive view into the strong scaling characteristics of the hybrid algorithm. The speedup is measured relative to an optimized single-node parallel baseline, executed via the same framework but constrained to a single MPI process. The results show that for a problem size of 100 million records, the speedup remains sub-linear and below 1.0, indicating that the overhead of distributed execution surpasses the gains from parallel computation across nodes. This outcome stems from the algorithm's communication-to-computation ratio. The total execution time is dominated by two main communication phases: the initial data distribution via \code{MPI\_Scatterv} and, more critically, the iterative binary tree reduction. According to a simple linear cost model, each merge step introduces a latency component ($t_0$) and a bandwidth-dependent term ($n \cdot s$). In our hierarchical merge, the message size ($n$) grows exponentially at each step toward the root. Even with non-blocking primitives like \code{MPI\_Isend} and \code{MPI\_Irecv}, the sheer volume of data being serialized into byte buffers and transferred across the network creates a bandwidth bottleneck that the local computation phases cannot fully hide. The observed performance suggests that for this problem scale, the cumulative communication costs are not sufficiently amortized, leading to a performance penalty compared to the single-node execution.
 
-\textbf{Cluster Strong Scaling.} Figure \ref{fig:cluster_strong_scaling} provides an instructive view into the strong scaling characteristics of the hybrid algorithm. The speedup is measured relative to the optimized single-node parallel baseline. The results show that while the two-process run is slower due to initial communication overhead, the hybrid implementation achieves a positive speedup with four and eight processes. This demonstrates that for a sufficiently large problem size, distributing the computational load can effectively overcome the high cost of network communication. The diminishing returns in efficiency as more nodes are added are expected, as communication and synchronization costs begin to represent a larger fraction of the total execution time.
-
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.5\linewidth]{../python/plots/cluster_weak_scaling.pdf}
-    \caption{Cluster weak scaling analysis, showing efficiency relative to the single-node baseline. An efficiency of 1.0 represents ideal scaling.}
-    \label{fig:cluster_weak_scaling}
-\end{figure}
-
-\textbf{Cluster Weak Scaling.} To complete the performance study, we conducted a weak scaling test on the cluster. In this test, the problem size per node was kept constant, while the number of nodes was increased. Figure \ref{fig:cluster_weak_scaling} plots the weak scaling efficiency, where an ideal algorithm would maintain an efficiency of 1.0. Our results show a significant drop in efficiency as more nodes are added. This behavior is characteristic of algorithms with non-scalable communication patterns, such as our distributed MergeSort. The primary reason for this poor scaling lies in the hierarchical merge phase. While the local sort phase scales perfectly, the communication costs do not. In each step of the binary tree reduction, processes must transmit increasingly large, already-merged partitions to their partners. The total volume of data communicated and the sequential dependency of the final merge steps grow with the number of processes. This communication overhead dominates the execution time, demonstrating the inherent scalability limits of this MergeSort algorithm in a distributed-memory environment.
-
+To complete the performance study, we conducted a weak scaling test on the cluster, where the computational load per node ($N/P$) was held constant. Figure \ref{fig:cluster_weak_scaling} plots the resulting efficiency, which ideally should remain at 1.0. Our results, however, demonstrate a rapid degradation in efficiency. While the local computation phase exhibits perfect weak scaling, the communication complexity of the hierarchical merge phase increases with $P$. Although each process participates in a logarithmic number of steps ($\log_2 P$), the volume of data transferred in the later stages of the reduction grows linearly with the number of nodes participating in a given subtree. This leads to increased network contention and serialization at the upper levels of the merge tree, where fewer processes are active but must handle larger data volumes. Consequently, the total execution time becomes dominated by communication.
 
 \end{document}
