@@ -329,7 +329,7 @@ bool validate_softmax(const float *output, size_t K,
  */
 template <typename Func, typename... Args>
 double benchmark(Func &&func, const float *input, float *output, size_t K,
-                 size_t samples = 15, size_t iterations_per_sample = 30,
+                 size_t samples = 2, size_t iterations_per_sample = 5,
                  Args &&...args) noexcept {
   std::vector<double> measurements;
   measurements.reserve(samples);
@@ -375,8 +375,8 @@ double benchmark(Func &&func, const float *input, float *output, size_t K,
  */
 template <typename Func>
 double benchmark_plain(Func &&func, const float *input, float *output, size_t K,
-                       size_t samples = 15,
-                       size_t iterations_per_sample = 30) noexcept {
+                       size_t samples = 2,
+                       size_t iterations_per_sample = 5) noexcept {
   std::vector<double> measurements;
   measurements.reserve(samples);
 
@@ -421,8 +421,8 @@ double benchmark_plain(Func &&func, const float *input, float *output, size_t K,
  */
 template <typename Func>
 double benchmark_threaded(Func &&func, const float *input, float *output,
-                          size_t K, int num_threads = -1, size_t samples = 15,
-                          size_t iterations_per_sample = 30) noexcept {
+                          size_t K, int num_threads = -1, size_t samples = 2,
+                          size_t iterations_per_sample = 5) noexcept {
   std::vector<double> measurements;
   measurements.reserve(samples);
 
