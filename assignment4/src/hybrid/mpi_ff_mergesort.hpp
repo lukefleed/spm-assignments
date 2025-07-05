@@ -34,9 +34,8 @@ struct HybridMetrics {
  * Implements a three-phase algorithm:
  * 1. Data distribution across MPI processes using a load-balanced scatter.
  * 2. Local parallel sorting on each node.
- * 3. A pipelined hierarchical merge using a binary-tree reduction pattern.
- *    This phase employs non-blocking receives to overlap computation
- *    (merging) and communication (data transfer).
+ * 3. A hierarchical merge using a binary-tree reduction pattern.
+
  */
 class HybridMergeSort {
 public:

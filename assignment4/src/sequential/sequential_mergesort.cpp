@@ -1,5 +1,4 @@
 #include "sequential_mergesort.hpp"
-#include <algorithm>
 #include <vector>
 
 /**

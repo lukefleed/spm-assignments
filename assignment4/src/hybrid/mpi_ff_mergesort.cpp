@@ -15,11 +15,23 @@ void parallel_mergesort(std::vector<Record> &data, size_t num_threads);
 namespace {
 
 /**
- * @brief Packs a vector of Record objects into a byte buffer for MPI
- * communication.
- * @param records The records to pack.
- * @param buffer The output byte buffer.
- * @param payload_size The size of the payload for each record.
+ * @brief Packs a vector of Record objects into a contiguous byte buffer for
+ * serialization.
+ *
+ * This function serializes Record objects by copying their key and payload data
+ * into a linear byte buffer. Each record is packed sequentially with the key
+ * followed by the payload data. The buffer is resized to accommodate all
+ * records.
+ *
+ * @param records The vector of Record objects to be packed
+ * @param buffer The output buffer that will contain the serialized data
+ * (resized automatically)
+ * @param payload_size The size in bytes of each record's payload data
+ *
+ * @note The buffer layout for each record is: [key (8 bytes)][payload
+ * (payload_size bytes)]
+ * @note If payload_size is 0 or rec.payload is null, only the key is copied but
+ * space is still reserved
  */
 void pack_records(const std::vector<Record> &records, std::vector<char> &buffer,
                   size_t payload_size) {
@@ -37,11 +49,25 @@ void pack_records(const std::vector<Record> &records, std::vector<char> &buffer,
 }
 
 /**
- * @brief Unpacks a byte buffer into a vector of Record objects.
- * @param buffer The input byte buffer.
- * @param num_records The number of records to unpack from the buffer.
- * @param records The output vector of records.
- * @param payload_size The size of the payload for each record.
+ * @brief Unpacks serialized records from a buffer into a vector of Record
+ * objects.
+ *
+ * This function deserializes a contiguous buffer containing packed Record data
+ * back into a vector of Record objects. Each record in the buffer consists of
+ * a key (unsigned long) followed by optional payload data.
+ *
+ * @param buffer Pointer to the serialized data buffer containing packed records
+ * @param num_records Number of records to unpack from the buffer
+ * @param records Reference to vector that will be populated with unpacked
+ * Record objects
+ * @param payload_size Size in bytes of the payload data for each record (0 if
+ * no payload)
+ *
+ * @note The records vector is cleared and resized to accommodate the unpacked
+ * data. Memory layout in buffer: [key1][payload1][key2][payload2]...
+ * @warning No bounds checking is performed on the buffer - caller must ensure
+ *          buffer contains at least num_records * (sizeof(unsigned long) +
+ * payload_size) bytes
  */
 void unpack_records(const char *buffer, size_t num_records,
                     std::vector<Record> &records, size_t payload_size) {
@@ -63,6 +89,21 @@ void unpack_records(const char *buffer, size_t num_records,
 
 namespace hybrid {
 
+/**
+ * @brief Constructs a HybridMergeSort object with the specified configuration.
+ *
+ * Initializes the hybrid merge sort implementation that combines MPI and
+ * FastFlow. Performs validation checks to ensure MPI is properly initialized
+ * and supports the required threading level (MPI_THREAD_FUNNELED). Sets up MPI
+ * communicator information including rank and size.
+ *
+ * @param config The hybrid configuration containing parallel threading settings
+ *               and other algorithm parameters
+ *
+ * @throws std::runtime_error If MPI is not initialized or does not support
+ *                           MPI_THREAD_FUNNELED threading level
+ * @throws std::invalid_argument If parallel_threads in config is set to 0
+ */
 HybridMergeSort::HybridMergeSort(const HybridConfig &config)
     : config_(config), mpi_rank_(-1), mpi_size_(-1), payload_size_(0),
       metrics_{} {
@@ -85,6 +126,28 @@ HybridMergeSort::HybridMergeSort(const HybridConfig &config)
 
 HybridMergeSort::~HybridMergeSort() = default;
 
+/**
+ * @brief Performs hybrid merge sort on a distributed dataset using MPI and
+ * FastFlow.
+ *
+ * This method implements a three-phase distributed sorting algorithm:
+ * 1. Distribution phase: Distributes input data from rank 0 to all MPI
+ * processes
+ * 2. Local sorting phase: Each process sorts its local data chunk in parallel
+ * using FastFlow
+ * 3. Merge phase: Hierarchically merges sorted chunks across processes using
+ * MPI communication
+ *
+ * @param data Input vector of Record objects to be sorted (only meaningful on
+ * rank 0)
+ * @param payload_size Size of the payload data for each record
+ * @return std::vector<Record> Sorted vector of records (populated only on rank
+ * 0, empty on other ranks)
+ *
+ * @note The input data parameter is only used by rank 0; other processes
+ * receive their data chunks through MPI communication during the distribution
+ * phase
+ */
 std::vector<Record> HybridMergeSort::sort(std::vector<Record> &data,
                                           size_t payload_size) {
   Timer total_timer;
@@ -113,6 +176,34 @@ std::vector<Record> HybridMergeSort::sort(std::vector<Record> &data,
   return local_data;
 }
 
+/**
+ * @brief Distributes data from rank 0 to all MPI processes for parallel
+ * processing.
+ *
+ * This function implements a data distribution strategy where the root process
+ * (rank 0) broadcasts the total number of records to all processes, then
+ * scatters the data evenly across all MPI ranks using MPI_Scatterv. The
+ * distribution handles uneven data sizes by giving remainder records to
+ * lower-ranked processes.
+ *
+ * @param local_data [out] Vector to store the records assigned to this MPI
+ * process
+ * @param global_data [in] Complete dataset available only on rank 0; empty on
+ * other ranks
+ *
+ * @details The function performs the following steps:
+ * 1. Broadcasts total record count from rank 0 to all processes
+ * 2. Calculates how many records each process should receive (load balancing)
+ * 3. Converts record counts to byte counts for MPI communication
+ * 4. Packs records into a contiguous buffer on rank 0
+ * 5. Scatters data chunks to all processes using MPI_Scatterv
+ * 6. Unpacks received bytes back into Record objects on each process
+ * 7. Updates communication metrics with bytes transferred
+ *
+ * @note Records are distributed as evenly as possible, with any remainder
+ * records assigned to the lowest-ranked processes (0, 1, 2, ...).
+ * @note The function handles empty datasets by early return.
+ */
 void HybridMergeSort::distribute_data(std::vector<Record> &local_data,
                                       const std::vector<Record> &global_data) {
   size_t total_num_records = (mpi_rank_ == 0) ? global_data.size() : 0;
@@ -157,6 +248,22 @@ void HybridMergeSort::distribute_data(std::vector<Record> &local_data,
   metrics_.bytes_communicated += recv_buffer.size();
 }
 
+/**
+ * @brief Sorts local data using either parallel or sequential merge sort based
+ * on data size and configuration.
+ *
+ * This method intelligently chooses between parallel and sequential sorting
+ * algorithms depending on the size of the input data and the configured
+ * threading parameters. For large datasets that meet the minimum threshold and
+ * when multiple threads are available, it uses a parallel merge sort
+ * implementation. For smaller datasets or single-threaded configurations, it
+ * falls back to the standard library's sequential sort algorithm.
+ *
+ * @param data Reference to a vector of Record objects to be sorted in-place.
+ *             The vector is modified directly and will be sorted upon
+ * completion. If the vector is empty, the function returns immediately without
+ *             performing any operations.
+ */
 void HybridMergeSort::sort_local_data(std::vector<Record> &data) {
   if (data.empty())
     return;
@@ -171,6 +278,34 @@ void HybridMergeSort::sort_local_data(std::vector<Record> &data) {
   }
 }
 
+/**
+ * @brief Performs hierarchical merge of sorted data across MPI processes using
+ * recursive doubling pattern.
+ *
+ * This function implements a binary-tree merge pattern where processes are
+ * paired up in each iteration to merge their sorted data. The distance between
+ * partner processes doubles in each step (1, 2, 4, 8). In each iteration, one
+ * process acts as a sender (transmits its data and becomes inactive) while the
+ * other acts as a receiver (receives and merges the data).
+ *
+ * The algorithm follows these steps:
+ * 1. Processes with rank % (2 * step) != 0 send their data to partner (rank -
+ * step) and exit
+ * 2. Processes with rank % (2 * step) == 0 receive data from partner (rank +
+ * step) if it exists
+ * 3. Receiving processes merge the incoming data with their local data using
+ * parallel merge
+ * 4. The step size doubles and the process repeats until only one process
+ * remains with all data
+ *
+ * @param local_data Reference to vector containing the locally sorted records
+ * that will be merged with data from other processes. After completion, only
+ * the root process (rank 0) will contain the fully merged and sorted data.
+ *
+ * @note This function modifies the local_data vector in place. Sender processes
+ * will have their local_data cleared after transmission.
+ * @note Assumes that local_data is already sorted before calling this function.
+ */
 void HybridMergeSort::hierarchical_merge(std::vector<Record> &local_data) {
   const size_t record_byte_size = sizeof(unsigned long) + payload_size_;
 
@@ -199,16 +334,31 @@ void HybridMergeSort::hierarchical_merge(std::vector<Record> &local_data) {
     int partner_rank = mpi_rank_ + step;
     if (partner_rank < mpi_size_) {
       // Probe to get the size of the incoming message.
-      MPI_Status status;
-      MPI_Probe(partner_rank, 0, MPI_COMM_WORLD, &status);
+      MPI_Status status; // Status object to hold probe results
+      MPI_Probe(partner_rank, 0, MPI_COMM_WORLD,
+                &status); // MPI_Probe is blocking: the process waits until a
+                          // message is available from partner_rank starts
+                          // arriving. This does not transfer any data, but
+                          // populates the status object with information about
+                          // the incoming message (sender, tag, size).
       int incoming_bytes;
-      MPI_Get_count(&status, MPI_BYTE, &incoming_bytes);
+      MPI_Get_count(
+          &status, MPI_BYTE,
+          &incoming_bytes); // Get the size of the incoming message in bytes.
 
       if (incoming_bytes > 0) {
-        // Receive the data.
-        std::vector<char> recv_buffer(incoming_bytes);
-        MPI_Recv(recv_buffer.data(), incoming_bytes, MPI_BYTE, partner_rank, 0,
-                 MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        // Just after that MPI_Probe returns the exact size of the incoming
+        // message, we can allocate a buffer to hold the data
+        std::vector<char> recv_buffer(
+            incoming_bytes); // Allocate buffer to hold incoming data.
+        MPI_Recv(
+            recv_buffer.data(), incoming_bytes, MPI_BYTE, partner_rank, 0,
+            MPI_COMM_WORLD,
+            MPI_STATUS_IGNORE); // Then MPI_Recv is called to actually receive
+                                // the data from the partner process. This is a
+                                // blocking call: the process waits until all
+                                // incoming_bytes have been received and stored
+                                // in recv_buffer.
 
         metrics_.bytes_communicated += incoming_bytes;
 
@@ -224,6 +374,31 @@ void HybridMergeSort::hierarchical_merge(std::vector<Record> &local_data) {
   }
 }
 
+/**
+ * @brief Merges two sorted vectors in parallel using OpenMP threading.
+ *
+ * This function merges the local_data vector with the partner_data vector,
+ * storing the result in local_data. The merge operation uses parallel
+ * processing for large datasets to improve performance, falling back to
+ * sequential merge for smaller datasets to avoid parallel overhead.
+ *
+ * Algorithm:
+ * 1. For small datasets (< 20000 elements) or single-threaded configuration,
+ *    performs sequential merge using std::merge
+ * 2. For larger datasets, uses a two-phase parallel merge:
+ *    - Phase 1: Partitions the larger array into num_threads chunks and finds
+ *      corresponding split points in the smaller array using binary search
+ *    - Phase 2: Each thread independently merges its assigned sub-arrays
+ *      into the final result vector
+ *
+ * @param local_data The first sorted vector to merge (modified in-place with
+ * result)
+ * @param partner_data The second sorted vector to merge (contents moved during
+ * merge)
+ *
+ * @post partner_data is left in a valid but unspecified state due to move
+ * operations
+ */
 void HybridMergeSort::parallel_merge(std::vector<Record> &local_data,
                                      std::vector<Record> &partner_data) {
   if (partner_data.empty())
@@ -291,6 +466,7 @@ void HybridMergeSort::parallel_merge(std::vector<Record> &local_data,
   local_data = std::move(merged);
 }
 
+// Metrics update function to record elapsed time for different phases.
 void HybridMergeSort::update_metrics(const std::string &phase,
                                      double elapsed_time) {
   if (phase == "local_sort")

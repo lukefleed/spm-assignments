@@ -53,7 +53,7 @@ public:
     // Sort phase: operates on single segment [start, mid)
     // Merge phase: combines adjacent segments [start, mid), [mid, end)
     if (to == nullptr) { // Then we are in the sort phase
-      end = mid; // Collapse range for in-place sorting
+      end = mid;         // Collapse range for in-place sorting
     }
 
     auto *task = new MergeTask{from, to, start, mid, end}; // Create a new task
@@ -79,8 +79,8 @@ class SortWorker : public ff_node_t<MergeTask, void> {
 public:
   void *svc(MergeTask *task) override {
     std::sort(task->source + task->start, task->source + task->end);
-    delete task; // Immediate cleanup, the worker is the owner of the memory of the task so
-                 // we can delete it right away
+    delete task;  // Immediate cleanup, the worker is the owner of the memory of
+                  // the task so we can delete it right away
     return GO_ON; // Signal that the worker is ready for the next task
   }
 };
@@ -95,6 +95,13 @@ class MergeWorker : public ff_node_t<MergeTask, void> {
 public:
   void *svc(MergeTask *task) override {
     // Stable merge of two adjacent sorted ranges
+    // Using std::make_move_iterator is crucial. When we pass to std::merge two
+    // move iterators, it does not copy the elements, but moves them (it does
+    // not use `operator=` but `operator=(&&)`). This is important for
+    // variable-size payloads, as it avoids unnecessary copies. During the
+    // merge, instead of allocating a new buffer, we steal from the record the
+    // source and assign it to the destination. Then the source pointer is
+    // nulled out.
     std::merge(std::make_move_iterator(task->source + task->start),
                std::make_move_iterator(task->source + task->mid),
                std::make_move_iterator(task->source + task->mid),
@@ -137,7 +144,7 @@ void parallel_mergesort(std::vector<Record> &data, const size_t num_threads) {
   sort_farm.add_emitter(new Emitter(n, chunk_size, data.data()));
   sort_farm.cleanup_emitter(true);
 
-  std::vector<ff_node *> sorters; // Workers for sorting phase
+  std::vector<ff_node *> sorters;     // Workers for sorting phase
   sorters.reserve(effective_threads); // Preallocate vector
   for (size_t i = 0; i < effective_threads; ++i) {
     // Create a worker for each thread
@@ -154,8 +161,8 @@ void parallel_mergesort(std::vector<Record> &data, const size_t num_threads) {
 
   // Phase 2: Iterative parallel merge with buffer ping-pong
   std::vector<Record> aux_buffer(n); // Single allocation at the beginning
-  Record *from = data.data(); // Pointer to current source buffer
-  Record *to = aux_buffer.data(); // Pointer to current destination buffer
+  Record *from = data.data();        // Pointer to current source buffer
+  Record *to = aux_buffer.data();    // Pointer to current destination buffer
 
   // Bottom-up merge with width doubling
   // The size of the segments doubles each iteration
@@ -165,7 +172,7 @@ void parallel_mergesort(std::vector<Record> &data, const size_t num_threads) {
     merge_farm.add_emitter(new Emitter(n, width, from, to));
     merge_farm.cleanup_emitter(true);
 
-    std::vector<ff_node *> mergers; // Workers for merging phase
+    std::vector<ff_node *> mergers;     // Workers for merging phase
     mergers.reserve(effective_threads); // Preallocate vector
     for (size_t i = 0; i < effective_threads; ++i) {
       // Create a worker for each thread

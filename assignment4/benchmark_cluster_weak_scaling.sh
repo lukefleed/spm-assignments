@@ -41,12 +41,14 @@ echo "Payload size:     ${PAYLOAD_B}B"
 echo ""
 
 [ -f "${CSV_FILENAME}" ] && rm -f "${CSV_FILENAME}"
-echo "MPI_Procs,Threads,Total_Records_M,Time_ms" > "${CSV_FILENAME}"
+echo "MPI_Procs,Threads,Total_Records_M,Time_ms,Efficiency_%" > "${CSV_FILENAME}"
 
-printf "%-11s %-19s %-14s\n" "MPI Procs" "Total Records (M)" "Time (ms)"
-printf "%s\n" "------------------------------------------------"
+printf "%-11s %-19s %-14s %-14s\n" "MPI Procs" "Total Records (M)" "Time (ms)" "Efficiency (%)"
+printf "%s\n" "----------------------------------------------------------------"
 
 read -ra NODES_ARRAY <<< "$NODE_LIST"
+T_BASELINE=""  # Will store the baseline time (1 node)
+
 for nodes in "${NODES_ARRAY[@]}"; do
     TOTAL_RECORDS_M=$((nodes * RECORDS_PER_NODE_M))
 
@@ -59,8 +61,17 @@ for nodes in "${NODES_ARRAY[@]}"; do
 
     IFS=',' read -r _ _ T_CURRENT _ _ _ <<< "${RUN_OUTPUT}"
 
-    echo "${nodes},${THREADS},${TOTAL_RECORDS_M},${T_CURRENT}" >> "${CSV_FILENAME}"
-    printf "%-11d %-19d %-14.2f\n" ${nodes} ${TOTAL_RECORDS_M} ${T_CURRENT}
+    # Store baseline time (first node count, assumed to be 1)
+    if [ -z "${T_BASELINE}" ]; then
+        T_BASELINE="${T_CURRENT}"
+    fi
+
+    # Calculate efficiency (speedup/nodes)
+    SPEEDUP=$(echo "scale=4; ${T_BASELINE} / ${T_CURRENT}" | bc -l)
+    EFFICIENCY_PERCENT=$(echo "scale=2; (${SPEEDUP} / ${nodes}) * 100" | bc -l)
+
+    echo "${nodes},${THREADS},${TOTAL_RECORDS_M},${T_CURRENT},${EFFICIENCY_PERCENT}" >> "${CSV_FILENAME}"
+    printf "%-11d %-19d %-14.2f %-14.2f%%\n" ${nodes} ${TOTAL_RECORDS_M} ${T_CURRENT} ${EFFICIENCY_PERCENT}
 done
 
 echo ""
