@@ -508,9 +508,26 @@ int main(int argc, char *argv[]) {
       mode = "seq";
     else if (arg1 == "--mode=par")
       mode = "par";
+    else if (arg1 == "--help" || arg1 == "-h") {
+      std::cout << "MinizP Test Suite - Correctness Tests\n\n";
+      std::cout << "Usage: " << argv[0] << " [OPTIONS]\n\n";
+      std::cout << "Options:\n";
+      std::cout << "  --mode=seq    Run tests in sequential mode (default)\n";
+      std::cout << "  --mode=par    Run tests in parallel mode\n";
+      std::cout << "  --help, -h    Display this help message and exit\n\n";
+      std::cout << "Description:\n";
+      std::cout << "  Runs correctness tests for the minizp compression\n";
+      std::cout << "  and decompression functionality. Tests include file creation,\n";
+      std::cout << "  compression, decompression, and various edge cases.\n\n";
+      std::cout << "Examples:\n";
+      std::cout << "  " << argv[0] << " --mode=seq    # Run sequential tests\n";
+      std::cout << "  " << argv[0] << " --mode=par    # Run parallel tests\n";
+      return 0;
+    }
     else {
-      std::cerr << "Usage: " << argv[0] << " [--mode=seq | --mode=par]"
-                << std::endl;
+      std::cerr << "Error: Invalid option '" << arg1 << "'\n";
+      std::cerr << "Usage: " << argv[0] << " [--mode=seq | --mode=par]\n";
+      std::cerr << "Use --help for more information.\n";
       return 1;
     }
   }

@@ -46,7 +46,7 @@ struct BenchParams {
   int warmup = 1;                      ///< Number of warmup runs
   size_t large_file_size =
       512 * 1024 * 1024;      ///< Size for one large file (bytes)
-  int num_small_files = 4000; ///< Number of small files to generate
+  int num_small_files = 1000; ///< Number of small files to generate
   size_t min_small_file_size =
       1 * 1024; ///< Minimum size for small files (bytes)
   size_t max_small_file_size =
@@ -54,6 +54,44 @@ struct BenchParams {
   ConfigData config;   ///< Compression configuration
   std::vector<size_t> block_sizes_list; ///< Block sizes for matrix sweep
 };
+
+/**
+ * @brief Displays usage information and available options for the benchmark tool.
+ *
+ * @param argv0 Program name (typically argv[0]).
+ */
+void showBenchHelp(const char* argv0) {
+  std::cout << "MinizP Benchmark Driver - Performance Evaluation Tool\n\n";
+  std::cout << "Usage: " << argv0 << " --type=<TYPE> [OPTIONS]\n\n";
+  std::cout << "Required:\n";
+  std::cout << "  --type=<TYPE>            Benchmark type. One of:\n";
+  std::cout << "                           • one_large\n";
+  std::cout << "                           • many_small\n";
+  std::cout << "                           • many_large_sequential\n";
+  std::cout << "                           • many_large_parallel\n";
+  std::cout << "                           • many_large_parallel_right\n\n";
+  std::cout << "Global Options (all types):\n";
+  std::cout << "  --threads=<N>            Maximum threads to sweep (default: all cores)\n";
+  std::cout << "  --iterations=<I>         Measurement iterations per config (default: 2)\n";
+  std::cout << "  --warmup=<W>            Warmup runs before measurement (default: 1)\n";
+  std::cout << "  --threshold=<bytes>      Large-file threshold (default: 16 MiB)\n";
+  std::cout << "  --help, -h               Display this help message and exit\n\n";
+  std::cout << "Type-Specific Options:\n\n";
+  std::cout << "  For --type=one_large:\n";
+  std::cout << "    --large_size=<bytes>   Size for single large file (default: 512 MiB)\n";
+  std::cout << "    --block_sizes_list=<S1,S2,...> Custom block sizes (default: 1-12 MiB)\n\n";
+  std::cout << "  For --type=many_small:\n";
+  std::cout << "    --num_small=<N>        Number of small files (default: 1000)\n";
+  std::cout << "    --min_size=<bytes>     Min size for small files (default: 1 KiB)\n";
+  std::cout << "    --max_size=<bytes>     Max size for small files (default: 1 MiB)\n\n";
+  std::cout << "  For --type=many_large_* (sequential/parallel/parallel_right):\n";
+  std::cout << "    --block_sizes_list=<S1,S2,...> Custom block sizes (default: 1-12 MiB)\n";
+  std::cout << "    Note: Uses fixed 10 files of 50-250 MiB each\n\n";
+  std::cout << "Examples:\n";
+  std::cout << "  " << argv0 << " --type=many_small --threads=8 --num_small=2000\n";
+  std::cout << "  " << argv0 << " --type=one_large --threads=4 --large_size=1073741824\n";
+  std::cout << "  " << argv0 << " --type=many_large_parallel --block_sizes_list=1048576,2097152\n";
+}
 
 /**
  * @brief Parses command-line arguments for benchmark configuration.
@@ -66,12 +104,25 @@ struct BenchParams {
  * @return true if parsing succeeded, false on error.
  */
 bool parseBenchArgs(int argc, char *argv[], BenchParams &params) {
+  // Check for help first
+  for (int i = 1; i < argc; ++i) {
+    std::string arg = argv[i];
+    if (arg == "--help" || arg == "-h") {
+      showBenchHelp(argv[0]);
+      return false; // Signal to exit after showing help
+    }
+  }
+
   std::map<std::string, std::string> args;
   for (int i = 1; i < argc; ++i) {
     std::string arg = argv[i];
     size_t eq_pos = arg.find('=');
     if (arg.rfind("--", 0) == 0 && eq_pos != std::string::npos) {
       args[arg.substr(2, eq_pos - 2)] = arg.substr(eq_pos + 1);
+    } else if (arg.rfind("--", 0) == 0) {
+      std::cerr << "Error: Invalid option format '" << arg << "'. Expected --key=value format.\n";
+      std::cerr << "Use --help for usage information.\n";
+      return false;
     }
   }
   try {
@@ -87,12 +138,8 @@ bool parseBenchArgs(int argc, char *argv[], BenchParams &params) {
       params.large_file_size = std::stoull(args["large_size"]);
     if (args.count("num_small"))
       params.num_small_files = std::stoi(args["num_small"]);
-    if (args.count("verbosity"))
-      params.config.verbosity = std::stoi(args["verbosity"]);
     if (args.count("threshold"))
       params.config.large_file_threshold = std::stoull(args["threshold"]);
-    if (args.count("blocksize"))
-      params.config.block_size = std::stoull(args["blocksize"]);
     if (args.count("block_sizes_list")) {
       std::string list = args["block_sizes_list"];
       size_t pos = 0;
@@ -112,13 +159,21 @@ bool parseBenchArgs(int argc, char *argv[], BenchParams &params) {
         params.type != "many_large_sequential" &&
         params.type != "many_large_parallel" &&
         params.type != "many_large_parallel_right")
-      throw std::runtime_error("Invalid type");
+      throw std::runtime_error("Invalid type. Use --help to see valid types");
     if (params.threads <= 0)
       throw std::runtime_error("Threads must be positive");
     if (params.min_small_file_size > params.max_small_file_size)
       throw std::runtime_error("min_size must not exceed max_size");
+
+    // Check if required type parameter was provided
+    if (!args.count("type")) {
+      std::cerr << "Error: Required parameter --type=<TYPE> not provided.\n";
+      std::cerr << "Use --help for usage information.\n";
+      return false;
+    }
   } catch (const std::exception &e) {
     std::cerr << "Error parsing arguments: " << e.what() << std::endl;
+    std::cerr << "Use --help for usage information.\n";
     return false;
   }
   return true;

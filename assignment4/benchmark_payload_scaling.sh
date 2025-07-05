@@ -36,7 +36,7 @@ for payload in "${PAYLOADS[@]}"; do
     TEMP_LOG=$(mktemp)
 
     # Run test, show output in real-time, and capture it for CSV filename extraction
-    ./bin/single_node_main -s "$ARRAY_SIZE" -t "$THREADS" -r "$payload" --no-validate --csv --verbose 2>&1 | tee "$TEMP_LOG"
+    ./bin/single_node_main -s "$ARRAY_SIZE" -t "$THREADS" -r "$payload" --csv 2>&1 | tee "$TEMP_LOG"
 
     # Extract the CSV filename from the captured output
     CSV_FILE=$(grep "CSV output will be written to:" "$TEMP_LOG" | sed 's/.*CSV output will be written to: //')

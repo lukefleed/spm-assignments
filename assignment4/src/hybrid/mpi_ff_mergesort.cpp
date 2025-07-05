@@ -1,11 +1,9 @@
 #include "mpi_ff_mergesort.hpp"
 #include "../common/timer.hpp"
-#include "../common/utils.hpp"
 #include <algorithm>
 #include <cstring>
 #include <memory>
 #include <stdexcept>
-#include <thread>
 #include <vector>
 
 // Forward declaration for the intra-node parallel sorter.
@@ -109,8 +107,9 @@ HybridMergeSort::HybridMergeSort(const HybridConfig &config)
   }
 
   int provided;
-  MPI_Query_thread(&provided);
-  if (provided < MPI_THREAD_FUNNELED) {
+  MPI_Query_thread(&provided); // In the main we are calling MPI_Init_thread instead of MPI_Init since we are in hybrid environment where MPI needs to support threading.
+
+  if (provided < MPI_THREAD_FUNNELED) { // This guarantees that just the main thread will call MPI functions (the main thread is the one that calls MPI_Init_thread).
     throw std::runtime_error("MPI does not support MPI_THREAD_FUNNELED");
   }
 
@@ -123,8 +122,9 @@ HybridMergeSort::HybridMergeSort(const HybridConfig &config)
   }
 }
 
-HybridMergeSort::~HybridMergeSort() = default;
+HybridMergeSort::~HybridMergeSort() = default; // Destructor does not need to do anything special.
 
+/// Sorts the input data using a hybrid merge sort algorithm.
 std::vector<Record> HybridMergeSort::sort(std::vector<Record> &data,
                                           size_t payload_size) {
   Timer total_timer;
@@ -132,10 +132,12 @@ std::vector<Record> HybridMergeSort::sort(std::vector<Record> &data,
   std::vector<Record> local_data;
 
   Timer dist_timer;
+  // Phase 1: Distribute data across processes.
   distribute_data(local_data, data);
   update_metrics("distribution", dist_timer.elapsed_ms());
 
   Timer sort_timer;
+  // Phase 2: Sort local data.
   sort_local_data(local_data);
   update_metrics("local_sort", sort_timer.elapsed_ms());
 
@@ -150,29 +152,35 @@ std::vector<Record> HybridMergeSort::sort(std::vector<Record> &data,
   return local_data;
 }
 
+// Distributes the global data across all MPI processes using MPI_Scatterv.
+// The goal here is to scatter a big global array from the root process and distribute it to all other processes.
 void HybridMergeSort::distribute_data(std::vector<Record> &local_data,
                                       const std::vector<Record> &global_data) {
   size_t total_num_records = (mpi_rank_ == 0) ? global_data.size() : 0;
+  // Broadcast the total number of records to all processes.
   MPI_Bcast(&total_num_records, 1, MPI_UNSIGNED_LONG, 0, MPI_COMM_WORLD);
   if (total_num_records == 0)
     return;
 
   // Calculate per-process counts and displacements for MPI_Scatterv.
-  std::vector<int> send_counts(mpi_size_);
-  std::vector<int> displs(mpi_size_);
-  size_t base_count = total_num_records / mpi_size_;
-  size_t remainder = total_num_records % mpi_size_;
+  std::vector<int> send_counts(mpi_size_); // Number of records to send to each process.
+  std::vector<int> displs(mpi_size_); // From where to start reading in the send buffer for each process.
+  size_t base_count = total_num_records / mpi_size_; // Base count of records per process.
+  size_t remainder = total_num_records % mpi_size_; // Remainder to distribute among the first few processes.
   for (int i = 0; i < mpi_size_; ++i) {
+    // The first `remainder` processes get an extra record to balance the load.
     send_counts[i] = base_count + (i < static_cast<int>(remainder) ? 1 : 0);
+    // The displacements is the sum of the previous counts.
+    // This allows MPI_Scatterv to know where to start reading for each process.
     displs[i] = (i == 0) ? 0 : displs[i - 1] + send_counts[i - 1];
   }
 
-  local_data.clear();
+  local_data.clear(); // Clear local data to ensure it starts empty.
 
   // Convert record counts to byte counts for MPI.
   const size_t record_byte_size = sizeof(unsigned long) + payload_size_;
-  std::vector<int> send_counts_bytes(mpi_size_);
-  std::vector<int> displs_bytes(mpi_size_);
+  std::vector<int> send_counts_bytes(mpi_size_); // Number of bytes to send to each process.
+  std::vector<int> displs_bytes(mpi_size_); // Byte displacements for each process.
   for (int i = 0; i < mpi_size_; ++i) {
     send_counts_bytes[i] = send_counts[i] * record_byte_size;
     displs_bytes[i] = displs[i] * record_byte_size;
@@ -181,7 +189,9 @@ void HybridMergeSort::distribute_data(std::vector<Record> &local_data,
   // Root process packs all data into a single contiguous buffer.
   std::vector<char> send_buffer;
   if (mpi_rank_ == 0) {
+    // Resize the send buffer to hold all records.
     send_buffer.resize(total_num_records * record_byte_size);
+    // Pack the global data into the send buffer.
     pack_records(global_data, send_buffer, payload_size_);
   }
 
@@ -197,6 +207,9 @@ void HybridMergeSort::distribute_data(std::vector<Record> &local_data,
   metrics_.bytes_communicated += recv_buffer.size();
 }
 
+// Sorts the local data using either parallel mergesort or std::sort based on
+// the size of the local partition and the configured number of threads.
+// This function is called after the data has been distributed to each process.
 void HybridMergeSort::sort_local_data(std::vector<Record> &data) {
   if (data.empty())
     return;
@@ -210,6 +223,10 @@ void HybridMergeSort::sort_local_data(std::vector<Record> &data) {
   }
 }
 
+// Performs a hierarchical merge of sorted data across all MPI processes.
+// This function implements a binary tree reduction pattern to merge data
+// efficiently across processes. Each process merges its local sorted data with
+// data received from its partner process in the binary tree structure.
 void HybridMergeSort::hierarchical_merge(std::vector<Record> &local_data) {
   std::vector<MergeStep> steps_to_process;
   int total_receives_posted = 0;

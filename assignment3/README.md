@@ -124,8 +124,6 @@ Sequential-only build (no OpenMP). Same flags as `minizp`, but single-threaded r
 
 ### minizp_bench
 
-**Synopsis**
-
 ```
 ./minizp_bench
   --type=<TYPE>
@@ -135,9 +133,7 @@ Sequential-only build (no OpenMP). Same flags as `minizp`, but single-threaded r
   [--large_size=<bytes>]
   [--num_small=<N>]
   [--min_size=<bytes>] [--max_size=<bytes>]
-  [--verbosity=<L>]
   [--threshold=<bytes>]
-  [--blocksize=<bytes>]
   [--block_sizes_list=<S1,S2,...>]
 ```
 
@@ -153,26 +149,39 @@ Benchmark driver that generates test data, sweeps over thread counts and block s
     - `many_large_sequential`
     - `many_large_parallel`
     - `many_large_parallel_right`
+
+**Global Options (all types):**
+
 - `--threads=<N>`
   - Maximum number of threads to sweep in outer or inner loops. Default = max available cores.
 - `--iterations=<I>`
   - Number of timed measurement iterations per configuration. Default = 2.
 - `--warmup=<W>`
   - Number of warmup runs before measurement. Default = 1.
-- `--large_size=<bytes>`
-  - Size for single large file in `one_large` type. Default = 512 MiB.
-- `--num_small=<N>`
-  - Number of small files to generate for `many_small`. Default = 4000.
-- `--min_size=<bytes>` / `--max_size=<bytes>`
-  - Size range for small-file generation. Defaults = 1 KiB / 1 MiB.
-- `--verbosity=<L>`
-  - Verbosity level (0-2). Default = 0.
 - `--threshold=<bytes>`
   - Override large-file threshold (bytes). Default = 16 MiB.
-- `--blocksize=<bytes>`
-  - Block size for large-file sweeps. Default = 1 MiB.
+
+**Type-Specific Options:**
+
+**For `--type=one_large`:**
+
+- `--large_size=<bytes>`
+  - Size for single large file. Default = 512 MiB.
 - `--block_sizes_list=<S1,S2,...>`
-  - Comma-separated list of block sizes (bytes) to override default matrix.
+  - Comma-separated list of block sizes (bytes). Default = 1-12 MiB range.
+
+**For `--type=many_small`:**
+
+- `--num_small=<N>`
+  - Number of small files to generate. Default = 1000.
+- `--min_size=<bytes>` / `--max_size=<bytes>`
+  - Size range for small-file generation. Defaults = 1 KiB / 1 MiB.
+
+**For `--type=many_large_*` (sequential/parallel/parallel_right):**
+
+- `--block_sizes_list=<S1,S2,...>`
+  - Comma-separated list of block sizes (bytes). Default = 1-12 MiB range.
+- Note: Uses fixed 10 files of 50-250 MiB each.
 
 **Examples**
 

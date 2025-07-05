@@ -52,10 +52,8 @@ Options:
   -r BYTES           Record payload size in bytes (default: 8)
   -t THREADS         Number of FastFlow threads (default: 4)
   --pattern PATTERN  Data pattern: random, sorted, reverse, nearly (default: random)
-  --no-validate      Skip correctness validation for faster benchmarking
   --csv              Enable CSV output mode
   --csv-file FILE    Specify CSV output filename
-  -v, --verbose      Show progress when in CSV mode
 ```
 
 **Example Usage:**
@@ -67,11 +65,11 @@ Options:
 # Large test with custom configuration
 ./bin/single_node_main -s 50M -r 64 -t 8 --pattern random
 
-# CSV benchmark mode with progress output
-./bin/single_node_main -s 10M -t 16 --csv --csv-file results.csv --verbose
+# CSV benchmark mode
+./bin/single_node_main -s 10M -t 16 --csv --csv-file results.csv
 
-# Fast benchmark without validation
-./bin/single_node_main -s 100M -t 12 --no-validate --csv
+# Fast benchmark
+./bin/single_node_main -s 100M -t 12 --csv
 ```
 
 **Sample Console Output:**
@@ -110,8 +108,6 @@ Options:
   -r BYTES           Record payload size in bytes (default: 64)
   -t THREADS         Number of parallel threads per node (default: 4)
   -p PATTERN         Data pattern: random, sorted, reverse, nearly
-  --no-validate      Disable result validation
-  --verbose          Enable verbose output
   --benchmark        Enable benchmark mode
   --help             Show this help message
 ```
@@ -125,8 +121,8 @@ mpirun -np 4 ./bin/multi_node_main -s 1M -t 8
 # Benchmark mode with detailed analysis
 mpirun -np 8 ./bin/multi_node_main --benchmark -s 50M -r 16
 
-# Large payload test with verbose output
-mpirun -np 2 ./bin/multi_node_main -s 1M -r 256 --verbose
+# Large payload test
+mpirun -np 2 ./bin/multi_node_main -s 1M -r 256
 ```
 
 **Sample Output:**

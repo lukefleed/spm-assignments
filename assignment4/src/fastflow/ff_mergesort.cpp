@@ -2,7 +2,6 @@
 #include "../common/record.hpp"
 #include <algorithm>
 #include <ff/ff.hpp>
-#include <memory>
 #include <vector>
 
 using namespace ff;
@@ -49,15 +48,15 @@ public:
 
     size_t start = offset;
     size_t mid = std::min(start + step_size, n);
-    size_t end = std::min(start + 2 * step_size, n);
+    size_t end = std::min(start + 2 * step_size, n); // Range for the merge
 
     // Sort phase: operates on single segment [start, mid)
     // Merge phase: combines adjacent segments [start, mid), [mid, end)
-    if (to == nullptr) {
+    if (to == nullptr) { // Then we are in the sort phase
       end = mid; // Collapse range for in-place sorting
     }
 
-    auto *task = new MergeTask{from, to, start, mid, end};
+    auto *task = new MergeTask{from, to, start, mid, end}; // Create a new task
     offset = end; // Advance to next segment
 
     return task;
@@ -80,8 +79,9 @@ class SortWorker : public ff_node_t<MergeTask, void> {
 public:
   void *svc(MergeTask *task) override {
     std::sort(task->source + task->start, task->source + task->end);
-    delete task; // Immediate cleanup
-    return GO_ON;
+    delete task; // Immediate cleanup, the worker is the owner of the memory of the task so
+                 // we can delete it right away
+    return GO_ON; // Signal that the worker is ready for the next task
   }
 };
 
@@ -111,7 +111,7 @@ public:
  * @brief Parallel merge sort using FastFlow framework
  *
  * Three-phase algorithm:
- * 1. Parallel sorting of cache-friendly chunks
+ * 1. Parallel sorting of chunks
  * 2. Iterative parallel merge passes with buffer ping-ponging
  * 3. Final data placement ensuring in-place result
  */
@@ -128,7 +128,7 @@ void parallel_mergesort(std::vector<Record> &data, const size_t num_threads) {
     return;
   }
 
-  // Cache-friendly chunk sizing with 4x oversubscription for load balancing
+  // Chunk sizing with 4x oversubscription for load balancing
   const size_t chunk_size =
       std::max(static_cast<size_t>(1024), n / (effective_threads * 4));
 
@@ -137,37 +137,46 @@ void parallel_mergesort(std::vector<Record> &data, const size_t num_threads) {
   sort_farm.add_emitter(new Emitter(n, chunk_size, data.data()));
   sort_farm.cleanup_emitter(true);
 
-  std::vector<ff_node *> sorters;
-  sorters.reserve(effective_threads);
+  std::vector<ff_node *> sorters; // Workers for sorting phase
+  sorters.reserve(effective_threads); // Preallocate vector
   for (size_t i = 0; i < effective_threads; ++i) {
+    // Create a worker for each thread
     sorters.push_back(new SortWorker());
   }
+  // Add all workers to the farm
   sort_farm.add_workers(sorters);
-  sort_farm.cleanup_workers(true);
+  sort_farm.cleanup_workers(true); // Cleanup workers after use
 
+  // Run the sorting farm and wait for completion
   if (sort_farm.run_and_wait_end() < 0) {
     throw std::runtime_error("Initial sorting farm failed");
   }
 
   // Phase 2: Iterative parallel merge with buffer ping-pong
-  std::vector<Record> aux_buffer(n);
-  Record *from = data.data();
-  Record *to = aux_buffer.data();
+  std::vector<Record> aux_buffer(n); // Single allocation at the beginning
+  Record *from = data.data(); // Pointer to current source buffer
+  Record *to = aux_buffer.data(); // Pointer to current destination buffer
 
   // Bottom-up merge with width doubling
+  // The size of the segments doubles each iteration
   for (size_t width = chunk_size; width < n; width *= 2) {
     ff_farm merge_farm;
+    // The emitter gets configured to read from `from` and write to `to`
     merge_farm.add_emitter(new Emitter(n, width, from, to));
     merge_farm.cleanup_emitter(true);
 
-    std::vector<ff_node *> mergers;
-    mergers.reserve(effective_threads);
+    std::vector<ff_node *> mergers; // Workers for merging phase
+    mergers.reserve(effective_threads); // Preallocate vector
     for (size_t i = 0; i < effective_threads; ++i) {
+      // Create a worker for each thread
       mergers.push_back(new MergeWorker());
     }
-    merge_farm.add_workers(mergers);
-    merge_farm.cleanup_workers(true);
 
+    // Add all workers to the farm
+    merge_farm.add_workers(mergers);
+    merge_farm.cleanup_workers(true); // Cleanup workers after use
+
+    // Run the merge farm and wait for completion
     if (merge_farm.run_and_wait_end() < 0) {
       throw std::runtime_error("Merge farm failed");
     }
@@ -177,6 +186,7 @@ void parallel_mergesort(std::vector<Record> &data, const size_t num_threads) {
   }
 
   // Phase 3: Final data placement if needed
+  // The data may still be in the auxiliary buffer
   if (from != data.data()) {
     std::move(from, from + n, data.data());
   }

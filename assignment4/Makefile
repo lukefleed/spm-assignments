@@ -3,7 +3,7 @@ CXX = g++
 MPICXX = mpic++
 
 # Compiler and Linker Flags
-COMMON_FLAGS = -std=c++17 -Wall -O3 -I./include -I./fastflow -pthread
+COMMON_FLAGS = -std=c++17 -Wall -O3 -I./fastflow -pthread
 # Specific CXXFLAGS for non-MPI compilation
 CXXFLAGS = $(COMMON_FLAGS)
 # Specific MPICXXFLAGS for MPI compilation

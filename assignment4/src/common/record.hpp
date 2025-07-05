@@ -1,7 +1,7 @@
 #ifndef RECORD_HPP
 #define RECORD_HPP
 
-#include <cstddef>
+#include <cstddef> // used for size_t
 #include <cstring>
 
 /**

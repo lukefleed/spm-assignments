@@ -1,7 +1,6 @@
 #pragma once
 
 #include "../common/record.hpp"
-#include <memory>
 #include <mpi.h>
 #include <string>
 #include <vector>

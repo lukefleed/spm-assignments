@@ -2,13 +2,34 @@
 #include "../src/common/timer.hpp"
 #include "../src/common/utils.hpp"
 #include "../src/hybrid/mpi_ff_mergesort.hpp"
-#include "../src/sequential/sequential_mergesort.hpp"
 #include <algorithm>
 #include <iomanip>
 #include <iostream>
-#include <memory>
 #include <mpi.h>
-#include <sstream>
+
+
+/**
+ * @brief Display help information for command-line usage
+ */
+void print_help() {
+  std::cout << "Usage: test_hybrid_correctness [OPTIONS]\n\n";
+  std::cout << "Hybrid MPI+FastFlow MergeSort correctness test suite.\n";
+  std::cout << "Tests various data patterns and configurations to verify sorting correctness.\n\n";
+
+  std::cout << "Options:\n";
+  std::cout << "  -h, --help              Show this help message\n\n";
+
+  std::cout << "Test Cases:\n";
+  std::cout << "  - Small random data (1K records)\n";
+  std::cout << "  - Small data with payload (1K records, 8 bytes payload)\n";
+  std::cout << "  - Already sorted data (1K records)\n";
+  std::cout << "  - Reverse sorted data (1K records)\n";
+  std::cout << "  - Medium random data (10K records)\n";
+  std::cout << "  - Large random data (50K records)\n";
+  std::cout << "  - Large payload test (100 records, 128 bytes payload)\n\n";
+
+  std::cout << "Note: This test must be run with MPI (e.g., mpirun -np 2 test_hybrid_correctness)\n";
+}
 
 /**
  * @brief Test configuration for hybrid sorting validation
@@ -38,6 +59,14 @@ bool verify_sorted(const std::vector<Record> &data) {
  * @brief Hybrid MPI+FastFlow mergesort correctness test suite
  */
 int main(int argc, char *argv[]) {
+  // Check for help option before MPI initialization
+  for (int i = 1; i < argc; ++i) {
+    if (std::string(argv[i]) == "-h" || std::string(argv[i]) == "--help") {
+      print_help();
+      return 0;
+    }
+  }
+
   int provided;
   MPI_Init_thread(&argc, &argv, MPI_THREAD_FUNNELED, &provided);
 
@@ -53,7 +82,17 @@ int main(int argc, char *argv[]) {
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
   MPI_Comm_size(MPI_COMM_WORLD, &size);
 
+  // Parse command-line arguments (rank 0 only)
   if (rank == 0) {
+    // Display help message if requested
+    for (int i = 1; i < argc; ++i) {
+      if (std::string(argv[i]) == "-h" || std::string(argv[i]) == "--help") {
+        print_help();
+        MPI_Finalize();
+        return 0;
+      }
+    }
+
     std::cout << "\nHybrid MPI+Parallel Mergesort Correctness Tests\n";
     std::cout << "===============================================\n";
     std::cout << "Running with " << size << " MPI processes\n\n";

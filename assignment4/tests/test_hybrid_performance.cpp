@@ -1,19 +1,14 @@
 #include "../src/common/record.hpp"
 #include "../src/common/timer.hpp"
 #include "../src/common/utils.hpp"
-#include "../src/fastflow/ff_mergesort.hpp"
 #include "../src/hybrid/mpi_ff_mergesort.hpp"
-#include "../src/sequential/sequential_mergesort.hpp"
 #include <algorithm>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
-#include <memory>
 #include <mpi.h>
-#include <sstream>
 #include <stdexcept>
 #include <string>
-#include <vector>
 
 /**
  * @brief Performance test configuration
@@ -203,9 +198,47 @@ void run_enhanced_hybrid_benchmark(const PerfTestConfig &config, int rank,
 }
 
 /**
+ * @brief Display help information for command-line usage
+ */
+void print_help() {
+  std::cout << "Usage: test_hybrid_performance <parallel_threads> [OPTIONS]\n\n";
+  std::cout << "Hybrid MPI+FastFlow MergeSort performance benchmark.\n";
+  std::cout << "Measures performance and efficiency of distributed parallel sorting.\n\n";
+
+  std::cout << "Required Arguments:\n";
+  std::cout << "  parallel_threads        Number of FastFlow threads per MPI process\n\n";
+
+  std::cout << "Optional Arguments:\n";
+  std::cout << "  data_size_millions      Data size in millions of records (default: 10)\n";
+  std::cout << "  payload_size           Record payload size in bytes (default: 64)\n";
+  std::cout << "  csv_filename           Output CSV file for results\n\n";
+
+  std::cout << "Options:\n";
+  std::cout << "  -h, --help             Show this help message\n";
+  std::cout << "  --quiet                Suppress verbose output\n";
+  std::cout << "  --skip-baselines       Skip single-process baseline measurements\n";
+  std::cout << "  --baseline-time=<ms>   Use provided baseline time in milliseconds\n\n";
+
+  std::cout << "Examples:\n";
+  std::cout << "  mpirun -np 2 test_hybrid_performance 4\n";
+  std::cout << "  mpirun -np 4 test_hybrid_performance 8 20 32 results.csv\n";
+  std::cout << "  mpirun -np 2 test_hybrid_performance 4 --quiet --skip-baselines\n\n";
+
+  std::cout << "Note: This test must be run with MPI (e.g., mpirun -np N test_hybrid_performance)\n";
+}
+
+/**
  * @brief Hybrid MPI+FastFlow performance benchmarking main
  */
 int main(int argc, char *argv[]) {
+  // Check for help option before MPI initialization
+  for (int i = 1; i < argc; ++i) {
+    if (std::string(argv[i]) == "-h" || std::string(argv[i]) == "--help") {
+      print_help();
+      return 0;
+    }
+  }
+
   int provided;
   MPI_Init_thread(&argc, &argv, MPI_THREAD_FUNNELED, &provided);
 
@@ -226,8 +259,8 @@ int main(int argc, char *argv[]) {
       std::cerr << "Usage: " << argv[0]
                 << " <parallel_threads> [data_size_millions] [payload_size] "
                    "[csv_filename] [--quiet] [--skip-baselines] "
-                   "[--baseline-time=<ms>]"
-                << std::endl;
+                   "[--baseline-time=<ms>]\n";
+      std::cerr << "Use --help for detailed usage information.\n";
     }
     MPI_Finalize();
     return 1;

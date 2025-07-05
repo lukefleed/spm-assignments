@@ -2,9 +2,6 @@
 #define UTILS_HPP
 
 #include "record.hpp"
-#include <algorithm>
-#include <iomanip>
-#include <iostream>
 #include <random>
 #include <vector>
 
@@ -48,8 +45,6 @@ struct Config {
   size_t payload_size = 8;
   size_t num_threads = 4;
   DataPattern pattern = DataPattern::RANDOM;
-  bool validate = true;
-  bool verbose = false;
   bool csv_output = false;
   std::string csv_filename = "";
 };
@@ -57,7 +52,7 @@ struct Config {
 /**
  * @brief Parse command-line arguments into configuration
  */
-Config parse_args(int argc, char *argv[]);
+std::pair<Config, bool> parse_args(int argc, char *argv[]);
 
 /**
  * @brief Format byte count with appropriate units (B, KB, MB, GB)

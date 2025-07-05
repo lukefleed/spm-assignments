@@ -1,12 +1,12 @@
 #include "../src/common/record.hpp"
-#include "../src/common/timer.hpp"
 #include "../src/common/utils.hpp"
 #include "../src/sequential/sequential_mergesort.hpp"
-#include <algorithm>
 #include <cassert>
 #include <iostream>
 #include <set>
 #include <vector>
+#include <string>
+#include <cstring>
 
 void parallel_mergesort(std::vector<Record> &data, size_t num_threads);
 
@@ -110,9 +110,60 @@ bool run_test_case(const TestCase &test) {
 }
 
 /**
+ * @brief Display help information for the test program
+ */
+void print_help() {
+  std::cout << "=== Single Node MergeSort Correctness Test Suite ===" << std::endl;
+  std::cout << std::endl;
+  std::cout << "DESCRIPTION:" << std::endl;
+  std::cout << "  This program tests the correctness of both sequential and parallel" << std::endl;
+  std::cout << "  mergesort implementations by running a comprehensive test suite." << std::endl;
+  std::cout << std::endl;
+  std::cout << "USAGE:" << std::endl;
+  std::cout << "  " << "test_correctness" << " [options]" << std::endl;
+  std::cout << std::endl;
+  std::cout << "OPTIONS:" << std::endl;
+  std::cout << "  -h, --help    Show this help message and exit" << std::endl;
+  std::cout << std::endl;
+  std::cout << "TEST CATEGORIES:" << std::endl;
+  std::cout << "  • Edge cases: Empty arrays, single elements, two elements" << std::endl;
+  std::cout << "  • Small datasets: 10 elements with various thread counts" << std::endl;
+  std::cout << "  • Medium datasets: 1,000 elements with different data patterns" << std::endl;
+  std::cout << "  • Large datasets: 100,000 elements for stress testing" << std::endl;
+  std::cout << "  • Payload variations: Different record payload sizes" << std::endl;
+  std::cout << "  • Thread scalability: Testing with 1, 2, 4, 8, 16 threads" << std::endl;
+  std::cout << "  • Special cases: Identical keys, power-of-2 sizes, prime sizes" << std::endl;
+  std::cout << std::endl;
+  std::cout << "DATA PATTERNS TESTED:" << std::endl;
+  std::cout << "  • RANDOM: Randomly shuffled data" << std::endl;
+  std::cout << "  • SORTED: Already sorted in ascending order" << std::endl;
+  std::cout << "  • REVERSE_SORTED: Sorted in descending order" << std::endl;
+  std::cout << "  • NEARLY_SORTED: Mostly sorted with some random elements" << std::endl;
+  std::cout << std::endl;
+  std::cout << "VALIDATION:" << std::endl;
+  std::cout << "  Each test validates:" << std::endl;
+  std::cout << "  1. Correct ascending order of sorted results" << std::endl;
+  std::cout << "  2. Preservation of all original keys (no data loss)" << std::endl;
+  std::cout << "  3. Consistency between sequential and parallel implementations" << std::endl;
+  std::cout << std::endl;
+  std::cout << "OUTPUT:" << std::endl;
+  std::cout << "  The program outputs test progress and final results summary." << std::endl;
+  std::cout << "  Exit code 0 indicates all tests passed, 1 indicates failures." << std::endl;
+  std::cout << std::endl;
+}
+
+/**
  * @brief Single-node mergesort correctness test suite
  */
-int main() {
+int main(int argc, char *argv[]) {
+  // Parse command line arguments
+  for (int i = 1; i < argc; ++i) {
+    if (std::strcmp(argv[i], "-h") == 0 || std::strcmp(argv[i], "--help") == 0) {
+      print_help();
+      return 0;
+    }
+  }
+
   std::cout << "=== Single Node MergeSort Correctness Tests ===" << std::endl;
 
   std::vector<TestCase> test_cases = {

@@ -2,8 +2,9 @@
 #include <cctype>
 #include <climits>
 #include <cstring>
-#include <sstream>
+#include <iomanip>
 #include <stdexcept>
+
 
 /**
  * @brief Generate test dataset with specified pattern
@@ -76,13 +77,26 @@ std::vector<Record> copy_records(const std::vector<Record> &original) {
 }
 
 /**
- * @brief Parse command-line arguments into configuration
+ * @brief Exception thrown when help is requested
  */
-Config parse_args(int argc, char *argv[]) {
+class HelpRequestedException : public std::exception {
+public:
+  const char* what() const noexcept override {
+    return "Help requested";
+  }
+};
+
+/**
+ * @brief Parse command-line arguments into configuration
+ * @return pair<Config, bool> where bool indicates if help was requested
+ */
+std::pair<Config, bool> parse_args(int argc, char *argv[]) {
   Config config;
   for (int i = 1; i < argc; ++i) {
     std::string arg(argv[i]);
-    if (arg == "-s" && i + 1 < argc)
+    if (arg == "-h" || arg == "--help") {
+      return {config, true}; // Help requested
+    } else if (arg == "-s" && i + 1 < argc)
       config.array_size = parse_size(argv[++i]);
     else if (arg == "-r" && i + 1 < argc)
       config.payload_size = std::stoul(argv[++i]);
@@ -98,18 +112,14 @@ Config parse_args(int argc, char *argv[]) {
         config.pattern = DataPattern::REVERSE_SORTED;
       else if (p == "nearly")
         config.pattern = DataPattern::NEARLY_SORTED;
-    } else if (arg == "--no-validate")
-      config.validate = false;
-    else if (arg == "-v" || arg == "--verbose")
-      config.verbose = true;
-    else if (arg == "--csv")
+    } else if (arg == "--csv")
       config.csv_output = true;
     else if (arg == "--csv-file" && i + 1 < argc) {
       config.csv_output = true;
       config.csv_filename = argv[++i];
     }
   }
-  return config;
+  return {config, false}; // No help requested
 }
 
 /**

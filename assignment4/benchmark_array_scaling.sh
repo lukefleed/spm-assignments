@@ -33,7 +33,7 @@ for size in "${SIZES[@]}"; do
     echo "Testing $size..."
 
     # Run test (CSV will be written to timestamped file)
-    ./bin/single_node_main -s "$size" -t "$THREADS" -r "$PAYLOAD_SIZE" --csv --verbose
+    ./bin/single_node_main -s "$size" -t "$THREADS" -r "$PAYLOAD_SIZE" --csv
 
     # Find the most recently created CSV file and append its data (skip header)
     LATEST_CSV=$(ls -t results_single_node_*.csv | head -1)

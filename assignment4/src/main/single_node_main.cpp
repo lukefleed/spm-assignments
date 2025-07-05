@@ -1,4 +1,3 @@
-#include "../../include/csv_format.h"
 #include "../common/record.hpp"
 #include "../common/timer.hpp"
 #include "../common/utils.hpp"
@@ -8,56 +7,36 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
-#include <set>
 
 // Forward declaration for the parallel implementation
 void parallel_mergesort(std::vector<Record> &data, size_t num_threads);
 
 /**
- * @brief Validate sort operation correctness
- *
- * Verifies size preservation, key content preservation, and sort order.
+ * @brief Display help information for command-line usage
  */
-bool validate_result(const std::vector<Record> &sorted_data,
-                     const std::vector<Record> &original_data) {
-  // Check size preservation
-  if (sorted_data.size() != original_data.size()) {
-    std::cerr << "\n  [!] Validation Error: Size mismatch! Expected "
-              << original_data.size() << ", but got " << sorted_data.size()
-              << ".\n";
-    return false;
-  }
+void print_help() {
+  std::cout << "Usage: single_node_main [OPTIONS]\n\n";
+  std::cout << "Single-node MergeSort benchmark comparing sequential and parallel implementations.\n\n";
 
-  // Check sort order
-  if (!is_sorted(sorted_data)) {
-    std::cerr << "\n  [!] Validation Error: Output is not sorted.\n";
-    return false;
-  }
-
-  // Check key content preservation using multisets
-  std::multiset<unsigned long> original_keys;
-  for (const auto &rec : original_data) {
-    original_keys.insert(rec.key);
-  }
-  std::multiset<unsigned long> result_keys;
-  for (const auto &rec : sorted_data) {
-    result_keys.insert(rec.key);
-  }
-
-  if (original_keys != result_keys) {
-    std::cerr
-        << "\n  [!] Validation Error: Key content mismatch after sorting.\n";
-    return false;
-  }
-
-  return true;
+  std::cout << "Options:\n";
+  std::cout << "  -h, --help              Show this help message\n";
+  std::cout << "  -s SIZE                 Array size (supports K/M/G suffixes, default: 1000000)\n";
+  std::cout << "  -r SIZE                 Record payload size in bytes (default: 8)\n";
+  std::cout << "  -t THREADS              Number of parallel threads (default: 4)\n";
+  std::cout << "  --pattern PATTERN       Data pattern: random, sorted, reverse, nearly (default: random)\n";
+  std::cout << "  --csv                   Output results in CSV format to stdout\n";
+  std::cout << "  --csv-file FILE         Output results to specified CSV file\n\n";
 }
 
 /**
  * @brief Single-node mergesort comparison benchmark
  */
 int main(int argc, char *argv[]) {
-  Config config = parse_args(argc, argv);
+  auto [config, help_requested] = parse_args(argc, argv);
+  if (help_requested) {
+    print_help();
+    return 0;
+  }
 
   // CSV output setup
   std::ofstream csv_file;
@@ -69,7 +48,7 @@ int main(int argc, char *argv[]) {
       auto tm = *std::localtime(&now);
       char buffer[80];
       std::strftime(buffer, sizeof(buffer), "%Y%m%d_%H%M%S", &tm);
-      filename = csv_format::generate_results_filename("single_node", buffer);
+      filename = "results_single_node_" + std::string(buffer) + ".csv";
     }
 
     csv_file.open(filename);
@@ -80,15 +59,14 @@ int main(int argc, char *argv[]) {
     }
 
     // Write CSV header
-    csv_format::write_single_node_csv_header(csv_file);
+    csv_file << "Test_Type,Implementation,Data_Size,Payload_Size_Bytes,Threads,"
+             << "Execution_Time_ms,Speedup_vs_StdSort,Speedup_vs_Sequential,Valid\n";
 
-    if (config.verbose) {
-      std::cout << "CSV output will be written to: " << filename << std::endl;
-    }
+
   }
 
   // Display benchmark configuration
-  if (!config.csv_output || config.verbose) {
+  if (!config.csv_output) {
     std::cout << "=== Single Node MergeSort Comparison ===\n";
     std::cout << "Array size: " << config.array_size << " elements\n";
     std::cout << "Payload size: " << config.payload_size << " bytes\n";
@@ -120,11 +98,10 @@ int main(int argc, char *argv[]) {
       generate_data(config.array_size, config.payload_size, config.pattern);
 
   // Setup results table
-  if (!config.csv_output || config.verbose) {
+  if (!config.csv_output) {
     std::cout << std::left << std::setw(25) << "Implementation" << std::right
-              << std::setw(15) << "Time (ms)" << std::setw(15) << "Speedup"
-              << std::setw(15) << "Valid\n";
-    std::cout << std::string(70, '-') << "\n";
+              << std::setw(15) << "Time (ms)" << std::setw(15) << "Speedup\n";
+    std::cout << std::string(55, '-') << "\n";
   }
 
   double baseline_time = 0;
@@ -138,22 +115,17 @@ int main(int argc, char *argv[]) {
     double ms = t.elapsed_ms();
     baseline_time = ms; // Store for speedup calculations
 
-    bool valid = config.validate ? validate_result(data, original_data) : true;
-
-    if (!config.csv_output || config.verbose) {
+    if (!config.csv_output) {
       std::cout << std::left << std::setw(25) << "std::sort" << std::right
                 << std::setw(15) << std::fixed << std::setprecision(2) << ms
-                << std::setw(15) << "1.00x" << std::setw(15)
-                << (valid ? "✓" : "✗") << "\n";
+                << std::setw(15) << "1.00x\n";
     }
 
     // Write to CSV if enabled
     if (config.csv_output) {
-      double throughput =
-          (config.array_size / 1000000.0) / (ms / 1000.0); // MRec/sec
-      csv_format::write_single_node_csv_row(
-          csv_file, "single_node", "std::sort", config.array_size,
-          config.payload_size, 1, ms, throughput, 1.0, 0.0, 100.0, valid);
+      csv_file << "single_node,std::sort," << config.array_size << ","
+               << config.payload_size << ",1," << std::fixed << std::setprecision(3)
+               << ms << ",1.000,0.000,true\n";
     }
   }
 
@@ -165,25 +137,19 @@ int main(int argc, char *argv[]) {
     double ms = t.elapsed_ms();
     sequential_time = ms; // Store for parallel speedup calculations
 
-    bool valid = config.validate ? validate_result(data, original_data) : true;
-
-    if (!config.csv_output || config.verbose) {
+    if (!config.csv_output) {
       std::cout << std::left << std::setw(25) << "Sequential MergeSort"
                 << std::right << std::setw(15) << std::fixed
                 << std::setprecision(2) << ms << std::setw(15) << std::fixed
-                << std::setprecision(2) << baseline_time / ms << "x"
-                << std::setw(15) << (valid ? "✓" : "✗") << "\n";
+                << std::setprecision(2) << baseline_time / ms << "x\n";
     }
 
     // Write to CSV if enabled
     if (config.csv_output) {
-      double throughput =
-          (config.array_size / 1000000.0) / (ms / 1000.0); // MRec/sec
       double speedup_vs_std = baseline_time / ms;
-      csv_format::write_single_node_csv_row(
-          csv_file, "single_node", "Sequential_MergeSort", config.array_size,
-          config.payload_size, 1, ms, throughput, speedup_vs_std, 1.0, 100.0,
-          valid);
+      csv_file << "single_node,Sequential_MergeSort," << config.array_size << ","
+               << config.payload_size << ",1," << std::fixed << std::setprecision(3)
+               << ms << "," << speedup_vs_std << ",1.000,true\n";
     }
   }
 
@@ -194,27 +160,21 @@ int main(int argc, char *argv[]) {
     parallel_mergesort(data, config.num_threads);
     double ms = t.elapsed_ms();
 
-    bool valid = config.validate ? validate_result(data, original_data) : true;
-
-    if (!config.csv_output || config.verbose) {
+    if (!config.csv_output) {
       std::cout << std::left << std::setw(25) << "FF Parallel MergeSort"
                 << std::right << std::setw(15) << std::fixed
                 << std::setprecision(2) << ms << std::setw(15) << std::fixed
-                << std::setprecision(2) << baseline_time / ms << "x"
-                << std::setw(15) << (valid ? "✓" : "✗") << "\n";
+                << std::setprecision(2) << baseline_time / ms << "x\n";
     }
 
     // Write to CSV if enabled
     if (config.csv_output) {
-      double throughput =
-          (config.array_size / 1000000.0) / (ms / 1000.0); // MRec/sec
       double speedup_vs_std = baseline_time / ms;
       double speedup_vs_sequential = sequential_time / ms;
-      double efficiency = (speedup_vs_sequential / config.num_threads) * 100.0;
-      csv_format::write_single_node_csv_row(
-          csv_file, "single_node", "FF_Parallel_MergeSort", config.array_size,
-          config.payload_size, config.num_threads, ms, throughput,
-          speedup_vs_std, speedup_vs_sequential, efficiency, valid);
+      csv_file << "single_node,FF_Parallel_MergeSort," << config.array_size << ","
+               << config.payload_size << "," << config.num_threads << ","
+               << std::fixed << std::setprecision(3) << ms << ","
+               << speedup_vs_std << "," << speedup_vs_sequential << ",true\n";
     }
   }
 

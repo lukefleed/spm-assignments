@@ -61,13 +61,11 @@ struct MultiNodeConfig {
   size_t payload_size;
   size_t parallel_threads;
   DataPattern pattern;
-  bool validate;
-  bool verbose;
   bool benchmark_mode;
 
   MultiNodeConfig()
       : array_size(1000000), payload_size(64), parallel_threads(4),
-        pattern(DataPattern::RANDOM), validate(true), verbose(false),
+        pattern(DataPattern::RANDOM),
         benchmark_mode(false) {}
 };
 
@@ -97,10 +95,6 @@ MultiNodeConfig parse_multi_node_args(int argc, char *argv[]) {
         config.pattern = DataPattern::REVERSE_SORTED;
       else if (pattern == "nearly")
         config.pattern = DataPattern::NEARLY_SORTED;
-    } else if (arg == "--no-validate") {
-      config.validate = false;
-    } else if (arg == "--verbose" || arg == "-v") {
-      config.verbose = true;
     } else if (arg == "--benchmark" || arg == "-b") {
       config.benchmark_mode = true;
     } else if (arg == "--help" || arg == "-h") {
@@ -111,8 +105,6 @@ MultiNodeConfig parse_multi_node_args(int argc, char *argv[]) {
           << "  -r BYTES    Record payload size in bytes\n"
           << "  -t THREADS  Number of parallel threads per node\n"
           << "  -p PATTERN  Data pattern: random, sorted, reverse, nearly\n"
-          << "  --no-validate  Disable result validation\n"
-          << "  --verbose   Enable verbose output\n"
           << "  --benchmark Enable benchmark mode\n"
           << "  --help      Show this help message\n";
       MPI_Finalize();
@@ -274,7 +266,6 @@ void run_benchmark_suite(const MultiNodeConfig &base_config, int rank, int size,
         test_config.array_size = test_size;
         test_config.payload_size = payload_size;
         test_config.parallel_threads = threads;
-        test_config.validate = false; // Skip validation for speed
 
         // Generate test data on root process
         std::vector<Record> test_data;
@@ -348,13 +339,6 @@ int main(int argc, char *argv[]) {
   try {
     MultiNodeConfig config = parse_multi_node_args(argc, argv);
 
-    if (rank == 0 && config.verbose) {
-      std::cout << "Hybrid MPI+Parallel MergeSort starting...\n";
-      std::cout << "MPI processes: " << size << "\n";
-      std::cout << "Parallel threads per node: " << config.parallel_threads
-                << "\n";
-    }
-
     // Handle benchmark mode
     if (config.benchmark_mode) {
       std::ofstream csv_file;
@@ -383,17 +367,9 @@ int main(int argc, char *argv[]) {
     // Generate test data on root process only
     std::vector<Record> original_data;
     if (rank == 0) {
-      if (config.verbose) {
-        std::cout << "Generating " << config.array_size << " records with "
-                  << config.payload_size << " byte payload...\n";
-      }
-
       original_data =
           generate_data(config.array_size, config.payload_size, config.pattern);
 
-      if (config.verbose) {
-        std::cout << "Data generation complete. Starting hybrid sort...\n";
-      }
     }
 
     // Configure hybrid sorter
@@ -414,16 +390,6 @@ int main(int argc, char *argv[]) {
 
     const auto &metrics = sorter.get_metrics();
 
-    // Validate result if requested
-    bool is_valid = true;
-    if (config.validate) {
-      is_valid = validate_hybrid_result(sorted_data, original_data, rank);
-      if (rank == 0) {
-        std::cout << "Validation: " << (is_valid ? "✓ PASSED" : "✗ FAILED")
-                  << "\n";
-      }
-    }
-
     // Generate performance summary
     if (!config.benchmark_mode) {
       std::ofstream csv_file;
@@ -442,27 +408,6 @@ int main(int argc, char *argv[]) {
         csv_file.close();
         std::cout
             << "\nSingle test result saved to: hybrid_single_test_result.csv\n";
-      }
-    }
-
-    // Optional sequential comparison for small datasets
-    if (rank == 0 && config.array_size <= 10000000 && config.verbose) {
-      std::cout << "\nRunning sequential comparison...\n";
-      auto seq_data = copy_records(original_data);
-      Timer seq_timer;
-      sequential_mergesort(seq_data);
-      double seq_time = seq_timer.elapsed_ms();
-
-      double speedup = seq_time / total_time;
-      std::cout << "Sequential time: " << std::fixed << std::setprecision(2)
-                << seq_time << " ms\n";
-      std::cout << "Hybrid speedup: " << std::setprecision(2) << speedup
-                << "x\n";
-
-      if (speedup >= 1.0) {
-        std::cout << "✓ Positive speedup achieved!\n";
-      } else {
-        std::cout << "⚠ Negative speedup - consider tuning parameters\n";
       }
     }
 

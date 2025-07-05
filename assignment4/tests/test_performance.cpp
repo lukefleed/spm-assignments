@@ -1,4 +1,3 @@
-#include "../include/csv_format.h"
 #include "../src/common/record.hpp"
 #include "../src/common/timer.hpp"
 #include "../src/common/utils.hpp"
@@ -8,7 +7,6 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
-#include <memory>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -25,7 +23,6 @@ struct TestResult {
   size_t payload_size;
   size_t num_threads;
   double execution_time_ms;
-  double throughput_mb_per_sec;
   double speedup;
 };
 
@@ -34,26 +31,15 @@ struct TestResult {
  */
 void write_standardized_csv_row(std::ofstream &file, const TestResult &result,
                                 double sequential_time_ms) {
-  // Calculate metrics for standardized format
-  double throughput_mrec_per_sec =
-      (static_cast<double>(result.array_size) / 1000000.0) /
-      (result.execution_time_ms / 1000.0);
-
-  // For efficiency calculation (only meaningful for parallel implementations)
-  double efficiency = result.num_threads > 1
-                          ? (result.speedup / result.num_threads) * 100.0
-                          : 100.0;
-
   // Calculate speedup vs sequential
   double speedup_vs_sequential =
       sequential_time_ms > 0.0 ? sequential_time_ms / result.execution_time_ms
                                : 1.0;
 
-  csv_format::write_single_node_csv_row(
-      file, "performance_test", result.implementation, result.array_size,
-      result.payload_size, result.num_threads, result.execution_time_ms,
-      throughput_mrec_per_sec, result.speedup, speedup_vs_sequential,
-      efficiency, true);
+  file << "performance_test," << result.implementation << "," << result.array_size << ","
+       << result.payload_size << "," << result.num_threads << ","
+       << std::fixed << std::setprecision(3) << result.execution_time_ms << ","
+       << result.speedup << "," << speedup_vs_sequential << ",true\n";
 }
 
 /**
@@ -93,14 +79,6 @@ TestResult run_performance_test(const std::string &implementation,
 
   result.execution_time_ms = timer.elapsed_ms();
 
-  // Calculate throughput accounting for actual record size
-  size_t data_size_bytes =
-      (array_size *
-       (sizeof(Record) - sizeof(std::unique_ptr<char[]>) + payload_size));
-  double data_size_mb =
-      static_cast<double>(data_size_bytes) / (1024.0 * 1024.0);
-  result.throughput_mb_per_sec =
-      data_size_mb / (result.execution_time_ms / 1000.0);
 
   // Calculate speedup relative to baseline
   if (baseline_time_ms > 0.0) {
@@ -133,17 +111,14 @@ void run_thread_scaling_test(std::ofstream &csv_file,
   const int w_time = 15;
   const int w_speedup1 = 22;
   const int w_speedup2 = 25;
-  const int w_tput = 20;
 
   // Display table header
   std::cout << std::left << std::setw(w_impl) << "Implementation"
             << std::setw(w_threads) << "Threads" << std::setw(w_time)
             << "Time (ms)" << std::setw(w_speedup1) << "Speedup (std::sort)"
-            << std::setw(w_speedup2) << "Speedup (Sequential)"
-            << std::setw(w_tput) << "Throughput (MB/s)" << std::endl;
+            << std::setw(w_speedup2) << "Speedup (Sequential)" << std::endl;
   std::cout << std::string(w_impl + w_threads + w_time + w_speedup1 +
-                               w_speedup2 + w_tput,
-                           '-')
+                               w_speedup2, '-')
             << std::endl;
 
   // Benchmark std::sort (baseline)
@@ -154,9 +129,7 @@ void run_thread_scaling_test(std::ofstream &csv_file,
   std::cout << std::setw(w_impl) << "std::sort" << std::setw(w_threads) << "1"
             << std::setw(w_time) << std::fixed << std::setprecision(1)
             << std_sort_result.execution_time_ms << std::setw(w_speedup1)
-            << "1.00x" << std::setw(w_speedup2) << "-" << std::setw(w_tput)
-            << std::setprecision(1) << std_sort_result.throughput_mb_per_sec
-            << std::endl;
+            << "1.00x" << std::setw(w_speedup2) << "-" << std::endl;
 
   // Benchmark sequential mergesort
   auto sequential_result =
@@ -174,8 +147,7 @@ void run_thread_scaling_test(std::ofstream &csv_file,
             << std::setw(w_time) << std::fixed << std::setprecision(1)
             << sequential_result.execution_time_ms << std::setw(w_speedup1)
             << speedup_std_ss.str() << std::setw(w_speedup2) << "1.00x"
-            << std::setw(w_tput) << std::setprecision(1)
-            << sequential_result.throughput_mb_per_sec << std::endl;
+            << std::endl;
 
   // Benchmark parallel mergesort with different thread counts
   for (size_t threads : thread_counts) {
@@ -198,9 +170,7 @@ void run_thread_scaling_test(std::ofstream &csv_file,
               << threads << std::setw(w_time) << std::fixed
               << std::setprecision(1) << ff_result.execution_time_ms
               << std::setw(w_speedup1) << ff_vs_std_ss.str()
-              << std::setw(w_speedup2) << ff_vs_seq_ss.str()
-              << std::setw(w_tput) << std::setprecision(1)
-              << ff_result.throughput_mb_per_sec << std::endl;
+              << std::setw(w_speedup2) << ff_vs_seq_ss.str();
   }
 }
 
@@ -226,16 +196,13 @@ void run_array_size_test(std::ofstream &csv_file) {
   const int w_time = 15;
   const int w_speedup1 = 22;
   const int w_speedup2 = 25;
-  const int w_tput = 20;
 
   // Display table header
   std::cout << std::left << std::setw(w_impl) << "Implementation"
             << std::setw(w_size) << "Size" << std::setw(w_time) << "Time (ms)"
             << std::setw(w_speedup1) << "Speedup (std::sort)"
-            << std::setw(w_speedup2) << "Speedup (Sequential)"
-            << std::setw(w_tput) << "Throughput (MB/s)" << std::endl;
-  std::cout << std::string(w_impl + w_size + w_time + w_speedup1 + w_speedup2 +
-                               w_tput,
+            << std::setw(w_speedup2) << "Speedup (Sequential)";
+  std::cout << std::string(w_impl + w_size + w_time + w_speedup1 + w_speedup2,
                            '-')
             << std::endl;
 
@@ -251,8 +218,7 @@ void run_array_size_test(std::ofstream &csv_file) {
               << size_info.first << std::setw(w_time) << std::fixed
               << std::setprecision(1) << std_result.execution_time_ms
               << std::setw(w_speedup1) << "1.00x" << std::setw(w_speedup2)
-              << "-" << std::setw(w_tput) << std::setprecision(1)
-              << std_result.throughput_mb_per_sec << std::endl;
+              << "-" << std::endl;
 
     // Sequential mergesort
     auto seq_result = run_performance_test("Sequential", size, payload_size, 1);
@@ -269,9 +235,7 @@ void run_array_size_test(std::ofstream &csv_file) {
               << size_info.first << std::setw(w_time) << std::fixed
               << std::setprecision(1) << seq_result.execution_time_ms
               << std::setw(w_speedup1) << seq_vs_std_ss.str()
-              << std::setw(w_speedup2) << "1.00x" << std::setw(w_tput)
-              << std::setprecision(1) << seq_result.throughput_mb_per_sec
-              << std::endl;
+              << std::setw(w_speedup2) << "1.00x" << std::endl;
 
     // Parallel mergesort
     auto ff_result =
@@ -293,13 +257,11 @@ void run_array_size_test(std::ofstream &csv_file) {
               << size_info.first << std::setw(w_time) << std::fixed
               << std::setprecision(1) << ff_result.execution_time_ms
               << std::setw(w_speedup1) << ff_vs_std_ss.str()
-              << std::setw(w_speedup2) << ff_vs_seq_ss.str()
-              << std::setw(w_tput) << std::setprecision(1)
-              << ff_result.throughput_mb_per_sec << std::endl;
+              << std::setw(w_speedup2) << ff_vs_seq_ss.str() << std::endl;
 
     if (size_info.first != "10M") {
       std::cout << std::string(w_impl + w_size + w_time + w_speedup1 +
-                                   w_speedup2 + w_tput,
+                                   w_speedup2,
                                '-')
                 << std::endl;
     }
@@ -323,16 +285,14 @@ void run_payload_size_test(std::ofstream &csv_file) {
   const int w_time = 15;
   const int w_speedup1 = 22;
   const int w_speedup2 = 25;
-  const int w_tput = 20;
 
   // Display table header
   std::cout << std::left << std::setw(w_impl) << "Implementation"
             << std::setw(w_payload) << "Payload (B)" << std::setw(w_time)
             << "Time (ms)" << std::setw(w_speedup1) << "Speedup (std::sort)"
-            << std::setw(w_speedup2) << "Speedup (Sequential)"
-            << std::setw(w_tput) << "Throughput (MB/s)" << std::endl;
+            << std::setw(w_speedup2) << "Speedup (Sequential)";
   std::cout << std::string(w_impl + w_payload + w_time + w_speedup1 +
-                               w_speedup2 + w_tput,
+                               w_speedup2,
                            '-')
             << std::endl;
 
@@ -346,8 +306,7 @@ void run_payload_size_test(std::ofstream &csv_file) {
               << payload << std::setw(w_time) << std::fixed
               << std::setprecision(1) << std_result.execution_time_ms
               << std::setw(w_speedup1) << "1.00x" << std::setw(w_speedup2)
-              << "-" << std::setw(w_tput) << std::setprecision(1)
-              << std_result.throughput_mb_per_sec << std::endl;
+              << "-" << std::endl;
 
     // Sequential mergesort
     auto seq_result =
@@ -364,9 +323,7 @@ void run_payload_size_test(std::ofstream &csv_file) {
               << payload << std::setw(w_time) << std::fixed
               << std::setprecision(1) << seq_result.execution_time_ms
               << std::setw(w_speedup1) << seq_vs_std_ss.str()
-              << std::setw(w_speedup2) << "1.00x" << std::setw(w_tput)
-              << std::setprecision(1) << seq_result.throughput_mb_per_sec
-              << std::endl;
+              << std::setw(w_speedup2) << "1.00x" << std::endl;
 
     // Parallel mergesort
     auto ff_result =
@@ -388,15 +345,13 @@ void run_payload_size_test(std::ofstream &csv_file) {
               << payload << std::setw(w_time) << std::fixed
               << std::setprecision(1) << ff_result.execution_time_ms
               << std::setw(w_speedup1) << ff_vs_std_ss.str()
-              << std::setw(w_speedup2) << ff_vs_seq_ss.str()
-              << std::setw(w_tput) << std::setprecision(1)
-              << ff_result.throughput_mb_per_sec << std::endl;
+              << std::setw(w_speedup2) << ff_vs_seq_ss.str() << std::endl;
 
     if (payload != 256) {
       std::cout << std::string(w_impl + w_payload + w_time + w_speedup1 +
-                                   w_speedup2 + w_tput,
-                               '-')
-                << std::endl;
+                                    w_speedup2,
+                                '-')
+                  << std::endl;
     }
   }
 }
@@ -502,7 +457,8 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  csv_format::write_single_node_csv_header(csv_file);
+  csv_file << "Test_Type,Implementation,Data_Size,Payload_Size_Bytes,Threads,"
+           << "Execution_Time_ms,Speedup_vs_StdSort,Speedup_vs_Sequential,Valid\n";
 
   // Execute core thread scaling benchmark
   run_thread_scaling_test(csv_file, config.thread_counts, config.array_size,
