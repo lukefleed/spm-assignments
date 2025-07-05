@@ -99,8 +99,8 @@ $(TARGET_HYBRID_CORRECT): $(OBJ_DIR) $(BIN_DIR) $(COMMON_OBJ) $(HYBRID_OBJ) $(FF
 	$(MPICXX) $(MPICXXFLAGS) $(TEST_HYBRID_CORRECT_SRC) $(COMMON_OBJ) $(HYBRID_OBJ) $(FF_OBJ) -o $@ $(LDFLAGS)
 
 # Link test_hybrid_performance
-$(TARGET_HYBRID_PERF): $(OBJ_DIR) $(BIN_DIR) $(COMMON_OBJ) $(HYBRID_OBJ) $(FF_OBJ) $(TEST_HYBRID_PERF_SRC)
-	$(MPICXX) $(MPICXXFLAGS) $(TEST_HYBRID_PERF_SRC) $(COMMON_OBJ) $(HYBRID_OBJ) $(FF_OBJ) -o $@ $(LDFLAGS)
+$(TARGET_HYBRID_PERF): $(OBJ_DIR) $(BIN_DIR) $(COMMON_OBJ) $(SEQ_OBJ) $(HYBRID_OBJ) $(FF_OBJ) $(TEST_HYBRID_PERF_SRC)
+	$(MPICXX) $(MPICXXFLAGS) $(TEST_HYBRID_PERF_SRC) $(COMMON_OBJ) $(SEQ_OBJ) $(HYBRID_OBJ) $(FF_OBJ) -o $@ $(LDFLAGS)
 
 # Link single_node_main executable
 $(TARGET_SINGLE_NODE): $(OBJ_DIR) $(BIN_DIR) $(COMMON_OBJ) $(SEQ_OBJ) $(FF_OBJ) $(OBJ_DIR)/main/single_node_main.o
@@ -114,7 +114,7 @@ $(TARGET_MULTI_NODE): $(OBJ_DIR) $(BIN_DIR) $(COMMON_OBJ) $(SEQ_OBJ) $(HYBRID_OB
 clean:
 	@echo "Cleaning up object and binary files..."
 	@rm -rf $(OBJ_DIR) $(BIN_DIR)
-	@rm -f .baseline_time_hybrid_*.tmp
+	@rm -f .baseline_time_hybrid_*.tmp *.csv
 
 # Phony targets
 .PHONY: all clean test_perf_hybrid test_correctness_single_node test_perf_single_node benchmark_array_scaling benchmark_payload_scaling benchmark_cluster_scaling benchmark_cluster_weak_scaling test_correctness_hybrid help
@@ -125,7 +125,6 @@ test_correctness_single_node: $(TARGET_CORRECT)
 	$(TARGET_CORRECT)
 
 # Default values for single node performance test
-# Generate thread list dynamically: 2, 4, 8, 16, ..., up to max system threads
 MAX_THREADS := $(shell nproc)
 THREAD_LIST ?= $(shell i=2; while [ $$i -le $(MAX_THREADS) ]; do echo $$i; i=$$((i*2)); done | tr '\n' ' ')
 ARRAY_SIZE_M ?= 100
@@ -235,33 +234,44 @@ help:
 	@echo "  make test_perf_hybrid"
 	@echo "  make test_perf_hybrid MPI_NODES_LIST=\"1 2 4 8\" FF_THREADS=8 RECORDS_SIZE_M=50"
 
-# Hybrid MPI+Parallel performance test
+# --- Performance Test Target ---
 MPI_NODES_LIST ?= 1 2 4 8
 FF_THREADS ?= 4
 RECORDS_SIZE_M ?= 10
-PAYLOAD_SIZE_B ?= 64
+PAYLOAD_SIZE_B ?= 16
 HYBRID_CSV_FILE ?= hybrid_performance_results.csv
 
-# Hybrid MPI+Parallel performance test
 test_perf_hybrid: $(TARGET_HYBRID_PERF)
-	@echo "=============================================================================="
-	@echo "                 Hybrid MPI+Parallel Performance Test                        "
-	@echo "------------------------------------------------------------------------------"
-	@echo " Config: $(RECORDS_SIZE_M)M records, $(PAYLOAD_SIZE_B)B payload, $(FF_THREADS) FF threads/process"
+	@echo "=========================================================================================="
+	@echo "                         Hybrid MPI+Parallel Performance Test"
+	@echo "------------------------------------------------------------------------------------------"
+	@echo " Config: $(RECORDS_SIZE_M)M records, $(PAYLOAD_SIZE_B)B payload, $(FF_THREADS) threads/process"
 	@echo " MPI Processes: $(MPI_NODES_LIST)"
-	@echo " Analysis: Parallel baseline comparison with MPI scaling"
 	@echo " Output: $(HYBRID_CSV_FILE)"
-	@echo "=============================================================================="
-	@# Run baseline establishment first (single-node parallel)
-	@baseline_time=$$(mpirun --oversubscribe -np 1 $(TARGET_HYBRID_PERF) $(FF_THREADS) $(RECORDS_SIZE_M) $(PAYLOAD_SIZE_B) $(HYBRID_CSV_FILE) --quiet 2>&1 | grep "Mergesort FF" | awk '{print $$3}'); \
-	echo ""; \
-	echo "MPI Procs       Time (ms) Throughput (MRec/s) 	    Speedup    MPI Eff (%)  Total Eff (%)"; \
-	echo "--------------------------------------------------------------------------------------------"; \
+	@echo "=========================================================================================="
+	@echo "Establishing 1-node baseline..."
+	@BASELINE_OUTPUT=$$(mpirun --oversubscribe -np 1 $(TARGET_HYBRID_PERF) $(FF_THREADS) $(RECORDS_SIZE_M) $(PAYLOAD_SIZE_B)); \
+	if [ -z "$$BASELINE_OUTPUT" ]; then echo "Error: Failed to get baseline output."; exit 1; fi; \
+	T_1NODE=$$(echo $$BASELINE_OUTPUT | cut -d',' -f3); \
+	T_STDSORT=$$(echo $$BASELINE_OUTPUT | cut -d',' -f4); \
+	T_SEQUENTIAL=$$(echo $$BASELINE_OUTPUT | cut -d',' -f5); \
+	echo "Baselines captured: T_1NODE=$${T_1NODE}ms, T_STDSORT=$${T_STDSORT}ms, T_SEQUENTIAL=$${T_SEQUENTIAL}ms"; \
+	rm -f $(HYBRID_CSV_FILE); \
+	echo "MPI_Procs,Threads,Time_ms,Speedup_vs_StdSort,Speedup_vs_Sequential,Speedup_vs_1Node" > $(HYBRID_CSV_FILE); \
+	printf "\n%-11s %-14s %-20s %-24s %-18s\n" "MPI Procs" "Time (ms)" "Speedup vs StdSort" "Speedup vs Sequential" "Speedup vs 1-Node"; \
+	echo "------------------------------------------------------------------------------------------"; \
 	for nodes in $(MPI_NODES_LIST); do \
 		if [ $$nodes -eq 1 ]; then \
-			mpirun --oversubscribe -np $$nodes $(TARGET_HYBRID_PERF) $(FF_THREADS) $(RECORDS_SIZE_M) $(PAYLOAD_SIZE_B) $(HYBRID_CSV_FILE) --quiet; \
+			RUN_OUTPUT=$$BASELINE_OUTPUT; \
 		else \
-			mpirun --oversubscribe -np $$nodes $(TARGET_HYBRID_PERF) $(FF_THREADS) $(RECORDS_SIZE_M) $(PAYLOAD_SIZE_B) $(HYBRID_CSV_FILE) --quiet --skip-baselines --baseline-time=$$baseline_time; \
+			RUN_OUTPUT=$$(mpirun --oversubscribe -np $$nodes $(TARGET_HYBRID_PERF) $(FF_THREADS) $(RECORDS_SIZE_M) $(PAYLOAD_SIZE_B) --t-stdsort $$T_STDSORT --t-sequential $$T_SEQUENTIAL --t-1node $$T_1NODE); \
 		fi; \
+		if [ -z "$$RUN_OUTPUT" ]; then echo "Error: Test run failed for $$nodes nodes."; continue; fi; \
+		T_CURRENT=$$(echo $$RUN_OUTPUT | cut -d',' -f3); \
+		SPEEDUP_STD=$$(awk "BEGIN {if($$T_CURRENT>0) printf \"%.2f\", $$T_STDSORT/$$T_CURRENT; else print 0}"); \
+		SPEEDUP_SEQ=$$(awk "BEGIN {if($$T_CURRENT>0) printf \"%.2f\", $$T_SEQUENTIAL/$$T_CURRENT; else print 0}"); \
+		SPEEDUP_1NODE=$$(awk "BEGIN {if($$T_CURRENT>0) printf \"%.2f\", $$T_1NODE/$$T_CURRENT; else print 0}"); \
+		printf "%-11d %-14.2f %-20.2f %-24.2f %-18.2f\n" $$nodes $$T_CURRENT $$SPEEDUP_STD $$SPEEDUP_SEQ $$SPEEDUP_1NODE; \
+		echo "$$nodes,$(FF_THREADS),$$T_CURRENT,$$SPEEDUP_STD,$$SPEEDUP_SEQ,$$SPEEDUP_1NODE" >> $(HYBRID_CSV_FILE); \
 	done
-	@echo "=============================================================================="
+	@echo "=========================================================================================="

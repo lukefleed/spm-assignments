@@ -2,7 +2,6 @@
 #include "../common/timer.hpp"
 #include "../common/utils.hpp"
 #include "../hybrid/mpi_ff_mergesort.hpp"
-#include "../sequential/sequential_mergesort.hpp"
 #include <algorithm>
 #include <fstream>
 #include <iomanip>
@@ -10,48 +9,7 @@
 #include <memory>
 #include <mpi.h>
 #include <sstream>
-
-/**
- * @brief Test result structure for performance data collection
- */
-struct HybridTestResult {
-  std::string test_name;
-  size_t data_size;
-  size_t payload_size;
-  int mpi_processes;
-  int parallel_threads;
-  double total_time_ms;
-  double throughput_mrec_per_sec;
-  double speedup;
-  double efficiency_percent;
-
-  HybridTestResult(const std::string &name, size_t size, size_t payload,
-                   int processes, int threads, double time, double throughput,
-                   double speedup_val, double efficiency)
-      : test_name(name), data_size(size), payload_size(payload),
-        mpi_processes(processes), parallel_threads(threads),
-        total_time_ms(time), throughput_mrec_per_sec(throughput),
-        speedup(speedup_val), efficiency_percent(efficiency) {}
-};
-
-/**
- * @brief Write CSV header for performance results
- */
-void write_hybrid_csv_header(std::ofstream &file) {
-  file << "Test_Name,Data_Size,Payload_Size,MPI_Processes,Parallel_Threads,"
-       << "Total_Time_ms,Throughput_MRec_per_sec,Speedup,Efficiency_Percent\n";
-}
-
-/**
- * @brief Write single result row to CSV
- */
-void write_hybrid_csv_row(std::ofstream &file, const HybridTestResult &result) {
-  file << result.test_name << "," << result.data_size << ","
-       << result.payload_size << "," << result.mpi_processes << ","
-       << result.parallel_threads << "," << result.total_time_ms << ","
-       << result.throughput_mrec_per_sec << "," << result.speedup << ","
-       << result.efficiency_percent << "\n";
-}
+#include <vector>
 
 /**
  * @brief Multi-node execution configuration
@@ -61,12 +19,10 @@ struct MultiNodeConfig {
   size_t payload_size;
   size_t parallel_threads;
   DataPattern pattern;
-  bool benchmark_mode;
 
   MultiNodeConfig()
       : array_size(1000000), payload_size(64), parallel_threads(4),
-        pattern(DataPattern::RANDOM),
-        benchmark_mode(false) {}
+        pattern(DataPattern::RANDOM) {}
 };
 
 /**
@@ -74,342 +30,143 @@ struct MultiNodeConfig {
  */
 MultiNodeConfig parse_multi_node_args(int argc, char *argv[]) {
   MultiNodeConfig config;
-
   for (int i = 1; i < argc; ++i) {
     std::string arg = argv[i];
-
     if (arg == "-s" && i + 1 < argc) {
-      std::string size_str = argv[++i];
-      config.array_size = parse_size(size_str);
+      config.array_size = parse_size(argv[++i]);
     } else if (arg == "-r" && i + 1 < argc) {
       config.payload_size = std::stoul(argv[++i]);
     } else if (arg == "-t" && i + 1 < argc) {
       config.parallel_threads = std::stoul(argv[++i]);
     } else if (arg == "-p" && i + 1 < argc) {
-      std::string pattern = argv[++i];
-      if (pattern == "random")
-        config.pattern = DataPattern::RANDOM;
-      else if (pattern == "sorted")
+      std::string pattern_str = argv[++i];
+      if (pattern_str == "sorted")
         config.pattern = DataPattern::SORTED;
-      else if (pattern == "reverse")
+      else if (pattern_str == "reverse")
         config.pattern = DataPattern::REVERSE_SORTED;
-      else if (pattern == "nearly")
+      else if (pattern_str == "nearly")
         config.pattern = DataPattern::NEARLY_SORTED;
-    } else if (arg == "--benchmark" || arg == "-b") {
-      config.benchmark_mode = true;
-    } else if (arg == "--help" || arg == "-h") {
-      std::cout
-          << "Usage: " << argv[0] << " [options]\n"
-          << "Options:\n"
-          << "  -s SIZE     Array size (e.g., 10M, 100M)\n"
-          << "  -r BYTES    Record payload size in bytes\n"
-          << "  -t THREADS  Number of parallel threads per node\n"
-          << "  -p PATTERN  Data pattern: random, sorted, reverse, nearly\n"
-          << "  --benchmark Enable benchmark mode\n"
-          << "  --help      Show this help message\n";
-      MPI_Finalize();
-      exit(0);
+      else
+        config.pattern = DataPattern::RANDOM;
     }
   }
-
   return config;
 }
 
 /**
- * @brief Validate hybrid mergesort result correctness
+ * @brief Validate hybrid mergesort result correctness.
+ *
+ * This version validates the sorted data against a pre-sorted list of original
+ * keys, which avoids the need to copy the full Record vector.
+ *
+ * @param sorted_data The final sorted vector of records.
+ * @param original_keys_sorted A vector containing all keys from the original
+ * data, sorted in ascending order.
+ * @param rank The MPI rank of the calling process.
+ * @return True if validation passes, false otherwise.
  */
-bool validate_hybrid_result(const std::vector<Record> &sorted_data,
-                            const std::vector<Record> &original_data,
-                            int rank) {
+bool validate_hybrid_result(
+    const std::vector<Record> &sorted_data,
+    const std::vector<unsigned long> &original_keys_sorted, int rank) {
   if (rank != 0)
-    return true; // Only root process validates
+    return true;
 
-  // Check size preservation
-  if (sorted_data.size() != original_data.size()) {
+  if (sorted_data.size() != original_keys_sorted.size()) {
     std::cerr << "[!] Validation Error: Size mismatch! Expected "
-              << original_data.size() << ", got " << sorted_data.size() << "\n";
+              << original_keys_sorted.size() << ", got " << sorted_data.size()
+              << "\n";
     return false;
   }
 
-  // Check sort order
-  for (size_t i = 1; i < sorted_data.size(); ++i) {
-    if (sorted_data[i] < sorted_data[i - 1]) {
-      std::cerr << "[!] Validation Error: Output is not sorted at position "
-                << i << "\n";
+  // Check key content and order simultaneously.
+  for (size_t i = 0; i < sorted_data.size(); ++i) {
+    if (sorted_data[i].key != original_keys_sorted[i]) {
+      std::cerr << "[!] Validation Error: Key mismatch or incorrect order at "
+                   "position "
+                << i << ". Expected key " << original_keys_sorted[i] << ", got "
+                << sorted_data[i].key << ".\n";
       return false;
     }
-  }
-
-  // Check key content preservation (permutation test)
-  std::vector<unsigned long> orig_keys, sorted_keys;
-  orig_keys.reserve(original_data.size());
-  sorted_keys.reserve(sorted_data.size());
-
-  for (const auto &record : original_data) {
-    orig_keys.push_back(record.key);
-  }
-  for (const auto &record : sorted_data) {
-    sorted_keys.push_back(record.key);
-  }
-
-  std::sort(orig_keys.begin(), orig_keys.end());
-  std::sort(sorted_keys.begin(), sorted_keys.end());
-
-  if (orig_keys != sorted_keys) {
-    std::cerr << "[!] Validation Error: Key content mismatch after sorting.\n";
-    return false;
   }
 
   return true;
 }
 
 /**
- * @brief Print comprehensive performance summary
+ * @brief Print a simple performance summary.
  */
 void print_performance_summary(const hybrid::HybridMetrics &metrics,
                                const MultiNodeConfig &config, double total_time,
-                               int rank, int size,
-                               std::ofstream *csv_file = nullptr) {
+                               int rank, int size) {
   if (rank == 0) {
-    // Display problem configuration
-    std::cout << "\n=== Multi-Node Hybrid MPI+Parallel MergeSort Results ===\n";
-    std::cout << "Problem Configuration:\n";
+    std::cout << "\n=== Multi-Node Hybrid MPI+Parallel Sort Results ===\n";
     std::cout << "  Array size: " << config.array_size << " elements\n";
     std::cout << "  Payload size: " << config.payload_size << " bytes\n";
-    std::cout << "  Total data: "
-              << format_bytes(config.array_size *
-                              (sizeof(unsigned long) + config.payload_size))
-              << "\n";
     std::cout << "  MPI processes: " << size << "\n";
-    std::cout << "  Parallel threads per node: " << config.parallel_threads
-              << "\n";
-    std::cout << "  Data pattern: ";
-    switch (config.pattern) {
-    case DataPattern::RANDOM:
-      std::cout << "Random\n";
-      break;
-    case DataPattern::SORTED:
-      std::cout << "Already Sorted\n";
-      break;
-    case DataPattern::REVERSE_SORTED:
-      std::cout << "Reverse Sorted\n";
-      break;
-    case DataPattern::NEARLY_SORTED:
-      std::cout << "Nearly Sorted\n";
-      break;
-    }
-
-    // Display performance metrics
-    std::cout << "\nPerformance Results:\n";
+    std::cout << "  Threads per node: " << config.parallel_threads << "\n";
+    std::cout << "--------------------------------------------------\n";
     std::cout << std::fixed << std::setprecision(2);
     std::cout << "  Total execution time: " << total_time << " ms\n";
-    std::cout << "  Local sort time: " << metrics.local_sort_time << " ms\n";
-    std::cout << "  Communication time: " << metrics.communication_time
-              << " ms\n";
-    std::cout << "  Merge time: " << metrics.merge_time << " ms\n";
-    std::cout << "  Data communicated: "
-              << format_bytes(metrics.bytes_communicated) << "\n";
-
-    // Calculate and display efficiency ratios
-    double comm_ratio = metrics.communication_time / total_time;
-    double compute_ratio = metrics.local_sort_time / total_time;
-
-    std::cout << "  Communication ratio: " << std::setprecision(1)
-              << (comm_ratio * 100) << "%\n";
-    std::cout << "  Computation ratio: " << std::setprecision(1)
-              << (compute_ratio * 100) << "%\n";
-
-    // Calculate throughput metrics
-    double elements_per_sec = config.array_size / (total_time / 1000.0);
-    std::cout << "  Throughput: " << std::setprecision(2)
-              << (elements_per_sec / 1e6) << " M elements/sec\n";
-
-    // Save to CSV if file provided
-    if (csv_file && csv_file->is_open()) {
-      double throughput_mrec_per_sec =
-          (config.array_size / 1e6) / (total_time / 1000.0);
-
-      HybridTestResult result("Hybrid_MPI_Parallel", config.array_size,
-                              config.payload_size, size,
-                              static_cast<int>(config.parallel_threads),
-                              total_time, throughput_mrec_per_sec, 1.0, 100.0);
-      write_hybrid_csv_row(*csv_file, result);
-    }
+    std::cout << "==================================================\n";
   }
 }
 
 /**
- * @brief Run comprehensive benchmark suite across parameter combinations
- */
-void run_benchmark_suite(const MultiNodeConfig &base_config, int rank, int size,
-                         std::ofstream &csv_file) {
-  if (rank == 0) {
-    std::cout << "\n=== Benchmark Suite ===\n";
-    std::cout << "Running comprehensive performance tests...\n";
-  }
-
-  // Define parameter ranges for systematic testing
-  std::vector<size_t> test_sizes = {1000000, 10000000, 100000000};
-  std::vector<size_t> payload_sizes = {8, 64, 256};
-  std::vector<size_t> thread_counts = {1, 4, 8, 16};
-
-  // Test all parameter combinations
-  for (size_t test_size : test_sizes) {
-    for (size_t payload_size : payload_sizes) {
-      for (size_t threads : thread_counts) {
-        // Skip unreasonable thread counts
-        if (threads > 64)
-          continue;
-
-        // Configure test parameters
-        MultiNodeConfig test_config = base_config;
-        test_config.array_size = test_size;
-        test_config.payload_size = payload_size;
-        test_config.parallel_threads = threads;
-
-        // Generate test data on root process
-        std::vector<Record> test_data;
-        if (rank == 0) {
-          test_data =
-              generate_data(test_config.array_size, test_config.payload_size,
-                            test_config.pattern);
-        }
-
-        // Execute hybrid sort with timing
-        Timer timer;
-        hybrid::HybridConfig hybrid_config;
-        hybrid_config.parallel_threads = test_config.parallel_threads;
-
-        hybrid::HybridMergeSort sorter(hybrid_config);
-        auto result = sorter.sort(test_data, test_config.payload_size);
-        double elapsed = timer.elapsed_ms();
-
-        // Process results on root
-        if (rank == 0) {
-          // Calculate performance metrics
-          double throughput_mrec_per_sec =
-              (test_size / 1e6) / (elapsed / 1000.0);
-
-          // Placeholder values for speedup and efficiency
-          double speedup = 1.0;
-          double efficiency_percent = 100.0;
-
-          // Save result to CSV
-          HybridTestResult test_result(
-              "Hybrid_MPI_Parallel", test_size, payload_size, size,
-              static_cast<int>(threads), elapsed, throughput_mrec_per_sec,
-              speedup, efficiency_percent);
-          write_hybrid_csv_row(csv_file, test_result);
-
-          // Display progress
-          std::cout << std::fixed << std::setprecision(2);
-          std::cout << "Size: " << (test_size / 1e6) << "M, "
-                    << "Payload: " << payload_size << "B, "
-                    << "Threads: " << threads << ", "
-                    << "Time: " << elapsed << "ms, "
-                    << "Throughput: " << throughput_mrec_per_sec << " MRec/s\n";
-        }
-
-        // Synchronize all processes before next test
-        MPI_Barrier(MPI_COMM_WORLD);
-      }
-    }
-  }
-}
-
-/**
- * @brief Multi-node hybrid mergesort benchmark main
+ * @brief Multi-node hybrid mergesort main application.
  */
 int main(int argc, char *argv[]) {
-  // Initialize MPI with threading support
   int provided;
   MPI_Init_thread(&argc, &argv, MPI_THREAD_FUNNELED, &provided);
-
   if (provided < MPI_THREAD_FUNNELED) {
-    std::cerr << "Error: MPI implementation does not provide required thread "
-                 "support\n";
+    std::cerr
+        << "MPI implementation does not provide required thread support\n";
     MPI_Abort(MPI_COMM_WORLD, 1);
   }
 
-  // Get MPI rank and size
   int rank, size;
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
   MPI_Comm_size(MPI_COMM_WORLD, &size);
 
   try {
     MultiNodeConfig config = parse_multi_node_args(argc, argv);
+    std::vector<Record> data_to_sort;
+    std::vector<unsigned long> original_keys;
 
-    // Handle benchmark mode
-    if (config.benchmark_mode) {
-      std::ofstream csv_file;
-      if (rank == 0) {
-        csv_file.open("hybrid_performance_results.csv");
-        if (!csv_file.is_open()) {
-          std::cerr << "Error: Cannot create hybrid_performance_results.csv"
-                    << std::endl;
-          MPI_Abort(MPI_COMM_WORLD, 1);
-        }
-        write_hybrid_csv_header(csv_file);
-      }
-
-      run_benchmark_suite(config, rank, size, csv_file);
-
-      if (rank == 0) {
-        csv_file.close();
-        std::cout << "\n=== Benchmark Complete ===\n";
-        std::cout << "Results saved to: hybrid_performance_results.csv\n";
-      }
-
-      MPI_Finalize();
-      return 0;
-    }
-
-    // Generate test data on root process only
-    std::vector<Record> original_data;
+    // Rank 0 generates data and extracts keys for validation.
     if (rank == 0) {
-      original_data =
+      data_to_sort =
           generate_data(config.array_size, config.payload_size, config.pattern);
-
+      original_keys.reserve(data_to_sort.size());
+      for (const auto &rec : data_to_sort) {
+        original_keys.push_back(rec.key);
+      }
+      // Sort the keys to create a ground truth for validation.
+      std::sort(original_keys.begin(), original_keys.end());
     }
 
-    // Configure hybrid sorter
     hybrid::HybridConfig hybrid_config;
     hybrid_config.parallel_threads = config.parallel_threads;
-
-    // Adjust thresholds based on problem characteristics
-    size_t total_threads = size * config.parallel_threads;
-    if (config.array_size < total_threads * 1024) {
-      hybrid_config.min_local_threshold = 1000;
-    }
-
-    // Execute hybrid mergesort with timing
-    Timer total_timer;
     hybrid::HybridMergeSort sorter(hybrid_config);
-    auto sorted_data = sorter.sort(original_data, config.payload_size);
+
+    Timer total_timer;
+    // Pass the vector to the sorter. Since Record is move-only, the sorter
+    // will operate on this data without any illegal copy operations.
+    auto sorted_data = sorter.sort(data_to_sort, config.payload_size);
     double total_time = total_timer.elapsed_ms();
 
-    const auto &metrics = sorter.get_metrics();
-
-    // Generate performance summary
-    if (!config.benchmark_mode) {
-      std::ofstream csv_file;
+    // Validate the result on rank 0.
+    if (!validate_hybrid_result(sorted_data, original_keys, rank)) {
       if (rank == 0) {
-        csv_file.open("hybrid_single_test_result.csv");
-        if (csv_file.is_open()) {
-          write_hybrid_csv_header(csv_file);
-        }
+        std::cerr << "[!] Correctness validation FAILED.\n";
       }
-
-      print_performance_summary(metrics, config, total_time, rank, size,
-                                (rank == 0 && csv_file.is_open()) ? &csv_file
-                                                                  : nullptr);
-
-      if (rank == 0 && csv_file.is_open()) {
-        csv_file.close();
-        std::cout
-            << "\nSingle test result saved to: hybrid_single_test_result.csv\n";
+    } else {
+      if (rank == 0) {
+        std::cout << "[+] Correctness validation PASSED.\n";
       }
     }
+
+    print_performance_summary(sorter.get_metrics(), config, total_time, rank,
+                              size);
 
   } catch (const std::exception &e) {
     if (rank == 0) {

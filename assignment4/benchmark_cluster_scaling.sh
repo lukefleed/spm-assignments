@@ -1,159 +1,97 @@
 #!/bin/bash
 
-# Default parameters (can be overridden via command line)
-DEFAULT_FF_THREADS=10
-DEFAULT_RECORDS_SIZE_M=100
-DEFAULT_PAYLOAD_SIZE_B=16
-DEFAULT_CSV_FILENAME="hybrid_performance_results.csv"
-
-# ============================================================================
+# Default parameters
+DEFAULT_THREADS=8
+DEFAULT_RECORDS_M=100
+DEFAULT_PAYLOAD_B=16
+DEFAULT_CSV_FILENAME="strong_scaling_results.csv"
 
 show_usage() {
     cat << EOF
-Usage: $0 "node_list" [ff_threads] [records_m] [payload_b] [csv_filename]
+Usage: $0 "node_list" [threads] [records_m] [payload_b] [csv_filename]
 
 Parameters:
-  node_list     Space-separated list of node counts (quoted)
-  ff_threads    FastFlow threads per MPI process (default: ${DEFAULT_FF_THREADS})
-  records_m     Dataset size in millions of records (default: ${DEFAULT_RECORDS_SIZE_M})
-  payload_b     Payload size in bytes (default: ${DEFAULT_PAYLOAD_SIZE_B})
+  node_list     Space-separated list of node counts (e.g., "1 2 4 8")
+  threads       Parallel threads per MPI process (default: ${DEFAULT_THREADS})
+  records_m     Dataset size in millions of records (default: ${DEFAULT_RECORDS_M})
+  payload_b     Payload size in bytes (default: ${DEFAULT_PAYLOAD_B})
   csv_filename  Output CSV file (default: ${DEFAULT_CSV_FILENAME})
-
-Examples:
-  $0 "1 2 4 8"                    # Full scaling test with defaults
-  $0 "1 2 4" 16 50 64             # Custom parameters
-  $0 "1 2" 8 10 8 "test.csv"      # All custom parameters
 EOF
 }
 
-# Validate and parse arguments
+# --- Argument Parsing ---
 if [ $# -lt 1 ]; then
-    echo "Error: Missing required node list parameter"
-    echo ""
+    echo "Error: Missing required node list." >&2
     show_usage
     exit 1
 fi
 
 NODE_LIST="$1"
-FF_THREADS="${2:-$DEFAULT_FF_THREADS}"
-RECORDS_SIZE_M="${3:-$DEFAULT_RECORDS_SIZE_M}"
-PAYLOAD_SIZE_B="${4:-$DEFAULT_PAYLOAD_SIZE_B}"
+THREADS="${2:-$DEFAULT_THREADS}"
+RECORDS_M="${3:-$DEFAULT_RECORDS_M}"
+PAYLOAD_B="${4:-$DEFAULT_PAYLOAD_B}"
 CSV_FILENAME="${5:-$DEFAULT_CSV_FILENAME}"
 
-# Parse and validate node list
-read -ra NODES_ARRAY <<< "$NODE_LIST"
-if [ ${#NODES_ARRAY[@]} -eq 0 ]; then
-    echo "Error: Empty node list provided"
-    exit 1
-fi
-
-# Validate all node values are positive integers
-for node in "${NODES_ARRAY[@]}"; do
-    if ! [[ "$node" =~ ^[0-9]+$ ]] || [ "$node" -lt 1 ]; then
-        echo "Error: Invalid node count '$node'. Must be positive integer."
-        exit 1
-    fi
-done
-
-# Validate other parameters
-if ! [[ "$FF_THREADS" =~ ^[0-9]+$ ]] || [ "$FF_THREADS" -lt 1 ]; then
-    echo "Error: FF_THREADS must be positive integer"
-    exit 1
-fi
-
-if ! [[ "$RECORDS_SIZE_M" =~ ^[0-9]+$ ]] || [ "$RECORDS_SIZE_M" -lt 1 ]; then
-    echo "Error: RECORDS_SIZE_M must be positive integer"
-    exit 1
-fi
-
-if ! [[ "$PAYLOAD_SIZE_B" =~ ^[0-9]+$ ]] || [ "$PAYLOAD_SIZE_B" -lt 1 ]; then
-    echo "Error: PAYLOAD_SIZE_B must be positive integer"
-    exit 1
-fi
-
-echo "Scaling test: ${NODE_LIST} nodes, ${FF_THREADS} threads/proc, ${RECORDS_SIZE_M}M records"
-
-# Clean up previous results
-if [ -f "${CSV_FILENAME}" ]; then
-    echo "Removing existing CSV file: ${CSV_FILENAME}"
-    rm -f "${CSV_FILENAME}"
-fi
-
-# Initialize progress tracking
-TOTAL_TESTS=${#NODES_ARRAY[@]}
-CURRENT_TEST=0
-START_TIME=$(date +%s)
-
-echo "Starting tests at $(date)"
+# --- Execution ---
+echo "=== Strong Scaling Test ==="
+echo "Node counts:  ${NODE_LIST}"
+echo "Threads/proc: ${THREADS}"
+echo "Record count: ${RECORDS_M}M"
+echo "Payload size: ${PAYLOAD_B}B"
 echo ""
 
+[ -f "${CSV_FILENAME}" ] && rm -f "${CSV_FILENAME}"
+echo "MPI_Procs,Threads,Total_Time_ms,Speedup_vs_StdSort,Speedup_vs_Sequential,Speedup_vs_1Node" > "${CSV_FILENAME}"
 
-# Configure FastFlow topology for baseline
-srun --nodes=1 \
-     --ntasks-per-node=1 \
-     --time=00:02:00 \
-     --mpi=pmix \
-     bash -c "cd fastflow/ff && echo 'y' | ./mapping_string.sh" >/dev/null 2>&1
-
-# Run baseline test and capture output
-BASELINE_OUTPUT=$(srun --ntasks=1 \
-                       --nodes=1 \
-                       --cpus-per-task=${FF_THREADS} \
-                       --time=00:10:00 \
-                       --mpi=pmix \
-                       bin/test_hybrid_performance ${FF_THREADS} ${RECORDS_SIZE_M} ${PAYLOAD_SIZE_B} ${CSV_FILENAME} --quiet 2>/dev/null)
-
+# --- Run 1-Node Baseline ---
+echo "Running 1-node baseline..."
+BASELINE_OUTPUT=$(mpirun -np 1 bin/test_hybrid_performance ${THREADS} ${RECORDS_M} ${PAYLOAD_B})
 if [ $? -ne 0 ]; then
-    echo "Error: Baseline test failed"
+    echo "Error: Baseline test failed." >&2
     exit 1
 fi
 
-# Extract baseline time from CSV for speedup calculations
-BASELINE_TIME=""
-if [ -f "${CSV_FILENAME}" ]; then
-    BASELINE_TIME=$(tail -n 1 "${CSV_FILENAME}" | cut -d',' -f6)
-fi
+IFS=',' read -r _ _ T_1NODE T_STDSORT T_SEQUENTIAL _ <<< "${BASELINE_OUTPUT}"
 
+SPEEDUP_STD=$(awk "BEGIN {if($T_1NODE>0) printf \"%.2f\", $T_STDSORT/$T_1NODE; else print 0}")
+SPEEDUP_SEQ=$(awk "BEGIN {if($T_1NODE>0) printf \"%.2f\", $T_SEQUENTIAL/$T_1NODE; else print 0}")
+
+echo "1,${THREADS},${T_1NODE},${SPEEDUP_STD},${SPEEDUP_SEQ},1.00" >> "${CSV_FILENAME}"
+echo "Baseline times captured. T_1NODE=${T_1NODE}ms, T_STDSORT=${T_STDSORT}ms, T_SEQUENTIAL=${T_SEQUENTIAL}ms"
 echo ""
-echo "MPI Procs   Time (ms)      Throughput (MRec/s)   Par Speedup  MPI Eff (%)  Total Eff (%)"
-echo "----------- -------------- ------------------- ------------ ------------- --------------"
 
-# Extract and display baseline with proper formatting
-echo "$BASELINE_OUTPUT" | grep "^Mergesort FF" | sed 's/^Mergesort FF/1          /'
+# --- Display Header ---
+printf "%-11s %-14s %-20s %-24s %-18s\n" "MPI Procs" "Time (ms)" "Speedup vs StdSort" "Speedup vs Sequential" "Speedup vs 1-Node"
+printf "%s\n" "--------------------------------------------------------------------------------------------"
+printf "%-11d %-14.2f %-20.2f %-24.2f %-18.2f\n" 1 ${T_1NODE} ${SPEEDUP_STD} ${SPEEDUP_SEQ} 1.00
 
+# --- Run Multi-Node Scaling Tests ---
+read -ra NODES_ARRAY <<< "$NODE_LIST"
 for nodes in "${NODES_ARRAY[@]}"; do
-    CURRENT_TEST=$((CURRENT_TEST + 1))
-
-    # Skip baseline node if already processed
-    if [ ${nodes} -eq 1 ]; then
+    if [ "$nodes" -eq 1 ]; then
         continue
     fi
 
-    # Configure FastFlow topology
-    srun --nodes=${nodes} \
-         --ntasks-per-node=1 \
-         --time=00:02:00 \
-         --mpi=pmix \
-         bash -c "cd fastflow/ff && echo 'y' | ./mapping_string.sh" >/dev/null 2>&1
+    RUN_OUTPUT=$(mpirun -np ${nodes} bin/test_hybrid_performance ${THREADS} ${RECORDS_M} ${PAYLOAD_B} \
+        --t-stdsort "${T_STDSORT}" \
+        --t-sequential "${T_SEQUENTIAL}" \
+        --t-1node "${T_1NODE}")
 
-    # MPI scaling test
-    srun --nodes=${nodes} \
-         --ntasks=${nodes} \
-         --ntasks-per-node=1 \
-         --cpus-per-task=${FF_THREADS} \
-         --time=00:10:00 \
-         --mpi=pmix \
-         bin/test_hybrid_performance ${FF_THREADS} ${RECORDS_SIZE_M} ${PAYLOAD_SIZE_B} ${CSV_FILENAME} --quiet --skip-baselines --baseline-time=${BASELINE_TIME}
-
-    # Exit on failure
     if [ $? -ne 0 ]; then
-        echo "Error: Test failed for ${nodes} nodes"
+        echo "Error: Test failed for ${nodes} nodes." >&2
         exit 1
     fi
+
+    IFS=',' read -r _ _ T_CURRENT _ _ _ <<< "${RUN_OUTPUT}"
+
+    SPEEDUP_STD=$(awk "BEGIN {if($T_CURRENT>0) printf \"%.2f\", $T_STDSORT/$T_CURRENT; else print 0}")
+    SPEEDUP_SEQ=$(awk "BEGIN {if($T_CURRENT>0) printf \"%.2f\", $T_SEQUENTIAL/$T_CURRENT; else print 0}")
+    SPEEDUP_1NODE=$(awk "BEGIN {if($T_CURRENT>0) printf \"%.2f\", $T_1NODE/$T_CURRENT; else print 0}")
+
+    echo "${nodes},${THREADS},${T_CURRENT},${SPEEDUP_STD},${SPEEDUP_SEQ},${SPEEDUP_1NODE}" >> "${CSV_FILENAME}"
+    printf "%-11d %-14.2f %-20.2f %-24.2f %-18.2f\n" ${nodes} ${T_CURRENT} ${SPEEDUP_STD} ${SPEEDUP_SEQ} ${SPEEDUP_1NODE}
 done
 
-TOTAL_TIME=$(($(date +%s) - START_TIME))
-
 echo ""
-echo "Completed: ${TOTAL_TESTS} tests in $(printf '%d:%02d' $((TOTAL_TIME/60)) $((TOTAL_TIME%60)))"
-echo "Results: ${CSV_FILENAME}"
+echo "=== Strong Scaling Test Complete ==="
+echo "Results saved to: ${CSV_FILENAME}"

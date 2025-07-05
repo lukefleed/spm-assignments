@@ -1,20 +1,25 @@
 #include "mpi_ff_mergesort.hpp"
 #include "../common/timer.hpp"
 #include <algorithm>
-#include <cmath> // For std::min with size_t and std::sqrt
+#include <cmath>
 #include <cstring>
-#include <omp.h> // Include OpenMP header
+#include <iterator> // For std::make_move_iterator
+#include <omp.h>
 #include <stdexcept>
 #include <vector>
 
 // Forward declaration for the FastFlow-based local sorter.
+// This is assumed to be defined elsewhere and is used for intra-node sorting.
 void parallel_mergesort(std::vector<Record> &data, size_t num_threads);
 
 namespace {
 
 /**
- * @brief Serializes a vector of Records into a flat byte buffer for MPI
- * transfer.
+ * @brief Packs a vector of Record objects into a byte buffer for MPI
+ * communication.
+ * @param records The records to pack.
+ * @param buffer The output byte buffer.
+ * @param payload_size The size of the payload for each record.
  */
 void pack_records(const std::vector<Record> &records, std::vector<char> &buffer,
                   size_t payload_size) {
@@ -32,7 +37,11 @@ void pack_records(const std::vector<Record> &records, std::vector<char> &buffer,
 }
 
 /**
- * @brief Deserializes a flat byte buffer into a vector of Records.
+ * @brief Unpacks a byte buffer into a vector of Record objects.
+ * @param buffer The input byte buffer.
+ * @param num_records The number of records to unpack from the buffer.
+ * @param records The output vector of records.
+ * @param payload_size The size of the payload for each record.
  */
 void unpack_records(const char *buffer, size_t num_records,
                     std::vector<Record> &records, size_t payload_size) {
@@ -81,17 +90,24 @@ std::vector<Record> HybridMergeSort::sort(std::vector<Record> &data,
   Timer total_timer;
   payload_size_ = payload_size;
   std::vector<Record> local_data;
+
+  // Phase 1: Distribute data from rank 0 to all processes.
   Timer dist_timer;
   distribute_data(local_data, data);
   update_metrics("distribution", dist_timer.elapsed_ms());
+
+  // Phase 2: Sort local data chunks in parallel.
   Timer sort_timer;
   sort_local_data(local_data);
   update_metrics("local_sort", sort_timer.elapsed_ms());
+
+  // Phase 3: Merge sorted chunks in a balanced, recursive manner.
   Timer merge_timer;
   if (mpi_size_ > 1) {
     hierarchical_merge(local_data);
   }
   update_metrics("merge", merge_timer.elapsed_ms());
+
   metrics_.total_time = total_timer.elapsed_ms();
   metrics_.local_elements = (mpi_rank_ == 0) ? local_data.size() : 0;
   return local_data;
@@ -104,6 +120,7 @@ void HybridMergeSort::distribute_data(std::vector<Record> &local_data,
   if (total_num_records == 0)
     return;
 
+  // Calculate counts and displacements for MPI_Scatterv.
   std::vector<int> send_counts(mpi_size_);
   std::vector<int> displs(mpi_size_);
   size_t base_count = total_num_records / mpi_size_;
@@ -113,6 +130,7 @@ void HybridMergeSort::distribute_data(std::vector<Record> &local_data,
     displs[i] = (i == 0) ? 0 : displs[i - 1] + send_counts[i - 1];
   }
 
+  // Convert record counts to byte counts for MPI.
   const size_t record_byte_size = sizeof(unsigned long) + payload_size_;
   std::vector<int> send_counts_bytes(mpi_size_);
   std::vector<int> displs_bytes(mpi_size_);
@@ -121,16 +139,19 @@ void HybridMergeSort::distribute_data(std::vector<Record> &local_data,
     displs_bytes[i] = displs[i] * record_byte_size;
   }
 
+  // Rank 0 packs all data into a single send buffer.
   std::vector<char> send_buffer;
   if (mpi_rank_ == 0) {
     pack_records(global_data, send_buffer, payload_size_);
   }
 
+  // Scatter data to all processes.
   std::vector<char> recv_buffer(send_counts_bytes[mpi_rank_]);
   MPI_Scatterv(send_buffer.data(), send_counts_bytes.data(),
                displs_bytes.data(), MPI_BYTE, recv_buffer.data(),
                recv_buffer.size(), MPI_BYTE, 0, MPI_COMM_WORLD);
 
+  // Unpack received bytes into Record objects.
   unpack_records(recv_buffer.data(), send_counts[mpi_rank_], local_data,
                  payload_size_);
   metrics_.bytes_communicated += recv_buffer.size();
@@ -139,122 +160,67 @@ void HybridMergeSort::distribute_data(std::vector<Record> &local_data,
 void HybridMergeSort::sort_local_data(std::vector<Record> &data) {
   if (data.empty())
     return;
+
+  // Use a parallel sort (e.g., FastFlow-based) for large local data chunks.
   if (data.size() >= config_.min_local_threshold &&
       config_.parallel_threads > 1) {
     parallel_mergesort(data, config_.parallel_threads);
   } else {
+    // Fallback to sequential sort for smaller chunks.
     std::sort(data.begin(), data.end());
   }
 }
 
 void HybridMergeSort::hierarchical_merge(std::vector<Record> &local_data) {
-  int k =
-      (mpi_size_ >= 4) ? 4 : 2; // k-nomial factor. Use k=4 for 4+ processes.
-  k = std::min(k, mpi_size_);
-  if (k <= 1)
-    return;
+  const size_t record_byte_size = sizeof(unsigned long) + payload_size_;
 
-  // --- Phase 1: Merge within sub-groups ---
-  int color = mpi_rank_ / k;
-  int group_rank = mpi_rank_ % k;
-  MPI_Comm group_comm;
-  // This is a collective call, all processes in MPI_COMM_WORLD must call it.
-  MPI_Comm_split(MPI_COMM_WORLD, color, group_rank, &group_comm);
+  // This loop implements the recursive doubling (binary-tree) merge pattern.
+  // In each step, processes are paired up, one sends its data, the other
+  // receives and merges. The distance between partners (`step`) doubles in each
+  // iteration.
+  for (int step = 1; step < mpi_size_; step *= 2) {
+    // Determine the role of the current process in this step.
+    if (mpi_rank_ % (2 * step) != 0) {
+      // Role: Sender. This process sends its data to its partner and becomes
+      // inactive.
+      int partner_rank = mpi_rank_ - step;
+      std::vector<char> send_buffer;
+      pack_records(local_data, send_buffer, payload_size_);
+      MPI_Send(send_buffer.data(), send_buffer.size(), MPI_BYTE, partner_rank,
+               0, MPI_COMM_WORLD);
 
-  int group_size;
-  MPI_Comm_size(group_comm, &group_size);
+      // Once data is sent, this process has no more work to do.
+      local_data.clear();
+      break;
+    }
 
-  if (group_rank != 0) {
-    // Senders send their data to the group leader (rank 0 in group_comm).
-    // Using a blocking send is safe here as the receiver posts non-blocking
-    // receives.
-    std::vector<char> send_buffer;
-    pack_records(local_data, send_buffer, payload_size_);
-    MPI_Send(send_buffer.data(), send_buffer.size(), MPI_BYTE, 0, 0,
-             group_comm);
-  } else {
-    // Group leader receives data from all other members non-blockingly to
-    // prevent deadlock.
-    std::vector<std::vector<char>> recv_buffers(group_size);
-    std::vector<MPI_Request> requests;
-    for (int i = 1; i < group_size; ++i) {
+    // Role: Receiver. This process will receive data from its partner if the
+    // partner exists.
+    int partner_rank = mpi_rank_ + step;
+    if (partner_rank < mpi_size_) {
+      // Probe to get the size of the incoming message.
       MPI_Status status;
-      MPI_Probe(i, 0, group_comm, &status); // Find message size first.
+      MPI_Probe(partner_rank, 0, MPI_COMM_WORLD, &status);
       int incoming_bytes;
       MPI_Get_count(&status, MPI_BYTE, &incoming_bytes);
-      if (incoming_bytes > 0) {
-        recv_buffers[i].resize(incoming_bytes);
-        MPI_Request req;
-        MPI_Irecv(recv_buffers[i].data(), incoming_bytes, MPI_BYTE, i, 0,
-                  group_comm, &req);
-        requests.push_back(req);
-      }
-    }
-    MPI_Waitall(requests.size(), requests.data(), MPI_STATUSES_IGNORE);
 
-    // After all data is received, merge it.
-    for (int i = 1; i < group_size; ++i) {
-      if (!recv_buffers[i].empty()) {
+      if (incoming_bytes > 0) {
+        // Receive the data.
+        std::vector<char> recv_buffer(incoming_bytes);
+        MPI_Recv(recv_buffer.data(), incoming_bytes, MPI_BYTE, partner_rank, 0,
+                 MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+        metrics_.bytes_communicated += incoming_bytes;
+
+        // Unpack the data into a temporary vector.
         std::vector<Record> partner_data;
-        const size_t record_byte_size = sizeof(unsigned long) + payload_size_;
-        unpack_records(recv_buffers[i].data(),
-                       recv_buffers[i].size() / record_byte_size, partner_data,
-                       payload_size_);
+        unpack_records(recv_buffer.data(), incoming_bytes / record_byte_size,
+                       partner_data, payload_size_);
+
+        // Merge the received data with the local data.
         parallel_merge(local_data, partner_data);
       }
     }
-  }
-  MPI_Comm_free(&group_comm);
-
-  // Processes that were senders are now idle and have no more data.
-  // They must still participate in the next collective call to avoid deadlock.
-  if (group_rank != 0) {
-    local_data.clear();
-  }
-
-  // --- Phase 2: Merge between group leaders ---
-  // All processes MUST call MPI_Comm_split. Non-leaders use MPI_UNDEFINED
-  // to signal they should not be part of the new communicator.
-  int leader_color = (mpi_rank_ % k == 0) ? 0 : MPI_UNDEFINED;
-  MPI_Comm leader_comm;
-  MPI_Comm_split(MPI_COMM_WORLD, leader_color, mpi_rank_, &leader_comm);
-
-  if (leader_comm != MPI_COMM_NULL) {
-    int leader_rank, leader_size;
-    MPI_Comm_rank(leader_comm, &leader_rank);
-    MPI_Comm_size(leader_comm, &leader_size);
-
-    // A standard, robust binary merge among the small number of leaders.
-    for (int step = 1; step < leader_size; step *= 2) {
-      if (leader_rank % (2 * step) != 0) {
-        int target_rank = leader_rank - step;
-        std::vector<char> send_buffer;
-        pack_records(local_data, send_buffer, payload_size_);
-        MPI_Send(send_buffer.data(), send_buffer.size(), MPI_BYTE, target_rank,
-                 0, leader_comm);
-        local_data.clear();
-        break;
-      }
-      int source_rank = leader_rank + step;
-      if (source_rank < leader_size) {
-        MPI_Status status;
-        MPI_Probe(source_rank, 0, leader_comm, &status);
-        int incoming_bytes;
-        MPI_Get_count(&status, MPI_BYTE, &incoming_bytes);
-        if (incoming_bytes > 0) {
-          std::vector<char> recv_buffer(incoming_bytes);
-          MPI_Recv(recv_buffer.data(), incoming_bytes, MPI_BYTE, source_rank, 0,
-                   leader_comm, MPI_STATUS_IGNORE);
-          std::vector<Record> partner_data;
-          const size_t record_byte_size = sizeof(unsigned long) + payload_size_;
-          unpack_records(recv_buffer.data(),
-                         recv_buffer.size() / record_byte_size, partner_data,
-                         payload_size_);
-          parallel_merge(local_data, partner_data);
-        }
-      }
-    }
-    MPI_Comm_free(&leader_comm);
   }
 }
 
@@ -269,6 +235,7 @@ void HybridMergeSort::parallel_merge(std::vector<Record> &local_data,
   const size_t total_size = local_data.size() + partner_data.size();
   const size_t parallel_threshold = 20000;
 
+  // Use sequential merge for small total sizes to avoid parallel overhead.
   if (total_size < parallel_threshold || config_.parallel_threads <= 1) {
     std::vector<Record> merged;
     merged.reserve(total_size);
@@ -281,7 +248,10 @@ void HybridMergeSort::parallel_merge(std::vector<Record> &local_data,
     return;
   }
 
+  // Parallel merge implementation using OpenMP.
   std::vector<Record> merged(total_size);
+
+  // Ensure A is the larger vector for better pivot selection.
   std::vector<Record> &A =
       (local_data.size() >= partner_data.size()) ? local_data : partner_data;
   std::vector<Record> &B =
@@ -291,6 +261,8 @@ void HybridMergeSort::parallel_merge(std::vector<Record> &local_data,
   std::vector<size_t> split_A(num_threads + 1, 0);
   std::vector<size_t> split_B(num_threads + 1, 0);
 
+// Phase 1: Partition the larger array A into `num_threads` chunks.
+// For each pivot in A, find its corresponding split point in B.
 #pragma omp parallel for
   for (int i = 1; i < num_threads; ++i) {
     split_A[i] = (A.size() * i) / num_threads;
@@ -300,6 +272,8 @@ void HybridMergeSort::parallel_merge(std::vector<Record> &local_data,
   split_A[num_threads] = A.size();
   split_B[num_threads] = B.size();
 
+// Phase 2: Each thread merges its assigned sub-arrays into the final
+// destination.
 #pragma omp parallel for
   for (int i = 0; i < num_threads; ++i) {
     size_t start_A = split_A[i];
