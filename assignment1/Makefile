@@ -6,11 +6,13 @@ USE_AVX512	?= 1
 # Define flags based on configuration
 ifeq ($(USE_AVX512),1)
 	AVX_FLAG = -march=native
+	LOOP_ALIGN = 64
 else
 	AVX_FLAG = -mavx2
+	LOOP_ALIGN = 32
 endif
 AUTOFLAGS = $(AVX_FLAG) -ftree-vectorize -fopenmp
-AVXFLAGS = -mavx2 -mfma -malign-double -falign-loops=32 -fopenmp
+AVXFLAGS = -mavx2 -mfma -malign-double -falign-loops=$(LOOP_ALIGN) -fopenmp
 CXXFLAGS	+= -Wall -fno-math-errno
 INCLUDES	= -I. -I./include
 LIBS	= -lpthread
