@@ -1,0 +1,42 @@
+[
+  {
+    "directory": "/home/l.lombardo11/spm-assignments/assignment3",
+    "command": "g++ -Wall -Wextra -pedantic -std=c++17 -O3 -DNDEBUG -fopenmp -Isrc/app -Isrc/core -Isrc/utils -Iminiz -c src/app/minizp.cpp -o obj/par/release/app/minizp.o",
+    "file": "src/app/minizp.cpp"
+  },
+  {
+    "directory": "/home/l.lombardo11/spm-assignments/assignment3",
+    "command": "g++ -Wall -Wextra -pedantic -std=c++17 -O3 -DNDEBUG -fopenmp -Isrc/app -Isrc/core -Isrc/utils -Iminiz -c src/app/test_main.cpp -o obj/par/release/app/test_main.o",
+    "file": "src/app/test_main.cpp"
+  },
+  {
+    "directory": "/home/l.lombardo11/spm-assignments/assignment3",
+    "command": "g++ -Wall -Wextra -pedantic -std=c++17 -O3 -DNDEBUG -fopenmp -Isrc/app -Isrc/core -Isrc/utils -Iminiz -c src/app/bench_main.cpp -o obj/par/release/app/bench_main.o",
+    "file": "src/app/bench_main.cpp"
+  },
+  {
+    "directory": "/home/l.lombardo11/spm-assignments/assignment3",
+    "command": "g++ -Wall -Wextra -pedantic -std=c++17 -O3 -DNDEBUG -fopenmp -Isrc/app -Isrc/core -Isrc/utils -Iminiz -c src/core/compressor.cpp -o obj/par/release/core/compressor.o",
+    "file": "src/core/compressor.cpp"
+  },
+  {
+    "directory": "/home/l.lombardo11/spm-assignments/assignment3",
+    "command": "g++ -Wall -Wextra -pedantic -std=c++17 -O3 -DNDEBUG -fopenmp -Isrc/app -Isrc/core -Isrc/utils -Iminiz -c src/core/file_handler.cpp -o obj/par/release/core/file_handler.o",
+    "file": "src/core/file_handler.cpp"
+  },
+  {
+    "directory": "/home/l.lombardo11/spm-assignments/assignment3",
+    "command": "g++ -Wall -Wextra -pedantic -std=c++17 -O3 -DNDEBUG -fopenmp -Isrc/app -Isrc/core -Isrc/utils -Iminiz -c src/utils/bench_utils.cpp -o obj/par/release/utils/bench_utils.o",
+    "file": "src/utils/bench_utils.cpp"
+  },
+  {
+    "directory": "/home/l.lombardo11/spm-assignments/assignment3",
+    "command": "g++ -Wall -Wextra -pedantic -std=c++17 -O3 -DNDEBUG -fopenmp -Isrc/app -Isrc/core -Isrc/utils -Iminiz -c src/utils/test_utils.cpp -o obj/par/release/utils/test_utils.o",
+    "file": "src/utils/test_utils.cpp"
+  },
+  {
+    "directory": "/home/l.lombardo11/spm-assignments/assignment3",
+    "command": "g++ -Wall -Wextra -pedantic -std=c++17 -O3 -DNDEBUG -fopenmp -Isrc/app -Isrc/core -Isrc/utils -Iminiz -c miniz/miniz.c -o obj/par/release/miniz.o",
+    "file": "miniz/miniz.c"
+  }
+]

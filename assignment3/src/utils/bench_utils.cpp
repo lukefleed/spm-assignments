@@ -6,7 +6,6 @@
 
 #include "bench_utils.hpp" // Declarations of benchmarking utilities
 #include <algorithm>       // For nth_element, max_element
-#include <iostream>        // For error messages
 #include <vector>          // For timing data container
 
 namespace BenchUtils {

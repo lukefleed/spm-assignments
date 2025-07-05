@@ -199,8 +199,6 @@ Benchmark driver that generates test data, sweeps over thread counts and block s
 
 ### plot.py
 
-**Synopsis**
-
 ```
 ./plot.py [OPTIONS]
 ```

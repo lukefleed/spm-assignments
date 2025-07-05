@@ -14,7 +14,6 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>     // For errors/verbose output
-#include <memory>       // For unique_ptr
 #include <omp.h>        // For parallel block compression
 #include <sys/mman.h>   // For mmap/munmap
 #include <sys/stat.h>   // For file stats, fstat
@@ -40,9 +39,9 @@ namespace { // Start anonymous namespace
  *        Manages the mapped memory region and the associated file descriptor.
  */
 class MappedFile {
-  unsigned char *ptr_ = nullptr;
-  size_t size_ = 0;
-  int fd_ = -1; // File descriptor if opened by mapFile
+  unsigned char *ptr_ = nullptr; //< Pointer to the mapped memory region
+  size_t size_ = 0;              //< Size of the mapped region in bytes
+  int fd_ = -1;                  //< File descriptor that is managed internally
 
 public:
   MappedFile() = default;
@@ -69,22 +68,42 @@ public:
     return *this;
   }
 
+  // This is the key of the pattern RAII: it calls unmap() automatically
   ~MappedFile() noexcept { unmap(); }
 
   /**
-   * @brief Maps an existing file into memory.
-   * @param fname Path to the file.
-   * @param size_in_out Expected size. If 0, determined via fstat. Updated with
-   * actual size.
-   * @param prot Memory protection flags (e.g., PROT_READ).
-   * @param flags Mapping flags (e.g., MAP_PRIVATE).
-   * @param open_flags Flags for opening the file (e.g., O_RDONLY).
-   * @return true if mapping was successful, false otherwise.
+   * @brief Maps a file into memory using mmap system call.
+   *
+   * This function opens a file and creates a memory mapping for it. It handles
+   * file size detection automatically if size_in_out is 0, and properly manages
+   * file descriptors based on the mapping type.
+   *
+   * @param fname The path to the file to be mapped
+   * @param size_in_out [in/out] Size of the mapping. If 0 on input, the file
+   * size will be determined automatically and returned in this parameter
+   * @param prot Memory protection flags for mmap (PROT_READ, PROT_WRITE, etc.)
+   * @param flags Memory mapping flags (MAP_PRIVATE, MAP_SHARED, etc.)
+   * @param open_flags File opening flags (default: O_RDONLY)
+   *
+   * @return true if mapping was successful, false otherwise
+   *
+   * @note This function automatically calls unmap() to release any previous
+   * mapping
+   * @note For empty files, no actual mapping is created and ptr_ is set to
+   * nullptr
+   * @note File descriptor management varies based on protection and mapping
+   * flags:
+   *       - For read-only or private mappings, fd is closed after mapping
+   *       - For shared writable mappings, fd may be kept open for potential
+   * fsync operations
+   * @note On failure, all resources are properly cleaned up and member
+   * variables reset
    */
   bool map(const char *fname, size_t &size_in_out, int prot, int flags,
            int open_flags = O_RDONLY) {
     unmap(); // Ensure previous mapping is released
 
+    // Open the file with the specified flags
     fd_ = open(fname, open_flags);
     if (fd_ < 0) {
       std::cerr << "Error: Failed opening file " << fname << " - "
@@ -92,8 +111,9 @@ public:
       return false;
     }
 
+    // If size_in_out is 0, determine the file size
     if (size_in_out == 0) {
-      struct stat s;
+      struct stat s; // Use stat to get file size
       if (fstat(fd_, &s) != 0) {
         std::cerr << "Error: Failed to fstat file " << fname << " - "
                   << strerror(errno) << std::endl;
@@ -101,8 +121,8 @@ public:
         fd_ = -1;
         return false;
       }
-      size_in_out = s.st_size;
-      if (size_in_out == 0) { // Handle empty file case
+      size_in_out = s.st_size; // Update size_in_out with the file size
+      if (size_in_out == 0) {  // Handle empty file case
         close(fd_);
         fd_ = -1;
         size_ = 0;
@@ -111,17 +131,18 @@ public:
       }
     }
 
+    // Memory map the file with the specified size and flags
     ptr_ = static_cast<unsigned char *>(
         mmap(nullptr, size_in_out, prot, flags, fd_, 0));
     if (ptr_ == MAP_FAILED) {
       std::cerr << "Error: Failed to memory map file " << fname << " - "
                 << strerror(errno) << std::endl;
-      ptr_ = nullptr;
+      ptr_ = nullptr; // Reset pointer on failure
       close(fd_);
       fd_ = -1;
       return false;
     }
-    size_ = size_in_out;
+    size_ = size_in_out; // Store the size of the mapped region
     // Keep fd_ open for mapped read-only files, close for others later if
     // needed
 
@@ -140,12 +161,26 @@ public:
   }
 
   /**
-   * @brief Creates/truncates a file, allocates space, and maps it for writing.
-   * @param fname Path to the output file.
-   * @param size The desired size of the file.
-   * @param prot Memory protection flags (default: PROT_READ | PROT_WRITE).
-   * @param flags Mapping flags (default: MAP_SHARED).
-   * @return true if allocation and mapping were successful, false otherwise.
+   * @brief Allocates and memory-maps a file for read/write operations.
+   *
+   * This function creates or truncates a file to the specified size and maps it
+   * into memory for efficient access. It handles special cases like zero-size
+   * files and provides proper error handling with cleanup on failure.
+   *
+   * @param fname The path to the file to create/open and map
+   * @param size The size in bytes to allocate for the file. If 0, only
+   * creates/truncates the file without mapping
+   * @param prot Memory protection flags for the mapping (default: PROT_READ |
+   * PROT_WRITE)
+   * @param flags Memory mapping flags (default: MAP_SHARED)
+   *
+   * @return true if the operation succeeds, false otherwise
+   *
+   * @note For zero-size files, the function creates/truncates the file but
+   * doesn't perform memory mapping
+   * @note The file descriptor remains open for shared writable mappings
+   * @note On failure, all allocated resources are properly cleaned up
+   * @note Calls unmap() at the beginning to clean up any existing mappings
    */
   bool allocate_and_map(const char *fname, size_t size,
                         int prot = PROT_READ | PROT_WRITE,
@@ -215,10 +250,23 @@ public:
 // --- Large File Header I/O ---
 
 /**
- * @brief Reads the LargeFileHeader from the beginning of a stream.
- * @param in_file Input file stream positioned at the start.
- * @param header The header structure to populate.
- * @return true if read successfully and magic/version match, false otherwise.
+ * @brief Reads and validates a large file header from an input file stream.
+ *
+ * This function reads a LargeFileHeader structure from the given input file
+ * stream and performs validation checks on the magic number and version fields
+ * to ensure the file format is supported.
+ *
+ * @param in_file Reference to the input file stream to read from
+ * @param header Reference to LargeFileHeader structure to populate with read
+ * data
+ *
+ * @return true if the header was successfully read and validated, false
+ * otherwise
+ *
+ * @note Validation checks include:
+ *       - Successful read operation
+ *       - Magic number matches MAGIC_NUMBER_LARGE_FILE
+ *       - Version is not greater than FORMAT_VERSION
  */
 bool read_large_file_header(std::ifstream &in_file, LargeFileHeader &header) {
   in_file.read(reinterpret_cast<char *>(&header), sizeof(header));
@@ -232,16 +280,24 @@ bool read_large_file_header(std::ifstream &in_file, LargeFileHeader &header) {
 }
 
 /**
- * @brief Reads the block metadata (compressed sizes) from a stream.
- * @param in_file Input file stream positioned after the header.
- * @param block_sizes Vector to store the read sizes.
- * @param num_blocks Expected number of blocks.
- * @return true if read successfully, false otherwise.
+ * @brief Reads block metadata from a binary file stream.
+ *
+ * This function reads a sequence of block sizes from the input file stream
+ * and stores them in the provided vector. The block sizes are expected to
+ * be stored as uint64_t values in binary format.
+ *
+ * @param in_file Reference to the input file stream to read from
+ * @param block_sizes Vector to store the read block sizes (will be resized)
+ * @param num_blocks Number of blocks to read metadata for
+ * @return true if the read operation was successful, false otherwise
+ *
+ * @note The file stream position must be at the correct location before calling
+ * this function
  */
 bool read_block_metadata(std::ifstream &in_file,
                          std::vector<uint64_t> &block_sizes,
                          size_t num_blocks) {
-  block_sizes.resize(num_blocks);
+  block_sizes.resize(num_blocks); // Resize to hold all block sizes
   in_file.read(reinterpret_cast<char *>(block_sizes.data()),
                num_blocks * sizeof(uint64_t));
   return in_file.good();
@@ -254,11 +310,17 @@ bool read_block_metadata(std::ifstream &in_file,
 //-----------------------------------------------------------------------------
 
 /**
- * @brief Chooses and runs the appropriate compression routine for a file.
- * @param[in] input_path Path to the input file to compress.
- * @param[in] cfg Configuration parameters including thresholds and threading
- * options.
- * @return true if compression succeeded, false otherwise.
+ * @brief Processes a file for compression by determining the appropriate
+ * compression strategy.
+ *
+ * This function analyzes the input file size and routes it to either the large
+ * file or small file compression handler based on the configured threshold.
+ *
+ * @param input_path The path to the input file to be processed
+ * @param cfg Configuration data containing compression settings and thresholds
+ *
+ * @return true if the file was successfully processed and compressed, false
+ * otherwise
  */
 bool process_file(const std::string &input_path, const ConfigData &cfg) {
   std::error_code ec;
@@ -281,11 +343,24 @@ bool process_file(const std::string &input_path, const ConfigData &cfg) {
 }
 
 /**
- * @brief Chooses and runs the appropriate decompression routine for a file.
- * @param[in] input_path Path to the compressed input file.
- * @param[in] cfg Configuration parameters including verbosity and removal
- * flags.
- * @return true if decompression succeeded, false otherwise.
+ * @brief Decompresses a file by automatically detecting its format and calling
+ * the appropriate decompression function.
+ *
+ * This function first attempts to determine if the input file is in large
+ * format by reading and validating its header. If the file is identified as
+ * large format, it delegates to decompress_large_file(). Otherwise, it
+ * validates the file size for small format compatibility and delegates to
+ * decompress_small_file().
+ *
+ * @param input_path The path to the compressed file to decompress
+ * @param cfg Configuration data containing verbosity level and other settings
+ *
+ * @return true if decompression was successful, false otherwise
+ *
+ * @note The function performs format detection by:
+ *       1. Attempting to read a large file header (checks magic number/version)
+ *       2. If not large format, validates file size is at least
+ * sizeof(uint64_t) for small format
  */
 bool decompress_file(const std::string &input_path, const ConfigData &cfg) {
   std::ifstream test_file(input_path, std::ios::binary);
@@ -323,12 +398,33 @@ bool decompress_file(const std::string &input_path, const ConfigData &cfg) {
 //-----------------------------------------------------------------------------
 
 /**
- * @brief Compresses small files using a single-threaded zlib stream.
- *        Writes a 64-bit original size header followed by compressed data.
- * @param[in] input_path Path to the input file.
- * @param[in] input_size Size of the input file in bytes.
- * @param[in] cfg Configuration parameters including removal option.
- * @return true if compression succeeded, false otherwise.
+ * @brief Compresses a small file using miniz compression library.
+ *
+ * This function handles compression of files that can be entirely loaded into
+ * memory. It memory-maps the input file, compresses the data using miniz's
+ * compress() function, and writes the compressed output with a prepended 64-bit
+ * original size header.
+ *
+ * @param input_path Path to the input file to be compressed
+ * @param input_size Size of the input file in bytes (0 for auto-detection)
+ * @param cfg Configuration data containing verbosity level and removal options
+ *
+ * @return true if compression succeeds and output file is written successfully,
+ *         false if any error occurs during the process
+ *
+ * @details
+ * - Memory-maps the input file for efficient reading
+ * - Handles special case of 0-byte files by creating output with only size
+ * header
+ * - Uses miniz compressBound() to allocate sufficient buffer space
+ * - Output format: [8-byte original size][compressed data]
+ * - Output file has SUFFIX appended to original filename
+ * - Optionally removes original file if cfg.remove_origin is true
+ *
+ * @note The function automatically unmaps the input file when MappedFile goes
+ * out of scope
+ * @warning If compression fails or file operations fail, partial output files
+ * are cleaned up
  */
 bool compress_small_file(const std::string &input_path, size_t input_size,
                          const ConfigData &cfg) {
@@ -426,18 +522,40 @@ bool compress_small_file(const std::string &input_path, size_t input_size,
 }
 
 /**
- * @brief Compresses large files by splitting into blocks and compressing in
- * parallel. Builds a custom header with block metadata and writes all blocks to
- * a single output file.
- * @param[in] input_path Path to the input file.
- * @param[in] input_size Size of the input file in bytes.
- * @param[in] cfg Configuration parameters including block size and thread
- * count.
- * @return true if compression succeeded, false otherwise.
+ * @brief Compresses a large file using parallel block-based compression with
+ * memory mapping.
+ *
+ * This function performs efficient compression of large files by:
+ * 1. Memory-mapping the input file for fast access
+ * 2. Dividing the file into blocks and compressing them in parallel
+ * 3. Writing the compressed output using memory mapping for optimal performance
+ *
+ * The compression process consists of three phases:
+ * - Phase 1: Parallel compression of file blocks into memory buffers
+ * - Phase 2: Sequential writing of compressed data to output file
+ * - Phase 3: Cleanup of allocated resources
+ *
+ * @param input_path Path to the input file to be compressed
+ * @param input_size Size of the input file in bytes
+ * @param cfg Configuration data containing compression parameters:
+ *            - block_size: Size of each compression block
+ *            - num_threads: Number of parallel threads to use
+ *            - verbosity: Level of diagnostic output
+ *            - remove_origin: Whether to delete the original file after
+ * compression
+ *
+ * @return true if compression succeeds, false if any error occurs
+ *
+ * @note The output file is created with the same name as input plus SUFFIX
+ * extension
+ * @note Uses zlib compression with default settings for each block
+ * @note Memory-maps both input and output files for efficient I/O operations
+ * @note Thread-safe compression using per-thread compressor states and buffers
+ * @note Automatically removes incomplete output file on failure
  */
 bool compress_large_file(const std::string &input_path, size_t input_size,
                          const ConfigData &cfg) {
-  MappedFile mapped_in;
+  MappedFile mapped_in;             // RAII wrapper for input file mapping
   size_t current_size = input_size; // map() will confirm this size
   if (!mapped_in.map(input_path.c_str(), current_size, PROT_READ,
                      MAP_PRIVATE)) {
@@ -464,7 +582,8 @@ bool compress_large_file(const std::string &input_path, size_t input_size,
   // Pre-allocate per-thread temporary buffers to avoid repeated vector
   // allocations
   int thread_count = cfg.num_threads;
-  std::vector<std::vector<unsigned char>> thread_temp_buffers(thread_count);
+  std::vector<std::vector<unsigned char>> thread_temp_buffers(
+      thread_count); // Per-thread temp buffers
   for (int t = 0; t < thread_count; ++t) {
     // reserve max possible compressed size once per thread
     thread_temp_buffers[t].reserve(compressBound(cfg.block_size));
@@ -473,17 +592,22 @@ bool compress_large_file(const std::string &input_path, size_t input_size,
   // overhead
   std::vector<tdefl_compressor *> thread_deflators(thread_count);
   for (int t = 0; t < thread_count; ++t) {
-    thread_deflators[t] = tdefl_compressor_alloc();
+    thread_deflators[t] =
+        tdefl_compressor_alloc(); // Allocate per-thread compressor
     // Initialize compressor state once per thread
     tdefl_init(thread_deflators[t], nullptr,
                nullptr, /* flags: default probes + zlib header */
                TDEFL_WRITE_ZLIB_HEADER | TDEFL_DEFAULT_MAX_PROBES);
   }
 
-  std::vector<std::vector<unsigned char>> compressed_blocks_data(num_blocks);
-  std::vector<uint64_t> compressed_block_sizes(num_blocks);
-  std::vector<int> block_mz_results(num_blocks, Z_OK);
-  std::atomic<bool> compression_error_occurred = false;
+  std::vector<std::vector<unsigned char>> compressed_blocks_data(
+      num_blocks); // Compressed data for each block
+  std::vector<uint64_t> compressed_block_sizes(
+      num_blocks); // Sizes of compressed blocks
+  std::vector<int> block_mz_results(
+      num_blocks, Z_OK); // Results of miniz compression for each block
+  std::atomic<bool> compression_error_occurred =
+      false; // Atomic flag to track any compression errors
 
 // Phase 1: Parallel block read & compression using memory-mapped input
 #pragma omp parallel for num_threads(cfg.num_threads) schedule(dynamic)
@@ -494,24 +618,26 @@ bool compress_large_file(const std::string &input_path, size_t input_size,
     size_t offset = i * cfg.block_size;
     size_t blk_size =
         (i == num_blocks - 1) ? (input_size - offset) : cfg.block_size;
-    const unsigned char *block_ptr = in_ptr + offset;
+    const unsigned char *block_ptr = in_ptr + offset; // Pointer to block data
 
     int tid = omp_get_thread_num();
-    tdefl_compressor *def = thread_deflators[tid];
+    tdefl_compressor *def =
+        thread_deflators[tid]; // Get thread-specific compressor
     // Reset compressor state per block
     tdefl_init(def, nullptr, nullptr,
                TDEFL_WRITE_ZLIB_HEADER | TDEFL_DEFAULT_MAX_PROBES);
-    auto &temp_buf = thread_temp_buffers[tid];
-    size_t need = compressBound(blk_size);
-    temp_buf.reserve(need);
-    temp_buf.resize(need);
-    mz_ulong out_len = need;
+    auto &temp_buf =
+        thread_temp_buffers[tid];          // Get thread-specific temp buffer
+    size_t need = compressBound(blk_size); // Calculate max compressed size
+    temp_buf.reserve(need);  // Ensure buffer can hold compressed data
+    temp_buf.resize(need);   // Resize to max size
+    mz_ulong out_len = need; // Output length for miniz compression
     int res = compress(temp_buf.data(), &out_len, block_ptr, blk_size);
-    block_mz_results[i] = res;
-    if (res == Z_OK) {
-      compressed_block_sizes[i] = out_len;
-      temp_buf.resize(out_len);
-      compressed_blocks_data[i] = temp_buf;
+    block_mz_results[i] = res; // Store result of miniz compression
+    if (res == Z_OK) {         // Only proceed if compression succeeded
+      compressed_block_sizes[i] = out_len;  // Store compressed size
+      temp_buf.resize(out_len);             // Resize to actual compressed size
+      compressed_blocks_data[i] = temp_buf; // Store compressed data
     } else {
       compression_error_occurred = true;
     }
@@ -525,7 +651,8 @@ bool compress_large_file(const std::string &input_path, size_t input_size,
   if (success) {
     // Double check results (optional sanity check)
     for (uint64_t i = 0; i < num_blocks; ++i) {
-      if (block_mz_results[i] != Z_OK) {
+      if (block_mz_results[i] !=
+          Z_OK) { // If any block failed, set success to false
         if (cfg.verbosity >= 1)
           std::cerr << "Miniz compression failed for block " << i << " of "
                     << input_path << ": " << mz_error(block_mz_results[i])
@@ -536,8 +663,9 @@ bool compress_large_file(const std::string &input_path, size_t input_size,
     }
   } else {
     // Find and log the first error if not already logged inside loop
-    for (uint64_t i = 0; i < num_blocks; ++i) {
-      if (block_mz_results[i] != Z_OK) {
+    for (uint64_t i = 0; i < num_blocks; ++i) { // Check all blocks
+      if (block_mz_results[i] != Z_OK) { // If any block failed compression
+        // Log the first error encountered
         if (cfg.verbosity >= 1)
           std::cerr << "Miniz compression failed for block " << i << " of "
                     << input_path << ": " << mz_error(block_mz_results[i])
@@ -547,7 +675,7 @@ bool compress_large_file(const std::string &input_path, size_t input_size,
     }
   }
 
-  std::string output_path = input_path + SUFFIX;
+  std::string output_path = input_path + SUFFIX; // Output file path with SUFFIX
   if (success) {
     // --- Phase 2: Memory-map output and memcpy blocks to reduce syscall
     // overhead ---
@@ -555,7 +683,7 @@ bool compress_large_file(const std::string &input_path, size_t input_size,
       // Initialize header correctly
       LargeFileHeader header; // Default initialize (magic, version)
       header.original_size = static_cast<uint64_t>(input_size);
-      header.num_blocks = num_blocks;
+      header.num_blocks = num_blocks; // Number of compressed blocks
 
       size_t header_size = sizeof(header);
       size_t meta_size = num_blocks * sizeof(uint64_t);
@@ -571,16 +699,18 @@ bool compress_large_file(const std::string &input_path, size_t input_size,
                     << std::endl;
         success = false;
       } else {
-        unsigned char *out_ptr = mapped_out.get();
+        unsigned char *out_ptr = mapped_out.get(); // Mapped output pointer
         // Copy header and metadata
-        memcpy(out_ptr, &header, header_size);
-        memcpy(out_ptr + header_size, compressed_block_sizes.data(), meta_size);
+        memcpy(out_ptr, &header, header_size); // Copy header to output
+        memcpy(out_ptr + header_size, compressed_block_sizes.data(),
+               meta_size); // Copy metadata
         // Precompute output offsets for each block
-        std::vector<size_t> data_offsets(num_blocks);
-        size_t cur_offset = header_size + meta_size;
-        for (size_t i = 0; i < num_blocks; ++i) {
-          data_offsets[i] = cur_offset;
-          cur_offset += compressed_block_sizes[i];
+        std::vector<size_t> data_offsets(num_blocks); // Offsets for each block
+        size_t cur_offset =
+            header_size + meta_size; // Start after header and metadata
+        for (size_t i = 0; i < num_blocks; ++i) {  // Calculate offsets
+          data_offsets[i] = cur_offset;            // Offset for this block
+          cur_offset += compressed_block_sizes[i]; // Update for next block
         }
 // Parallel copy compressed blocks into mapped region using precomputed offsets
 #pragma omp parallel for num_threads(cfg.num_threads) schedule(dynamic)
@@ -588,7 +718,7 @@ bool compress_large_file(const std::string &input_path, size_t input_size,
           size_t sz = compressed_block_sizes[i];
           if (sz > 0) {
             memcpy(out_ptr + data_offsets[i], compressed_blocks_data[i].data(),
-                   sz);
+                   sz); // Copy compressed block data to output
           }
         }
         // Unmap to flush
@@ -598,11 +728,11 @@ bool compress_large_file(const std::string &input_path, size_t input_size,
   }
 
   // --- Phase 3: Cleanup ---
-  // Free allocated tdefl_compressor states
+  // Free allocated tdefl_compressor states and reset pointers
   for (int t = 0; t < thread_count; ++t) {
     if (thread_deflators[t]) {
-      tdefl_compressor_free(thread_deflators[t]);
-      thread_deflators[t] = nullptr; // Good practice
+      tdefl_compressor_free(thread_deflators[t]); // Free compressor state
+      thread_deflators[t] = nullptr;              // Good practice
     }
   }
 
@@ -624,13 +754,40 @@ bool compress_large_file(const std::string &input_path, size_t input_size,
 }
 
 /**
- * @brief Decompresses large files created with the custom block format in
- * parallel. Reads header and metadata, maps files, then decompresses each block
- * concurrently.
- * @param[in] input_path Path to the compressed input file.
- * @param[in] cfg Configuration parameters including block size and thread
- * count.
- * @return true if decompression succeeded, false otherwise.
+ * @brief Decompresses a large file that was compressed using block-based
+ * compression.
+ *
+ * This function implements a multi-phase decompression process for large files
+ * that were compressed in blocks. It uses memory mapping and parallel
+ * processing to efficiently decompress multiple blocks simultaneously.
+ *
+ * @param input_path Path to the compressed input file
+ * @param cfg Configuration data containing decompression settings including:
+ *            - verbosity: Level of logging output
+ *            - num_threads: Number of threads for parallel decompression
+ *            - block_size: Size of each decompression block
+ *            - remove_origin: Whether to delete the input file after successful
+ * decompression
+ *
+ * @return true if decompression was successful, false otherwise
+ *
+ * @details The function operates in four main phases:
+ * 1. Header Reading: Sequentially reads the file header and block metadata
+ * 2. File Mapping: Maps both input and output files to memory for efficient
+ * access
+ * 3. Parallel Decompression: Uses OpenMP to decompress blocks in parallel
+ * 4. Validation and Cleanup: Verifies results and cleans up resources
+ *
+ * The function handles special cases including:
+ * - Zero-byte files
+ * - Empty blocks within the compressed data
+ * - Memory mapping failures
+ * - Decompression errors with detailed error reporting
+ *
+ * @note The function expects the input file to have a specific header format
+ * with block metadata and uses miniz library for decompression.
+ * @note Output file path is derived by removing the compression suffix or
+ * adding ".out"
  */
 bool decompress_large_file(const std::string &input_path,
                            const ConfigData &cfg) {
@@ -658,22 +815,25 @@ bool decompress_large_file(const std::string &input_path,
     return false;
   }
 
-  std::vector<uint64_t> compressed_block_sizes;
+  std::vector<uint64_t> compressed_block_sizes; // Sizes of compressed blocks
   if (!read_block_metadata(header_reader, compressed_block_sizes,
-                           header.num_blocks)) {
+                           header.num_blocks)) { // Read block sizes
     if (cfg.verbosity >= 1)
       std::cerr << "Error reading block metadata from: " << input_path
                 << std::endl;
     return false;
   }
+
+  // streampos is used to track position in the file
   std::streampos data_start_pos =
       header_reader.tellg(); // Position after metadata
   header_reader.close();     // Done with sequential reading
 
   // Determine output path
-  std::string output_path = input_path;
+  std::string output_path = input_path; // Start with input path
   if (output_path.length() > SUFFIX.length() &&
-      output_path.substr(output_path.length() - SUFFIX.length()) == SUFFIX) {
+      output_path.substr(output_path.length() - SUFFIX.length()) ==
+          SUFFIX) { // Check for suffix
     output_path = output_path.substr(0, output_path.length() - SUFFIX.length());
   } else {
     if (cfg.verbosity >= 1)
@@ -699,18 +859,18 @@ bool decompress_large_file(const std::string &input_path,
   }
 
   // --- Phase 2: Map Files and Calculate Offsets ---
-  MappedFile mapped_in;
+  MappedFile mapped_in;            // RAII wrapper for input file mapping
   size_t compressed_file_size = 0; // Let map determine the size
   if (!mapped_in.map(input_path.c_str(), compressed_file_size, PROT_READ,
-                     MAP_PRIVATE)) {
+                     MAP_PRIVATE)) { // Memory-map input file
     if (cfg.verbosity >= 1)
       std::cerr << "Error mapping large compressed input file: " << input_path
                 << std::endl;
     return false;
   }
-  unsigned char *in_base_ptr = mapped_in.get();
+  unsigned char *in_base_ptr = mapped_in.get(); // Base pointer to mapped input
 
-  MappedFile mapped_out;
+  MappedFile mapped_out; // RAII wrapper for output file mapping
   if (!mapped_out.allocate_and_map(output_path.c_str(), header.original_size)) {
     if (cfg.verbosity >= 1)
       std::cerr << "Error allocating output file map for " << output_path
@@ -719,6 +879,7 @@ bool decompress_large_file(const std::string &input_path,
     std::filesystem::remove(output_path);
     return false;
   }
+  // Ensure output map pointer is valid
   unsigned char *out_base_ptr = mapped_out.get();
   if (!out_base_ptr && header.original_size > 0) {
     if (cfg.verbosity >= 1)
@@ -729,22 +890,27 @@ bool decompress_large_file(const std::string &input_path,
   }
 
   // Calculate offsets for both compressed input and decompressed output
-  std::vector<size_t> compressed_block_offsets(header.num_blocks);
-  std::vector<size_t> decompressed_block_offsets(header.num_blocks);
-  size_t current_compressed_offset = static_cast<size_t>(data_start_pos);
+  std::vector<size_t> compressed_block_offsets(
+      header.num_blocks); // Offsets for compressed blocks
+  std::vector<size_t> decompressed_block_offsets(
+      header.num_blocks); // Offsets for decompressed blocks
+  size_t current_compressed_offset =
+      static_cast<size_t>(data_start_pos); // Start after header and metadata
   size_t current_decompressed_offset = 0;
 
   for (uint64_t i = 0; i < header.num_blocks; ++i) {
     compressed_block_offsets[i] = current_compressed_offset;
     decompressed_block_offsets[i] = current_decompressed_offset;
 
-    current_compressed_offset += compressed_block_sizes[i];
+    current_compressed_offset +=
+        compressed_block_sizes[i]; // Update offset for next block
 
     size_t decomp_size_for_block =
         (i == header.num_blocks - 1)
             ? (header.original_size - current_decompressed_offset)
-            : cfg.block_size;
-    current_decompressed_offset += decomp_size_for_block;
+            : cfg.block_size; // Last block may be smaller
+    current_decompressed_offset +=
+        decomp_size_for_block; // Update output offset
   }
   // Sanity check total size after calculating offsets
   if (current_decompressed_offset != header.original_size) {
@@ -761,9 +927,11 @@ bool decompress_large_file(const std::string &input_path,
   }
 
   // --- Phase 3: Parallel Decompression ---
-  std::atomic<bool> decompression_error = false;
-  std::vector<int> block_mz_results_decomp(header.num_blocks, Z_OK);
-  std::vector<mz_ulong> block_actual_decomp_sizes(header.num_blocks, 0);
+  std::atomic<bool> decompression_error = false; // Atomic flag for errors
+  std::vector<int> block_mz_results_decomp(header.num_blocks,
+                                           Z_OK); // Vector for Miniz results
+  std::vector<mz_ulong> block_actual_decomp_sizes(
+      header.num_blocks, 0); // Actual decompressed sizes for each block
 
 #pragma omp parallel for num_threads(cfg.num_threads) schedule(dynamic)
   for (uint64_t i = 0; i < header.num_blocks; ++i) {
@@ -771,11 +939,11 @@ bool decompress_large_file(const std::string &input_path,
       continue; // Skip if an error occurred elsewhere
     }
 
-    size_t compressed_size = compressed_block_sizes[i];
+    size_t compressed_size = compressed_block_sizes[i]; // Size of this block
     size_t expected_decomp_size =
         (i == header.num_blocks - 1)
             ? (header.original_size - decompressed_block_offsets[i])
-            : cfg.block_size;
+            : cfg.block_size; // Expected size for this block
 
     // Handle empty block case
     if (compressed_size == 0) {
@@ -792,13 +960,13 @@ bool decompress_large_file(const std::string &input_path,
 
     // Get pointers for this block
     const unsigned char *compressed_block_ptr =
-        in_base_ptr + compressed_block_offsets[i];
+        in_base_ptr + compressed_block_offsets[i]; // Compressed data pointer
     unsigned char *decompressed_block_ptr =
-        out_base_ptr + decompressed_block_offsets[i];
+        out_base_ptr + decompressed_block_offsets[i]; // Output pointer
 
     // Decompress directly into the output map
     mz_ulong dest_len = expected_decomp_size; // Pass expected size
-    int mz_result = Z_OK;
+    int mz_result = Z_OK;                     // Default to success
 
     // Check pointers before calling uncompress (defensive)
     if (!decompressed_block_ptr && expected_decomp_size > 0) {
@@ -907,11 +1075,32 @@ bool decompress_large_file(const std::string &input_path,
 }
 
 /**
- * @brief Decompresses small files by reading the original size header and
- * running a single uncompress call.
- * @param[in] input_path Path to the compressed input file.
- * @param[in] cfg Configuration parameters including removal option.
- * @return true if decompression succeeded, false otherwise.
+ * @brief Decompresses a small compressed file using memory mapping and miniz
+ * library.
+ *
+ * This function handles the decompression of files that can fit entirely in
+ * memory. It uses memory mapping for efficient I/O operations and the miniz
+ * library for decompression. The function expects the compressed file to
+ * contain an 8-byte header with the original file size followed by the
+ * compressed data.
+ *
+ * @param input_path Path to the compressed input file to decompress
+ * @param cfg Configuration data containing verbosity level and removal options
+ *
+ * @return true if decompression succeeds, false otherwise
+ *
+ * @details
+ * The function performs the following operations:
+ * - Maps the compressed file into memory for reading
+ * - Reads the original file size from the 8-byte header
+ * - Determines the output file path by removing the compression suffix or
+ * adding .out
+ * - Handles special case of zero-byte original files
+ * - Allocates and maps the output file with the original size
+ * - Decompresses the data using miniz uncompress function
+ * - Validates the decompressed size matches the expected original size
+ * - Optionally removes the original compressed file if cfg.remove_origin is
+ * true
  */
 bool decompress_small_file(const std::string &input_path,
                            const ConfigData &cfg) {

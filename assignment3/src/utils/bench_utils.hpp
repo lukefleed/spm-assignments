@@ -1,13 +1,8 @@
-/**
- * @file bench_utils.hpp
- * @brief Declarations of benchmarking utilities: error codes, result struct,
- * high-resolution timer, and benchmark runner.
- */
 #ifndef MINIZP_BENCH_UTILS_HPP
 #define MINIZP_BENCH_UTILS_HPP
 
-#include <chrono> // For high_resolution_clock
-#include <functional>
+#include <chrono>     // For high_resolution_clock
+#include <functional> // For std::function
 
 namespace BenchUtils {
 

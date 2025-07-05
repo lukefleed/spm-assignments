@@ -45,7 +45,7 @@ echo "MPI_Procs,Threads,Total_Time_ms,Speedup_vs_StdSort,Speedup_vs_Sequential,S
 
 # --- Run 1-Node Baseline ---
 echo "Running 1-node baseline..."
-BASELINE_OUTPUT=$(mpirun -np 1 bin/test_hybrid_performance ${THREADS} ${RECORDS_M} ${PAYLOAD_B})
+BASELINE_OUTPUT=$(srun --nodes=1 --ntasks=1 --ntasks-per-node=1 --cpus-per-task=${THREADS} --time=00:10:00 --mpi=pmix bin/test_hybrid_performance ${THREADS} ${RECORDS_M} ${PAYLOAD_B})
 if [ $? -ne 0 ]; then
     echo "Error: Baseline test failed." >&2
     exit 1
@@ -72,7 +72,7 @@ for nodes in "${NODES_ARRAY[@]}"; do
         continue
     fi
 
-    RUN_OUTPUT=$(mpirun -np ${nodes} bin/test_hybrid_performance ${THREADS} ${RECORDS_M} ${PAYLOAD_B} \
+    RUN_OUTPUT=$(srun --nodes=${nodes} --ntasks=${nodes} --ntasks-per-node=1 --cpus-per-task=${THREADS} --time=00:15:00 --mpi=pmix bin/test_hybrid_performance ${THREADS} ${RECORDS_M} ${PAYLOAD_B} \
         --t-stdsort "${T_STDSORT}" \
         --t-sequential "${T_SEQUENTIAL}" \
         --t-1node "${T_1NODE}")

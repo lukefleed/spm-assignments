@@ -103,7 +103,7 @@ static bool parseCommandLine(int argc, char *argv[], ConfigData &config,
   bool d_present = false;                // Flag to detect mutual exclusion C/D
   opterr = 0; // Disable getopt's default error messages; we handle them.
 
-  // Reset optind for potential re-parsing scenarios (though unlikely in main).
+  // Reset optind for potential re-parsing scenarios .
   optind = 1;
 
   while ((opt = getopt(argc, argv, optstring)) != -1) {

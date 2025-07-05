@@ -36,10 +36,11 @@ void write_standardized_csv_row(std::ofstream &file, const TestResult &result,
       sequential_time_ms > 0.0 ? sequential_time_ms / result.execution_time_ms
                                : 1.0;
 
-  file << "performance_test," << result.implementation << "," << result.array_size << ","
-       << result.payload_size << "," << result.num_threads << ","
-       << std::fixed << std::setprecision(3) << result.execution_time_ms << ","
-       << result.speedup << "," << speedup_vs_sequential << ",true\n";
+  file << "performance_test," << result.implementation << ","
+       << result.array_size << "," << result.payload_size << ","
+       << result.num_threads << "," << std::fixed << std::setprecision(3)
+       << result.execution_time_ms << "," << result.speedup << ","
+       << speedup_vs_sequential << ",true\n";
 }
 
 /**
@@ -79,7 +80,6 @@ TestResult run_performance_test(const std::string &implementation,
 
   result.execution_time_ms = timer.elapsed_ms();
 
-
   // Calculate speedup relative to baseline
   if (baseline_time_ms > 0.0) {
     result.speedup = baseline_time_ms / result.execution_time_ms;
@@ -117,8 +117,8 @@ void run_thread_scaling_test(std::ofstream &csv_file,
             << std::setw(w_threads) << "Threads" << std::setw(w_time)
             << "Time (ms)" << std::setw(w_speedup1) << "Speedup (std::sort)"
             << std::setw(w_speedup2) << "Speedup (Sequential)" << std::endl;
-  std::cout << std::string(w_impl + w_threads + w_time + w_speedup1 +
-                               w_speedup2, '-')
+  std::cout << std::string(
+                   w_impl + w_threads + w_time + w_speedup1 + w_speedup2, '-')
             << std::endl;
 
   // Benchmark std::sort (baseline)
@@ -170,7 +170,7 @@ void run_thread_scaling_test(std::ofstream &csv_file,
               << threads << std::setw(w_time) << std::fixed
               << std::setprecision(1) << ff_result.execution_time_ms
               << std::setw(w_speedup1) << ff_vs_std_ss.str()
-              << std::setw(w_speedup2) << ff_vs_seq_ss.str();
+              << std::setw(w_speedup2) << ff_vs_seq_ss.str() << std::endl;
   }
 }
 
@@ -260,9 +260,8 @@ void run_array_size_test(std::ofstream &csv_file) {
               << std::setw(w_speedup2) << ff_vs_seq_ss.str() << std::endl;
 
     if (size_info.first != "10M") {
-      std::cout << std::string(w_impl + w_size + w_time + w_speedup1 +
-                                   w_speedup2,
-                               '-')
+      std::cout << std::string(
+                       w_impl + w_size + w_time + w_speedup1 + w_speedup2, '-')
                 << std::endl;
     }
   }
@@ -291,9 +290,8 @@ void run_payload_size_test(std::ofstream &csv_file) {
             << std::setw(w_payload) << "Payload (B)" << std::setw(w_time)
             << "Time (ms)" << std::setw(w_speedup1) << "Speedup (std::sort)"
             << std::setw(w_speedup2) << "Speedup (Sequential)";
-  std::cout << std::string(w_impl + w_payload + w_time + w_speedup1 +
-                               w_speedup2,
-                           '-')
+  std::cout << std::string(
+                   w_impl + w_payload + w_time + w_speedup1 + w_speedup2, '-')
             << std::endl;
 
   // Test each payload size
@@ -349,9 +347,9 @@ void run_payload_size_test(std::ofstream &csv_file) {
 
     if (payload != 256) {
       std::cout << std::string(w_impl + w_payload + w_time + w_speedup1 +
-                                    w_speedup2,
-                                '-')
-                  << std::endl;
+                                   w_speedup2,
+                               '-')
+                << std::endl;
     }
   }
 }
@@ -457,8 +455,9 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  csv_file << "Test_Type,Implementation,Data_Size,Payload_Size_Bytes,Threads,"
-           << "Execution_Time_ms,Speedup_vs_StdSort,Speedup_vs_Sequential,Valid\n";
+  csv_file
+      << "Test_Type,Implementation,Data_Size,Payload_Size_Bytes,Threads,"
+      << "Execution_Time_ms,Speedup_vs_StdSort,Speedup_vs_Sequential,Valid\n";
 
   // Execute core thread scaling benchmark
   run_thread_scaling_test(csv_file, config.thread_counts, config.array_size,

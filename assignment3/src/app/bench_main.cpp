@@ -56,11 +56,12 @@ struct BenchParams {
 };
 
 /**
- * @brief Displays usage information and available options for the benchmark tool.
+ * @brief Displays usage information and available options for the benchmark
+ * tool.
  *
- * @param argv0 Program name (typically argv[0]).
+ * @param argv0 Program name.
  */
-void showBenchHelp(const char* argv0) {
+void showBenchHelp(const char *argv0) {
   std::cout << "MinizP Benchmark Driver - Performance Evaluation Tool\n\n";
   std::cout << "Usage: " << argv0 << " --type=<TYPE> [OPTIONS]\n\n";
   std::cout << "Required:\n";
@@ -71,26 +72,42 @@ void showBenchHelp(const char* argv0) {
   std::cout << "                           • many_large_parallel\n";
   std::cout << "                           • many_large_parallel_right\n\n";
   std::cout << "Global Options (all types):\n";
-  std::cout << "  --threads=<N>            Maximum threads to sweep (default: all cores)\n";
-  std::cout << "  --iterations=<I>         Measurement iterations per config (default: 2)\n";
-  std::cout << "  --warmup=<W>            Warmup runs before measurement (default: 1)\n";
-  std::cout << "  --threshold=<bytes>      Large-file threshold (default: 16 MiB)\n";
-  std::cout << "  --help, -h               Display this help message and exit\n\n";
+  std::cout << "  --threads=<N>            Maximum threads to sweep (default: "
+               "all cores)\n";
+  std::cout << "  --iterations=<I>         Measurement iterations per config "
+               "(default: 2)\n";
+  std::cout << "  --warmup=<W>            Warmup runs before measurement "
+               "(default: 1)\n";
+  std::cout
+      << "  --threshold=<bytes>      Large-file threshold (default: 16 MiB)\n";
+  std::cout
+      << "  --help, -h               Display this help message and exit\n\n";
   std::cout << "Type-Specific Options:\n\n";
   std::cout << "  For --type=one_large:\n";
-  std::cout << "    --large_size=<bytes>   Size for single large file (default: 512 MiB)\n";
-  std::cout << "    --block_sizes_list=<S1,S2,...> Custom block sizes (default: 1-12 MiB)\n\n";
+  std::cout << "    --large_size=<bytes>   Size for single large file "
+               "(default: 512 MiB)\n";
+  std::cout << "    --block_sizes_list=<S1,S2,...> Custom block sizes "
+               "(default: 1-12 MiB)\n\n";
   std::cout << "  For --type=many_small:\n";
-  std::cout << "    --num_small=<N>        Number of small files (default: 1000)\n";
-  std::cout << "    --min_size=<bytes>     Min size for small files (default: 1 KiB)\n";
-  std::cout << "    --max_size=<bytes>     Max size for small files (default: 1 MiB)\n\n";
-  std::cout << "  For --type=many_large_* (sequential/parallel/parallel_right):\n";
-  std::cout << "    --block_sizes_list=<S1,S2,...> Custom block sizes (default: 1-12 MiB)\n";
+  std::cout
+      << "    --num_small=<N>        Number of small files (default: 1000)\n";
+  std::cout << "    --min_size=<bytes>     Min size for small files (default: "
+               "1 KiB)\n";
+  std::cout << "    --max_size=<bytes>     Max size for small files (default: "
+               "1 MiB)\n\n";
+  std::cout
+      << "  For --type=many_large_* (sequential/parallel/parallel_right):\n";
+  std::cout << "    --block_sizes_list=<S1,S2,...> Custom block sizes "
+               "(default: 1-12 MiB)\n";
   std::cout << "    Note: Uses fixed 10 files of 50-250 MiB each\n\n";
   std::cout << "Examples:\n";
-  std::cout << "  " << argv0 << " --type=many_small --threads=8 --num_small=2000\n";
-  std::cout << "  " << argv0 << " --type=one_large --threads=4 --large_size=1073741824\n";
-  std::cout << "  " << argv0 << " --type=many_large_parallel --block_sizes_list=1048576,2097152\n";
+  std::cout << "  " << argv0
+            << " --type=many_small --threads=8 --num_small=2000\n";
+  std::cout << "  " << argv0
+            << " --type=one_large --threads=4 --large_size=1073741824\n";
+  std::cout
+      << "  " << argv0
+      << " --type=many_large_parallel --block_sizes_list=1048576,2097152\n";
 }
 
 /**
@@ -120,7 +137,8 @@ bool parseBenchArgs(int argc, char *argv[], BenchParams &params) {
     if (arg.rfind("--", 0) == 0 && eq_pos != std::string::npos) {
       args[arg.substr(2, eq_pos - 2)] = arg.substr(eq_pos + 1);
     } else if (arg.rfind("--", 0) == 0) {
-      std::cerr << "Error: Invalid option format '" << arg << "'. Expected --key=value format.\n";
+      std::cerr << "Error: Invalid option format '" << arg
+                << "'. Expected --key=value format.\n";
       std::cerr << "Use --help for usage information.\n";
       return false;
     }
@@ -180,14 +198,34 @@ bool parseBenchArgs(int argc, char *argv[], BenchParams &params) {
 }
 
 /**
- * @brief Prepares the benchmark environment by creating or cleaning the data
- * directory.
+ * @brief Sets up the benchmark environment by creating test files based on the
+ * specified parameters.
  *
- * Generates either one large file or many small files of random sizes
- * based on the 'type' field in params.
+ * This function initializes the benchmark directory and creates test files
+ * according to the benchmark type specified in the parameters. It handles four
+ * different benchmark scenarios:
+ * - "one_large": Creates a single large file of specified size
+ * - "many_large_sequential"/"many_large_parallel"/"many_large_parallel_right":
+ *   Creates 10 large files with random sizes between 50MB and 250MB
+ * - Default (many_small): Creates multiple small files with random distinct
+ * sizes within user-defined range
  *
- * @param params Benchmark parameters controlling data generation.
- * @throws runtime_error on file system or generation failure.
+ * @param params The benchmark parameters containing:
+ *               - type: The benchmark type determining file creation strategy
+ *               - large_file_size: Size for single large file (if type is
+ * "one_large")
+ *               - min_small_file_size: Minimum size for small files
+ *               - max_small_file_size: Maximum size for small files
+ *               - num_small_files: Number of small files to create
+ *
+ * @throws std::runtime_error If directory creation fails or file creation fails
+ *
+ * @note The function removes any existing benchmark directory before creating
+ * new files
+ * @note For small files, ensures all files have distinct sizes by using
+ * rejection sampling
+ * @note All files are created with random content using
+ * TestUtils::create_random_file
  */
 void setup_bench_environment(const BenchParams &params) {
   std::cout << "Setting up benchmark environment in " << BENCH_DIR << "..."

@@ -53,7 +53,7 @@ for nodes in "${NODES_ARRAY[@]}"; do
     TOTAL_RECORDS_M=$((nodes * RECORDS_PER_NODE_M))
 
     # We only need the timing for the hybrid run itself.
-    RUN_OUTPUT=$(mpirun -np ${nodes} bin/test_hybrid_performance ${THREADS} ${TOTAL_RECORDS_M} ${PAYLOAD_B})
+    RUN_OUTPUT=$(srun --nodes=${nodes} --ntasks=${nodes} --ntasks-per-node=1 --cpus-per-task=${THREADS} --time=00:15:00 --mpi=pmix bin/test_hybrid_performance ${THREADS} ${TOTAL_RECORDS_M} ${PAYLOAD_B})
     if [ $? -ne 0 ]; then
         echo "Error: Test failed for ${nodes} nodes." >&2
         exit 1
