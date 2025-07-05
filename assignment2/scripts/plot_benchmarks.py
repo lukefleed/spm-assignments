@@ -122,7 +122,55 @@ def _configure_xaxis_ticks(fig: go.Figure, unique_values: List[Any], is_threads:
         # For chunks, linear might be okay, but category might be better if non-uniform steps
         fig.update_xaxes(type='category', categoryorder='array', categoryarray=sorted([str(int(c)) for c in unique_numeric_sorted])) # Use category sorted numerically
 
+def _add_amdahl_trace(fig: go.Figure, group_df: pd.DataFrame, threads_col='NumThreads', speedup_col='Speedup'):
+    """Calculates and adds Amdahl's Law trace to a speedup plot."""
+    if threads_col not in group_df.columns or speedup_col not in group_df.columns:
+        print("  Warning: Cannot add Amdahl trace. Missing columns.")
+        return
 
+    df_amdahl = group_df[[threads_col, speedup_col]].copy()
+    df_amdahl[threads_col] = pd.to_numeric(df_amdahl[threads_col], errors='coerce')
+    df_amdahl[speedup_col] = pd.to_numeric(df_amdahl[speedup_col], errors='coerce')
+    df_amdahl = df_amdahl.dropna()
+    df_amdahl = df_amdahl[df_amdahl[threads_col] >= 1]
+
+    if df_amdahl.empty:
+        print("  Warning: Cannot add Amdahl trace. No valid data points.")
+        return
+
+    unique_threads = sorted(df_amdahl[threads_col].unique())
+    if not unique_threads or len(unique_threads) < 2: return
+
+    max_threads = max(unique_threads)
+    if max_threads <= 1: return
+
+    max_thread_data = df_amdahl[df_amdahl[threads_col] == max_threads]
+    if max_thread_data.empty: return
+
+    best_speedup_at_max_threads = max_thread_data[speedup_col].max()
+    overall_best_speedup = df_amdahl[df_amdahl[threads_col] > 1][speedup_col].max()
+
+    effective_speedup = max(best_speedup_at_max_threads, overall_best_speedup if pd.notna(overall_best_speedup) else 0)
+    effective_threads = max_threads
+
+    if pd.isna(effective_speedup) or not np.isfinite(effective_speedup) or effective_speedup <= 1:
+        print(f"  Note: Cannot add Amdahl trace. Best speedup ({effective_speedup:.2f}) is not > 1.")
+        return
+
+    # Calculate sequential fraction 's' based on the best observed speedup
+    # Avoid division by zero if effective_threads is 1
+    s = (effective_threads / effective_speedup - 1) / (effective_threads - 1) if effective_threads > 1 else 0.5
+    s = max(0.001, min(0.999, s)) # Clamp s to a reasonable range [0.001, 0.999]
+
+    amdahl_x = np.linspace(1, max_threads, 100)
+    amdahl_y = [1 / (s + (1 - s) / n) if n > 0 else 1 for n in amdahl_x]
+
+    fig.add_trace(go.Scatter(
+        x=amdahl_x, y=amdahl_y, mode='lines',
+        line=dict(color='red', dash='dash', width=1.5),
+        name=f"Amdahl (s={s:.3f})",
+        showlegend=True
+    ))
 
 def _filter_and_sort(df: pd.DataFrame, required_cols: List[str], sort_by: List[str],
                      filters: Optional[Dict[str, Any]] = None) -> pd.DataFrame:
@@ -342,7 +390,10 @@ def plot_speedup_vs_threads(df: pd.DataFrame, plot_dir: Path, optimal_chunks: Di
         _configure_xaxis_ticks(fig, unique_threads, is_threads=True)
         fig.update_yaxes(rangemode='tozero') # Ensure y-axis starts at 0
 
-
+        # Add Amdahl trace based on the best performing scheduler at each thread count in this specific plot
+        if not df_plot[df_plot['NumThreads'] > 1].empty:
+             best_scheduler_data = df_plot.loc[df_plot.groupby('NumThreads')['Speedup'].idxmax()]
+             _add_amdahl_trace(fig, best_scheduler_data)
 
         fig.update_layout(legend_title_text='Scheduler', width=DEFAULT_WIDTH, height=DEFAULT_HEIGHT)
         _save_figure(fig, filepath)
@@ -587,7 +638,10 @@ def plot_scheduler_chunk_comparison(df: pd.DataFrame, plot_dir: Path, scheduler_
         fig.add_hline(y=1.0, line_dash="dot", line_color="grey", annotation_text="Baseline (Seq=1x)", annotation_position="bottom right")
         fig.update_yaxes(rangemode='tozero')
 
-
+        # Add Amdahl trace based on the best performance across all chunks *within this plot*
+        if not group.empty:
+             best_overall_data = group.loc[group.groupby('NumThreads')['Speedup'].idxmax()]
+             _add_amdahl_trace(fig, best_overall_data)
 
         fig.update_layout(width=DEFAULT_WIDTH, height=DEFAULT_HEIGHT)
         _save_figure(fig, filepath)
