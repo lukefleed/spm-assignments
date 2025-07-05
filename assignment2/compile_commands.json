@@ -1,0 +1,42 @@
+[
+  {
+    "directory": "/home/l.lombardo11/spm-assignments/assignment2",
+    "command": "g++ -std=c++17 -Wall -Wextra -pedantic -O3 -g -pthread -Iinclude -c src/main.cpp -o build/obj/main.o",
+    "file": "/home/l.lombardo11/spm-assignments/assignment2/src/main.cpp"
+  },
+  {
+    "directory": "/home/l.lombardo11/spm-assignments/assignment2",
+    "command": "g++ -std=c++17 -Wall -Wextra -pedantic -O3 -g -pthread -Iinclude -c src/sequential.cpp -o build/obj/sequential.o",
+    "file": "/home/l.lombardo11/spm-assignments/assignment2/src/sequential.cpp"
+  },
+  {
+    "directory": "/home/l.lombardo11/spm-assignments/assignment2",
+    "command": "g++ -std=c++17 -Wall -Wextra -pedantic -O3 -g -pthread -Iinclude -c src/static_scheduler.cpp -o build/obj/static_scheduler.o",
+    "file": "/home/l.lombardo11/spm-assignments/assignment2/src/static_scheduler.cpp"
+  },
+  {
+    "directory": "/home/l.lombardo11/spm-assignments/assignment2",
+    "command": "g++ -std=c++17 -Wall -Wextra -pedantic -O3 -g -pthread -Iinclude -c src/dynamic_scheduler.cpp -o build/obj/dynamic_scheduler.o",
+    "file": "/home/l.lombardo11/spm-assignments/assignment2/src/dynamic_scheduler.cpp"
+  },
+  {
+    "directory": "/home/l.lombardo11/spm-assignments/assignment2",
+    "command": "g++ -std=c++17 -Wall -Wextra -pedantic -O3 -g -pthread -Iinclude -c src/collatz.cpp -o build/obj/collatz.o",
+    "file": "/home/l.lombardo11/spm-assignments/assignment2/src/collatz.cpp"
+  },
+  {
+    "directory": "/home/l.lombardo11/spm-assignments/assignment2",
+    "command": "g++ -std=c++17 -Wall -Wextra -pedantic -O3 -g -pthread -Iinclude -c src/testing.cpp -o build/obj/testing.o",
+    "file": "/home/l.lombardo11/spm-assignments/assignment2/src/testing.cpp"
+  },
+  {
+    "directory": "/home/l.lombardo11/spm-assignments/assignment2",
+    "command": "g++ -std=c++17 -Wall -Wextra -pedantic -O3 -g -pthread -Iinclude -c src/utils.cpp -o build/obj/utils.o",
+    "file": "/home/l.lombardo11/spm-assignments/assignment2/src/utils.cpp"
+  },
+  {
+    "directory": "/home/l.lombardo11/spm-assignments/assignment2",
+    "command": "g++ -std=c++17 -Wall -Wextra -pedantic -O3 -g -pthread -Iinclude -c src/theoretical_analysis.cpp -o build/obj/theoretical_analysis.o",
+    "file": "/home/l.lombardo11/spm-assignments/assignment2/src/theoretical_analysis.cpp"
+  }
+]

@@ -81,7 +81,7 @@ int main(int argc, char *argv[]) {
 
 #pragma omp parallel for default(none)                                         \
     shared(work_items, config, processing_error, std::cerr, std::cout)         \
-        schedule(dynamic)
+    schedule(dynamic) // Dynamic scheduling for better load balancing
   for (size_t i = 0; i < work_items.size(); ++i) {
     // Check if an error occurred in another thread to potentially stop early
     if (processing_error.load()) {
@@ -96,7 +96,7 @@ int main(int argc, char *argv[]) {
     try {
       if (config.compress_mode) {
         if (config.verbosity >= 2) {
-#pragma omp critical(cout_lock)
+#pragma omp critical(cout_lock) // Ensure thread-safe output
           {
             std::cout << "[Thread " << omp_get_thread_num()
                       << "] Compressing: " << item.path

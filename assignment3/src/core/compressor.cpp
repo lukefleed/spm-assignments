@@ -45,16 +45,17 @@ class MappedFile {
 
 public:
   MappedFile() = default;
-  // Non-copyable
+  // Delete copy constructor and assignment operator
   MappedFile(const MappedFile &) = delete;
   MappedFile &operator=(const MappedFile &) = delete;
-  // Movable
+  // Move constructor
   MappedFile(MappedFile &&other) noexcept
       : ptr_(other.ptr_), size_(other.size_), fd_(other.fd_) {
     other.ptr_ = nullptr;
     other.size_ = 0;
     other.fd_ = -1;
   }
+  // Move assignment operator
   MappedFile &operator=(MappedFile &&other) noexcept {
     if (this != &other) {
       unmap(); // Unmap existing if any
@@ -188,6 +189,7 @@ public:
     unmap();
     size_ = size; // Store intended size
 
+    // Open the file with read/write and create/truncate flags
     fd_ = open(fname, O_RDWR | O_CREAT | O_TRUNC, 0666);
     if (fd_ < 0) {
       std::cerr << "Error: Failed creating/opening output file " << fname
@@ -195,10 +197,11 @@ public:
       return false;
     }
 
-    if (size > 0) { // ftruncate fails for size 0 sometimes
-      if (ftruncate(fd_, size) < 0) {
+    if (size > 0) {                   // ftruncate fails for size 0 sometimes
+      if (ftruncate(fd_, size) < 0) { // Extends the file without writing
         std::cerr << "Error: ftruncate failed for " << fname << " - "
                   << strerror(errno) << std::endl;
+
         close(fd_);
         fd_ = -1;
         return false;
@@ -212,6 +215,12 @@ public:
       return true;
     }
 
+    // Here ftruncate succeeded, it tells the filesystem that the file will have
+    // size "X" but it doesn't actually allocate space. This is called a "sparse
+    // file" or "hole". If then I call a memcpy to `ptr_` the OS will allocate
+    // the space on demand and use only the disk pages that we actually touch.
+    // This is extremely efficient for large files since it avoids allocating
+    // space for the entire file upfront and the writing of empty blocks.
     ptr_ =
         static_cast<unsigned char *>(mmap(nullptr, size, prot, flags, fd_, 0));
     if (ptr_ == MAP_FAILED) {
@@ -471,11 +480,16 @@ bool compress_small_file(const std::string &input_path, size_t input_size,
     return true;
   }
 
-  unsigned char *in_ptr = mapped_in.get();
-  mz_ulong comp_len_bound = compressBound(input_size);
-  std::vector<unsigned char> compressed_data(comp_len_bound);
-  mz_ulong actual_comp_len = comp_len_bound;
+  // Here the file is completely mapped and has non-zero size
 
+  unsigned char *in_ptr = mapped_in.get(); // gets the pointer to mapped data
+  mz_ulong comp_len_bound =
+      compressBound(input_size); // Get max compressed size
+  std::vector<unsigned char> compressed_data(
+      comp_len_bound);                       // Pre-allocate buffer
+  mz_ulong actual_comp_len = comp_len_bound; // Actual size after compression
+
+  // Simply call the miniz compress function
   int mz_result =
       compress(compressed_data.data(), &actual_comp_len, in_ptr, input_size);
 
@@ -557,6 +571,7 @@ bool compress_large_file(const std::string &input_path, size_t input_size,
                          const ConfigData &cfg) {
   MappedFile mapped_in;             // RAII wrapper for input file mapping
   size_t current_size = input_size; // map() will confirm this size
+
   if (!mapped_in.map(input_path.c_str(), current_size, PROT_READ,
                      MAP_PRIVATE)) {
     if (cfg.verbosity >= 1)
@@ -571,7 +586,7 @@ bool compress_large_file(const std::string &input_path, size_t input_size,
     return false;
   }
 
-  unsigned char *in_ptr = mapped_in.get();
+  unsigned char *in_ptr = mapped_in.get(); // Get pointer to mapped data
 
   // Calculate block count
   uint64_t num_blocks = (input_size + cfg.block_size - 1) / cfg.block_size;
@@ -579,6 +594,7 @@ bool compress_large_file(const std::string &input_path, size_t input_size,
     num_blocks = 1; // Ensure at least one block if file not empty
 
   // --- Phase 1: Parallel Compression into Memory ---
+
   // Pre-allocate per-thread temporary buffers to avoid repeated vector
   // allocations
   int thread_count = cfg.num_threads;
@@ -588,6 +604,7 @@ bool compress_large_file(const std::string &input_path, size_t input_size,
     // reserve max possible compressed size once per thread
     thread_temp_buffers[t].reserve(compressBound(cfg.block_size));
   }
+
   // Pre-allocate per-thread tdefl_compressor state for reuse and reduced init
   // overhead
   std::vector<tdefl_compressor *> thread_deflators(thread_count);
@@ -677,8 +694,10 @@ bool compress_large_file(const std::string &input_path, size_t input_size,
 
   std::string output_path = input_path + SUFFIX; // Output file path with SUFFIX
   if (success) {
-    // --- Phase 2: Memory-map output and memcpy blocks to reduce syscall
-    // overhead ---
+    // --- Phase 2: Writing Compressed Data with Metadata and File
+    // It starts using allocated_and_map to create the output file at the final
+    // dimension total_size It writes sequentially the header and metadata Then
+    // it writes the compressed blocks in parallel
     {
       // Initialize header correctly
       LargeFileHeader header; // Default initialize (magic, version)

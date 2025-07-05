@@ -9,7 +9,6 @@
 #include "config.hpp" /**< Shared configuration data and constants */
 #include <cstdint>    /**< For fixed-width integer types */
 #include <string>
-#include <vector>
 
 namespace Compressor {
 using ::FORMAT_VERSION;
@@ -29,7 +28,7 @@ struct LargeFileHeader {
   // Block metadata (compressed sizes) will follow this header directly in the
   // file.
 };
-#pragma pack(pop)
+#pragma pack(pop) // Restore default packing
 
 /**
  * @brief Processes (compresses) a single file.
