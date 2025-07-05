@@ -37,13 +37,13 @@
 \setlength{\parskip}{-0.5em}
 
 \section*{Results}
-This section presents a comparative analysis of three softmax function implementations under varying conditions. We evaluate the \texttt{softmax\_auto} implementation with and without the \texttt{parallel} directive and compare performance between AVX2 and AVX512 instruction sets.
+This section presents a comparative analysis of three softmax function implementations under varying conditions. We evaluate the \texttt{softmax\_auto} implementation with and without the \texttt{parallel} directive and compare performance between AVX2 and AVX512 instruction sets. It is important to note that only the auto-vectorized implementation (\texttt{softmax\_auto}) adapts to use AVX512 instructions when available, while the manually vectorized implementation (\texttt{softmax\_avx}) uses explicit AVX2 instructions regardless of the compilation flags.
 
 \paragraph{Experimental Setup} All experiments were conducted on a system equipped with dual Intel(R) Xeon(R) Gold 5318Y CPUs, providing a total of 96 threads (48 per CPU). The system has 1TB of RAM and runs Ubuntu 22.04 with Linux kernel 5.15.0-119-generic. All code was compiled using GCC 11.4.0 with appropriate optimization flags.
 
 \subsection*{Performance}
 
-We compare the execution time of three softmax implementations across various input sizes, analyzing the effects of parallelization and vectorization instruction sets on the auto-vectorized implementation. Figures~\ref{fig:perf_noparallel_avx512} and \ref{fig:perf_noparallel_noavx512} demonstrate performance without parallelization, while Figures~\ref{fig:perf_parallel_avx512} and \ref{fig:perf_parallel_noavx512} show results with parallelization enabled.
+We compare the execution time of three softmax implementations across various input sizes, analyzing the effects of parallelization and vectorization instruction sets. The auto-vectorized implementation adapts its vectorization strategy based on available instruction sets (AVX512 when available, falling back to AVX2), while the manually vectorized implementation consistently uses AVX2 instructions. Figures~\ref{fig:perf_noparallel_avx512} and \ref{fig:perf_noparallel_noavx512} demonstrate performance without parallelization, while Figures~\ref{fig:perf_parallel_avx512} and \ref{fig:perf_parallel_noavx512} show results with parallelization enabled.
 
 \begin{figure}[H]
   \centering

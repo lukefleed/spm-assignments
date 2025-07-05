@@ -8,21 +8,36 @@
 #include <random>
 #include <vector>
 
+// Determine vector width and alignment based on available instruction sets
+#ifdef __AVX512F__
+#define VECTOR_ALIGNMENT 64    // AVX512 requires 64-byte alignment
+#define ELEMENTS_PER_VECTOR 16 // 16 floats per 512-bit register
+#else
+#define VECTOR_ALIGNMENT 32   // AVX2 requires 32-byte alignment
+#define ELEMENTS_PER_VECTOR 8 // 8 floats per 256-bit register
+#endif
+
 /**
  * @brief Custom C++17 aligned memory allocator for SIMD operations
  *
- * Uses C++17's aligned memory features to ensure proper 32-byte alignment
+ * Uses C++17's aligned memory features to ensure proper alignment
  * for optimal SIMD performance. Aligned memory access improves performance by:
  * - Eliminating unaligned load/store instructions
  * - Avoiding cache-line splits
  * - Preventing penalties on architectures with strict alignment requirements
+ *
+ * The alignment is automatically determined based on available instruction
+ * sets:
+ * - AVX512: 64-byte alignment (512-bit registers)
+ * - AVX2: 32-byte alignment (256-bit registers)
  *
  * @tparam T The type of elements to allocate
  */
 template <typename T> class AlignedAllocatorC17 {
 public:
   using value_type = T;
-  static constexpr size_t alignment = 32; // Alignment for AVX/AVX2
+  static constexpr size_t alignment =
+      VECTOR_ALIGNMENT; // Use dynamic alignment based on available instructions
 
   /**
    * @brief Allocate aligned memory using C++17 features
@@ -86,20 +101,22 @@ void softmax_auto_parallel(const float *__restrict__ input,
 
   float max_val = -std::numeric_limits<float>::infinity();
 
-#pragma omp parallel for simd reduction(max : max_val) aligned(input : 32)
+#pragma omp parallel for simd reduction(max : max_val)                         \
+    aligned(input : VECTOR_ALIGNMENT)
   for (size_t i = 0; i < K; ++i) {
     max_val = (input[i] > max_val) ? input[i] : max_val;
   }
 
   float sum = 0.0f;
-#pragma omp parallel for simd reduction(+ : sum) aligned(input, output : 32)
+#pragma omp parallel for simd reduction(+ : sum)                               \
+    aligned(input, output : VECTOR_ALIGNMENT)
   for (size_t i = 0; i < K; ++i) {
     output[i] = expf(input[i] - max_val);
     sum += output[i];
   }
 
   const float inv_sum = 1.0f / sum;
-#pragma omp parallel for simd aligned(output : 32)
+#pragma omp parallel for simd aligned(output : VECTOR_ALIGNMENT)
   for (size_t i = 0; i < K; ++i) {
     output[i] *= inv_sum;
   }
@@ -118,20 +135,20 @@ void softmax_auto_parallel(const float *__restrict__ input,
 void softmax_auto_noparallel(const float *__restrict__ input,
                              float *__restrict__ output, size_t K) {
   float max_val = -std::numeric_limits<float>::infinity();
-#pragma omp simd reduction(max : max_val) aligned(input : 32)
+#pragma omp simd reduction(max : max_val) aligned(input : VECTOR_ALIGNMENT)
   for (size_t i = 0; i < K; ++i) {
     max_val = (input[i] > max_val) ? input[i] : max_val;
   }
 
   float sum = 0.0f;
-#pragma omp simd reduction(+ : sum) aligned(input, output : 32)
+#pragma omp simd reduction(+ : sum) aligned(input, output : VECTOR_ALIGNMENT)
   for (size_t i = 0; i < K; ++i) {
     output[i] = expf(input[i] - max_val);
     sum += output[i];
   }
 
   const float inv_sum = 1.0f / sum;
-#pragma omp simd aligned(output : 32)
+#pragma omp simd aligned(output : VECTOR_ALIGNMENT)
   for (size_t i = 0; i < K; ++i) {
     output[i] *= inv_sum;
   }
@@ -212,6 +229,13 @@ int main(int argc, char *argv[]) {
   // Generate aligned random data
   aligned_vector<float> input = generate_random_input(K);
   aligned_vector<float> output(K);
+
+  // Display alignment information
+#ifdef __AVX512F__
+  std::printf("Using AVX512 with 64-byte alignment\n");
+#else
+  std::printf("Using AVX2 with 32-byte alignment\n");
+#endif
 
   // Benchmark auto-vectorized implementation
   TIMERSTART(softmax_auto);
