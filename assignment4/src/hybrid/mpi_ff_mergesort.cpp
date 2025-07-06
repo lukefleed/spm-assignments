@@ -213,21 +213,35 @@ void HybridMergeSort::distribute_data(std::vector<Record> &local_data,
     return;
 
   // Calculate counts and displacements for MPI_Scatterv.
+  // Ensure that the difference of records between two processes is at most 1.
   std::vector<int> send_counts(mpi_size_);
   std::vector<int> displs(mpi_size_);
   size_t base_count = total_num_records / mpi_size_;
-  size_t remainder = total_num_records % mpi_size_;
+  size_t remainder =
+      total_num_records %
+      mpi_size_; // Number of extra records when not evenly divisible
   for (int i = 0; i < mpi_size_; ++i) {
+    // Give one extra record to the first 'remainder' processes (ranks 0, 1, 2,
+    // ...) This ensures even distribution when total_num_records is not
+    // divisible by mpi_size_
     send_counts[i] = base_count + (i < static_cast<int>(remainder) ? 1 : 0);
     displs[i] = (i == 0) ? 0 : displs[i - 1] + send_counts[i - 1];
   }
 
   // Convert record counts to byte counts for MPI.
+  // MPI_Scatterv requires byte-level communication, so we need to convert
+  // the number of records each process should receive into the corresponding
+  // number of bytes that need to be transmitted.
   const size_t record_byte_size = sizeof(unsigned long) + payload_size_;
   std::vector<int> send_counts_bytes(mpi_size_);
   std::vector<int> displs_bytes(mpi_size_);
   for (int i = 0; i < mpi_size_; ++i) {
+    // Calculate how many bytes to send to process i
+    // Each record consists of a key (unsigned long) + payload data
     send_counts_bytes[i] = send_counts[i] * record_byte_size;
+
+    // Calculate byte offset where process i's data starts in the send buffer
+    // This tells MPI_Scatterv where to find each process's data chunk
     displs_bytes[i] = displs[i] * record_byte_size;
   }
 

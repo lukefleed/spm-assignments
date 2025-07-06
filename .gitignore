@@ -36,3 +36,6 @@ assignment3/obj/
 assignment3/minizp_bench
 assignment4/fastflow
 assignment4/fastflow
+
+# Compile comands
+*.json

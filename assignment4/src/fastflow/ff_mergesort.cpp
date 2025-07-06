@@ -23,10 +23,27 @@ struct MergeTask {
 };
 
 /**
- * @brief Task generator for farm work decomposition
+ * @brief Emitter node for FastFlow-based merge sort implementation
  *
- * Dual-purpose emitter serving both sort and merge phases.
- * Uses offset-based iteration for lock-free task generation.
+ * The Emitter class extends ff_node to distribute work tasks across worker
+ * nodes in a farm pattern. It operates in two distinct phases:
+ *
+ * 1. **Sort Phase**: Distributes individual chunks for parallel sorting
+ *    - Uses only the source buffer (to_buf is nullptr)
+ *    - Creates tasks for segments [start, mid) of size step_size
+ *    - Performs in-place sorting operations
+ *
+ * 2. **Merge Phase**: Distributes merge operations for sorted segments
+ *    - Uses both source and destination buffers
+ *    - Creates tasks to merge adjacent sorted segments [start, mid) and [mid,
+ * end)
+ *    - step_size represents the width of segments to be merged
+ *
+ * The emitter maintains internal state to track progress through the dataset
+ * and automatically signals completion when all segments have been distributed.
+ *
+ * @note The emitter determines operation mode based on whether to_buf is
+ * nullptr
  */
 class Emitter : public ff_node {
 public:
@@ -71,9 +88,19 @@ private:
 };
 
 /**
- * @brief In-place sorting worker for initial chunk processing
+ * @brief Worker node for parallel sorting operations in FastFlow framework.
  *
- * Operates directly on source buffer to eliminate copy overhead.
+ * SortWorker is a FastFlow node that processes MergeTask objects by sorting
+ * specified ranges of data using std::sort. This class inherits from ff_node_t.
+ *
+ * The worker takes ownership of the MergeTask memory and is responsible for
+ * cleaning it up after processing. Each worker operates independently on
+ * different data ranges.
+ *
+ * @tparam Input type: MergeTask* - Task containing source array and range
+ * information
+ * @tparam Output type: void - No output is produced, results are stored
+ * in-place
  */
 class SortWorker : public ff_node_t<MergeTask, void> {
 public:
@@ -98,7 +125,7 @@ public:
     // Using std::make_move_iterator is crucial. When we pass to std::merge two
     // move iterators, it does not copy the elements, but moves them (it does
     // not use `operator=` but `operator=(&&)`). This is important for
-    // variable-size payloads, as it avoids unnecessary copies. During the
+    // our payload, as it avoids unnecessary copies. During the
     // merge, instead of allocating a new buffer, we steal from the record the
     // source and assign it to the destination. Then the source pointer is
     // nulled out.
@@ -115,12 +142,29 @@ public:
 } // anonymous namespace
 
 /**
- * @brief Parallel merge sort using FastFlow framework
+ * @brief Performs parallel merge sort on a vector of Record objects using
+ * FastFlow framework.
  *
- * Three-phase algorithm:
- * 1. Parallel sorting of chunks
- * 2. Iterative parallel merge passes with buffer ping-ponging
- * 3. Final data placement ensuring in-place result
+ * This function implements a three-phase parallel merge sort algorithm:
+ * 1. Initial parallel sorting of chunks using a farm pattern
+ * 2. Iterative bottom-up merging with buffer ping-pong technique
+ * 3. Final data placement to ensure results are in the original vector
+ *
+ * The algorithm uses oversubscription (4x the number of threads) for better
+ * load balancing and includes optimizations such as sequential fallback for
+ * small datasets and efficient memory management with buffer swapping.
+ *
+ * @param data The vector of Record objects to be sorted in-place
+ * @param num_threads The number of worker threads to use for parallel
+ * execution. If 0, defaults to 1 thread.
+ *
+ * @throws std::runtime_error If any of the FastFlow farms fail to execute
+ * properly
+ *
+ * @note For datasets smaller than num_threads * 1024 elements, the function
+ * falls back to sequential std::sort to avoid parallelization overhead.
+ * @note The minimum chunk size is 1024 elements to ensure efficient parallel
+ * processing.
  */
 void parallel_mergesort(std::vector<Record> &data, const size_t num_threads) {
   const size_t n = data.size();

@@ -35,13 +35,24 @@ static void cleanup_partial(std::ofstream &out_file, const std::string &path) {
 }
 
 #if USE_DEV_URANDOM
+
 /**
- * @brief Fill file with random bytes from /dev/urandom.
- * @param out_file  The output file stream to write to.
- * @param size      Number of bytes to write.
- * @param verbosity Verbosity level for messages.
- * @param path      Path to the output file (used for error messages).
- * @return true on success, false on failure.
+ * @brief Fills an output file stream with random data from /dev/urandom.
+ *
+ * This function reads random bytes from the system's /dev/urandom device and
+ * writes them to the provided output file stream. It uses a buffered approach
+ * to efficiently handle large files by reading and writing data in chunks.
+ *
+ * @param out_file Reference to the output file stream to write random data to
+ * @param size Number of bytes of random data to generate and write
+ * @param verbosity Verbosity level for error/warning messages (0=silent,
+ * 1+=verbose)
+ * @param path File path string used for error reporting and cleanup on failure
+ *
+ * @return true if the operation completed successfully, false if an error
+ * occurred
+ * @note The function uses a buffer size of min(4096, size) bytes for optimal
+ * I/O performance.
  */
 static bool fill_with_dev_urandom(std::ofstream &out_file, size_t size,
                                   int verbosity, const std::string &path) {
@@ -83,12 +94,26 @@ static bool fill_with_dev_urandom(std::ofstream &out_file, size_t size,
 #endif
 
 /**
- * @brief Creates a file at the specified path filled with random data.
- * @param path Path to the file to create.
- * @param size Number of bytes to write; if zero, creates an empty file.
- * @param verbosity Verbosity level (0: silent; >=1: warnings; >=2:
- * informational messages).
- * @return True if file creation succeeds, false otherwise.
+ * @brief Creates a file filled with random data of specified size.
+ *
+ * This function creates a binary file at the given path and fills it with
+ * random data. It first attempts to use /dev/urandom (if available and enabled)
+ * for cryptographically secure random data, then falls back to C++
+ * pseudo-random generation using std::mt19937.
+ *
+ * @param path The file path where the random file should be created
+ * @param size The size in bytes of the file to create (0 creates an empty file)
+ * @param verbosity Controls error message output (>=1 enables error messages)
+ *
+ * @return true if the file was successfully created and filled with random
+ * data, false if an error occurred during file creation or writing
+ *
+ * @note The function uses binary mode and truncates any existing file at the
+ * path. For large files, data is written in chunks of up to 4096 bytes to
+ * manage memory usage efficiently.
+ *
+ * @warning If writing fails partway through, the function will attempt to clean
+ * up the partially written file.
  */
 bool create_random_file(const std::string &path, size_t size, int verbosity) {
   std::ofstream out_file(path, std::ios::binary | std::ios::trunc);

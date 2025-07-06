@@ -34,9 +34,27 @@ namespace { // Start anonymous namespace
 // --- Memory Mapping Utilities ---
 
 /**
- * @class MappedFile
- * @brief RAII wrapper for memory-mapped file pointers using POSIX mmap.
- *        Manages the mapped memory region and the associated file descriptor.
+ * @brief RAII wrapper class for memory-mapped files using mmap system call.
+ *
+ * MappedFile provides a safe and convenient interface for memory-mapping files
+ * into the process address space. It follows RAII principles to ensure proper
+ * resource management and automatic cleanup of memory mappings and file
+ * descriptors.
+ *
+ * The class supports both mapping existing files for reading/writing and
+ * creating new files with specified sizes. It handles various mapping
+ * configurations through mmap protection and flag parameters, and automatically
+ * manages file descriptors based on the mapping type.
+ *
+ * Key features:
+ * - Automatic resource cleanup through RAII
+ * - Support for move semantics (copy operations disabled)
+ * - Automatic file size detection for existing files
+ * - Efficient sparse file allocation for new files
+ *
+ * @note File descriptor management varies based on mapping type:
+ *       - Read-only and private mappings: fd closed after mapping
+ *       - Shared writable mappings: fd kept open for potential sync operations
  */
 class MappedFile {
   unsigned char *ptr_ = nullptr; //< Pointer to the mapped memory region
@@ -92,13 +110,6 @@ public:
    * mapping
    * @note For empty files, no actual mapping is created and ptr_ is set to
    * nullptr
-   * @note File descriptor management varies based on protection and mapping
-   * flags:
-   *       - For read-only or private mappings, fd is closed after mapping
-   *       - For shared writable mappings, fd may be kept open for potential
-   * fsync operations
-   * @note On failure, all resources are properly cleaned up and member
-   * variables reset
    */
   bool map(const char *fname, size_t &size_in_out, int prot, int flags,
            int open_flags = O_RDONLY) {
@@ -179,8 +190,6 @@ public:
    *
    * @note For zero-size files, the function creates/truncates the file but
    * doesn't perform memory mapping
-   * @note The file descriptor remains open for shared writable mappings
-   * @note On failure, all allocated resources are properly cleaned up
    * @note Calls unmap() at the beginning to clean up any existing mappings
    */
   bool allocate_and_map(const char *fname, size_t size,
@@ -251,9 +260,11 @@ public:
     fd_ = -1;
   }
 
-  unsigned char *get() const { return ptr_; }
-  size_t size() const { return size_; }
-  bool is_mapped() const { return ptr_ != nullptr; }
+  unsigned char *get() const { return ptr_; } // Get the mapped pointer
+  size_t size() const { return size_; } // Get the size of the mapped region
+  bool is_mapped() const {
+    return ptr_ != nullptr;
+  } // Check if mapped region exists
 };
 
 // --- Large File Header I/O ---
@@ -663,7 +674,7 @@ bool compress_large_file(const std::string &input_path, size_t input_size,
   // Input file can be unmapped now as all data processed
   mapped_in.unmap();
 
-  // --- Phase 2: Check for Errors and Write Output File Sequentially ---
+  // --- Phase 2: Write Output File Sequentially ---
   bool success = !compression_error_occurred.load();
   if (success) {
     // Double check results (optional sanity check)

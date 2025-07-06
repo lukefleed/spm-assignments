@@ -2,7 +2,7 @@
 #define RECORD_HPP
 
 #include <cstddef> // used for size_t
-#include <cstring>
+#include <cstring> // used for std::memset
 
 /**
  * @brief Record structure for variable-size payload sorting
@@ -16,19 +16,27 @@ struct Record {
   size_t payload_size; ///< Payload size in bytes
 
   /**
-   * @brief Initialize record with specified payload size
-   * @param payload_size Payload allocation size in bytes
+   * @brief Constructs a Record with the specified payload size.
+   *
+   * Creates a new Record instance with an initialized key set to 0 and
+   * dynamically allocates memory for the payload if a non-zero size is
+   * specified. The allocated payload memory is zero-initialized.
+   *
+   * @param payload_size The size in bytes for the payload buffer. Defaults to
+   * 0. If 0, no memory is allocated and payload remains nullptr.
    */
   Record(size_t payload_size = 0)
       : key(0), payload(nullptr), payload_size(payload_size) {
     if (payload_size > 0) {
       payload = new char[payload_size];
-      std::memset(payload, 0, payload_size);
+      std::memset(payload, 0,
+                  payload_size); // memset initializes memory to zero
     }
   }
 
-  Record(const Record &) = delete;
-  Record &operator=(const Record &) = delete;
+  Record(const Record &) = delete; // Disable copy constructor
+  Record &
+  operator=(const Record &) = delete; // Disable copy assignment operator
 
   /**
    * @brief Move constructor for Record class.

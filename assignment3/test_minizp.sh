@@ -43,23 +43,28 @@ run_test() {
   fi
 }
 
-# 1. Test compress preserve original
+# 1. Test compress single file while preserving the original
+# This verifies that compression creates a .zip file without deleting the source
 run_test "$BIN -C 0 small1.dat"
 [ -f small1.dat.zip ] && [ -f small1.dat ] || { echo "FAIL: compress preserve"; exit 1; }
 
-# 2. Test compress and remove original
+# 2. Test compress single file and remove the original
+# This verifies that compression creates a .zip file and deletes the source file
 run_test "$BIN -C 1 bigfile.dat"
 [ -f bigfile.dat.zip ] && [ ! -f bigfile.dat ] || { echo "FAIL: compress remove"; exit 1; }
 
-# 3. Test decompress preserve original
+# 3. Test decompress archive while preserving the original .zip file
+# This verifies that decompression extracts the file without deleting the archive
 run_test "$BIN -D 0 bigfile.dat.zip"
 [ -f bigfile.dat ] && [ -f bigfile.dat.zip ] || { echo "FAIL: decompress preserve"; exit 1; }
 
-# 4. Test decompress and remove archive
+# 4. Test decompress archive and remove the .zip file after extraction
+# This verifies that decompression extracts the file and deletes the archive
 run_test "$BIN -D 1 small1.dat.zip"
 [ -f small1.dat ] && [ ! -f small1.dat.zip ] || { echo "FAIL: decompress remove"; exit 1; }
 
-# 5. Test recursive compression on directory
+# 5. Test recursive compression on directory structure
+# This verifies that the -r flag compresses files within subdirectories
 run_test "$BIN -r 1 -C 0 nested"
 [ -f nested/other/file2.dat.zip ] || { echo "FAIL: recursive compress"; exit 1; }
 

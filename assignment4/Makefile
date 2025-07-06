@@ -166,7 +166,7 @@ benchmark_cluster_weak_scaling: $(TARGET_MULTI_NODE) $(TARGET_HYBRID_PERF)
 # Hybrid correctness test
 test_correctness_hybrid: $(TARGET_HYBRID_CORRECT)
 	@echo "Running hybrid MPI+parallel correctness tests..."
-	mpirun --oversubscribe -np 2 $(TARGET_HYBRID_CORRECT)
+	srun -n 2 $(TARGET_HYBRID_CORRECT)
 
 # Help target
 help:
@@ -250,7 +250,7 @@ test_perf_hybrid: $(TARGET_HYBRID_PERF)
 	@echo " Output: $(HYBRID_CSV_FILE)"
 	@echo "=========================================================================================="
 	@echo "Establishing 1-node baseline..."
-	@BASELINE_OUTPUT=$$(mpirun --oversubscribe -np 1 $(TARGET_HYBRID_PERF) $(FF_THREADS) $(RECORDS_SIZE_M) $(PAYLOAD_SIZE_B)); \
+	@BASELINE_OUTPUT=$$(srun -n 1 $(TARGET_HYBRID_PERF) $(FF_THREADS) $(RECORDS_SIZE_M) $(PAYLOAD_SIZE_B)); \
 	if [ -z "$$BASELINE_OUTPUT" ]; then echo "Error: Failed to get baseline output."; exit 1; fi; \
 	T_1NODE=$$(echo $$BASELINE_OUTPUT | cut -d',' -f3); \
 	T_STDSORT=$$(echo $$BASELINE_OUTPUT | cut -d',' -f4); \
@@ -264,7 +264,7 @@ test_perf_hybrid: $(TARGET_HYBRID_PERF)
 		if [ $$nodes -eq 1 ]; then \
 			RUN_OUTPUT=$$BASELINE_OUTPUT; \
 		else \
-			RUN_OUTPUT=$$(mpirun --oversubscribe -np $$nodes $(TARGET_HYBRID_PERF) $(FF_THREADS) $(RECORDS_SIZE_M) $(PAYLOAD_SIZE_B) --t-stdsort $$T_STDSORT --t-sequential $$T_SEQUENTIAL --t-1node $$T_1NODE); \
+			RUN_OUTPUT=$$(srun -n $$nodes $(TARGET_HYBRID_PERF) $(FF_THREADS) $(RECORDS_SIZE_M) $(PAYLOAD_SIZE_B) --t-stdsort $$T_STDSORT --t-sequential $$T_SEQUENTIAL --t-1node $$T_1NODE); \
 		fi; \
 		if [ -z "$$RUN_OUTPUT" ]; then echo "Error: Test run failed for $$nodes nodes."; continue; fi; \
 		T_CURRENT=$$(echo $$RUN_OUTPUT | cut -d',' -f3); \
