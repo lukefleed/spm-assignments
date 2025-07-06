@@ -206,7 +206,9 @@ void static_block_worker(int thread_id, int num_threads,
       // Threads with id < remainder get one extra element.
       thread_start = current_range.start +
                      static_cast<ull>(thread_id) * (base_block_size + 1);
-      thread_end = thread_start + base_block_size;
+      thread_end =
+          thread_start +
+          base_block_size; // End index is inclusive, so we add base_block_size.
     } else {
       // Threads with id >= remainder get the base block size.
       // Start index needs to account for the larger blocks assigned to earlier
@@ -387,7 +389,7 @@ bool run_static_scheduling(const Config &config,
   }
 
   // --- Thread Pool Setup ---
-  // Determine the actual number of threads to use. It's often beneficial
+  // Determine the actual number of threads to use. It's beneficial
   // to not exceed the number of hardware threads available to avoid excessive
   // context switching overhead. Using 1 thread implies sequential execution
   // handled elsewhere. Note: config.num_threads should be > 1 if this function
@@ -400,27 +402,27 @@ bool run_static_scheduling(const Config &config,
                      static_cast<int>(std::thread::hardware_concurrency()));
   // If user explicitly asked for more threads than hardware_concurrency, using
   // hardware_concurrency is generally a safer default for performance, though
-  // allowing oversubscription could be an option.
+  // allowing oversubscription could be an option (not implemented).
   if (config.verbose && static_cast<int>(config.num_threads) > threads_to_use &&
       config.num_threads > 1) {
     std::cout << "Warning: Requested " << config.num_threads
               << " threads, but limiting to hardware concurrency of "
               << threads_to_use << " for static scheduling." << std::endl;
   }
-  if (threads_to_use <=
-      0) { // Should not happen if config.num_threads > 0, but defensive check.
+  // Should not happen if config.num_threads > 0, but defensive check.
+  if (threads_to_use <= 0) {
     threads_to_use = 1;
   }
 
-  std::vector<std::thread> threads;
+  std::vector<std::thread> threads; // Vector to hold the worker threads.
   results_out.clear(); // Ensure the output vector is empty before population.
 
   // Initialize the results vector. One RangeResult per input range,
   // with the atomic max_steps initialized to 0.
   results_out.reserve(config.ranges.size()); // Pre-allocate memory
   for (const auto &r : config.ranges) {
-    results_out.emplace_back(
-        r); // Creates RangeResult with original range and max_steps=0
+    // Creates RangeResult with original range and max_steps=0
+    results_out.emplace_back(r);
   }
 
   if (config.verbose) {
@@ -529,28 +531,4 @@ bool run_static_scheduling(const Config &config,
   }
 
   return true; // Indicate successful completion.
-}
-
-/**
- * @brief Legacy function wrapper for static block-cyclic scheduling.
- *
- * This function exists potentially for backward compatibility or specific use
- * cases. It ensures the BLOCK_CYCLIC variant is selected and delegates to the
- * main `run_static_scheduling` function.
- *
- * @param config Configuration object. The `static_variant` field will be
- * ignored and forced to BLOCK_CYCLIC.
- * @param results_out Output vector for results.
- * @return bool Result of the delegated call to `run_static_scheduling`.
- * @deprecated Prefer using `run_static_scheduling` directly with the
- * appropriate `static_variant` set in the Config.
- */
-bool run_static_block_cyclic(const Config &config,
-                             std::vector<RangeResult> &results_out) {
-  // Create a mutable copy of the config to explicitly set the variant.
-  Config block_cyclic_config = config;
-  block_cyclic_config.static_variant = StaticVariant::BLOCK_CYCLIC;
-
-  // Delegate to the primary static scheduling implementation.
-  return run_static_scheduling(block_cyclic_config, results_out);
 }

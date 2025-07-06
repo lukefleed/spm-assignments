@@ -2,7 +2,6 @@
 #define COMMON_TYPES_H
 
 #include <atomic> // For std::atomic<ull> used in RangeResult
-#include <optional>
 #include <string>
 #include <vector> // For std::vector<Range> in Config
 

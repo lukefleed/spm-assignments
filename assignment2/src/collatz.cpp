@@ -1,8 +1,8 @@
 #include "collatz.h"
 #include <algorithm> // For std::max
+#include <iostream>  // For std::cerr
 #include <limits>    // For std::numeric_limits
 #include <stdexcept> // For std::overflow_error
-#include <iostream>  // For std::cerr
 
 /**
  * @brief Calculates the number of steps required for a given positive integer
@@ -22,7 +22,6 @@
  * @note Includes an optimization for powers of 2 and uses bitwise operations
  *       for efficiency. The power-of-2 optimization leverages the GCC/Clang
  *       intrinsic `__builtin_ctzll` (count trailing zeros) for performance.
- *       A portable alternative could be implemented if needed.
  */
 ull collatz_steps(ull n) {
   // Base cases: The sequence terminates immediately for 0 and 1.

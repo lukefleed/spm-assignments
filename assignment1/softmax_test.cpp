@@ -375,8 +375,8 @@ double benchmark(Func &&func, const float *input, float *output, size_t K,
  */
 template <typename Func>
 double benchmark_plain(Func &&func, const float *input, float *output, size_t K,
-                       size_t samples = 2,
-                       size_t iterations_per_sample = 5) noexcept {
+                       size_t samples = 1,
+                       size_t iterations_per_sample = 10) noexcept {
   std::vector<double> measurements;
   measurements.reserve(samples);
 
@@ -421,8 +421,8 @@ double benchmark_plain(Func &&func, const float *input, float *output, size_t K,
  */
 template <typename Func>
 double benchmark_threaded(Func &&func, const float *input, float *output,
-                          size_t K, int num_threads = -1, size_t samples = 2,
-                          size_t iterations_per_sample = 5) noexcept {
+                          size_t K, int num_threads = -1, size_t samples = 1,
+                          size_t iterations_per_sample = 10) noexcept {
   std::vector<double> measurements;
   measurements.reserve(samples);
 
@@ -530,16 +530,16 @@ int main(int argc, char *argv[]) {
    *    - Provides more realistic performance data across the size spectrum
    */
   std::set<size_t> unique_sizes;
-  for (size_t power = 0; power <= 22; ++power) {
+  for (size_t power = 0; power <= 25; ++power) {
     size_t value = 1ULL << power; // 2^power
     test_sizes.push_back(value);
     unique_sizes.insert(value);
   }
 
-  // Add 50 uniformly distributed values between 1 and 2^22
+  // Add 50 uniformly distributed values between 1 and 2^25
   std::mt19937 gen(
       42); // Using same seed as in generate_random_input for consistency
-  std::uniform_int_distribution<size_t> dis(1, 1ULL << 22);
+  std::uniform_int_distribution<size_t> dis(1, 1ULL << 25);
 
   size_t additional_needed = 50;
   while (additional_needed > 0) {

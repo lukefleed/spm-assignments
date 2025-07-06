@@ -33,21 +33,4 @@
 bool run_static_scheduling(const Config &config,
                            std::vector<RangeResult> &results_out);
 
-/**
- * @brief Executes static block-cyclic scheduling. [DEPRECATED]
- *
- * This function is provided for potential backward compatibility. It configures
- * the static variant to BLOCK_CYCLIC and then calls the main
- * `run_static_scheduling` function.
- *
- * @param config Configuration parameters. The `static_variant` field will be
- * overridden.
- * @param results_out Vector to store the computation results.
- * @return True if execution was successful, false otherwise.
- * @deprecated Prefer calling `run_static_scheduling` directly with
- * `config.static_variant` set to `StaticVariant::BLOCK_CYCLIC`.
- */
-bool run_static_block_cyclic(const Config &config,
-                             std::vector<RangeResult> &results_out);
-
 #endif // STATIC_SCHEDULER_H

@@ -11,6 +11,15 @@
 // TaskQueue (Simple Centralized Queue Implementation)
 //----------------------------------------------------------------------------
 
+/**
+ * @brief Adds a task to the queue in a thread-safe manner.
+ *
+ * This method safely adds a task to the internal queue using proper
+ * synchronization mechanisms. If the queue has been closed, the task
+ * is discarded and no operation is performed.
+ *
+ * @param task The task to be added to the queue (moved into the queue)
+ */
 void TaskQueue::push(Task task) {
   {
     // Lock the mutex to ensure exclusive access to the queue.
@@ -20,8 +29,7 @@ void TaskQueue::push(Task task) {
     if (closed_) {
       return;
     }
-    // Move the task into the queue. Using move is efficient if Task has
-    // move semantics.
+    // Move the task into the queue.
     queue_.push(std::move(task));
   } // Mutex is released here by lock_guard destructor.
 
@@ -31,6 +39,18 @@ void TaskQueue::push(Task task) {
   cond_var_.notify_one();
 }
 
+/**
+ * @brief Pops a task from the queue in a thread-safe manner.
+ *
+ * This method blocks the calling thread until a task becomes available or the
+ * queue is closed. It uses a condition variable to efficiently wait for tasks
+ * without busy-waiting, ensuring proper synchronization between producer and
+ * consumer threads.
+ *
+ * @return std::optional<Task> Returns a Task if one is available, or
+ * std::nullopt if the queue is empty and has been closed (signaling worker
+ * threads to terminate).
+ */
 std::optional<Task> TaskQueue::pop() {
   // Acquire the lock. unique_lock is needed for condition variable waiting.
   std::unique_lock<std::mutex> lock(mutex_);
@@ -58,6 +78,14 @@ std::optional<Task> TaskQueue::pop() {
   return task; // Return the task wrapped in std::optional.
 }
 
+/**
+ * @brief Closes the task queue and wakes up all waiting threads.
+ *
+ * This method safely sets the closed flag to true and notifies all threads
+ * that are currently blocked waiting for tasks. The operation is thread-safe
+ * and ensures that worker threads can detect the queue closure and exit
+ * when no more tasks are available.
+ */
 void TaskQueue::close() {
   {
     // Lock the mutex to safely modify the closed_ flag.
@@ -75,6 +103,16 @@ void TaskQueue::close() {
 // WorkStealingQueue (Mutex-Based Per-Thread Deque Implementation)
 //----------------------------------------------------------------------------
 
+/**
+ * @brief Adds a new task to the back of the work-stealing queue.
+ *
+ * This method safely adds a task to the queue using LIFO ordering for the owner
+ * thread. The task is moved into the queue to avoid unnecessary copying. The
+ * operation is thread-safe and protected by a mutex lock.
+ *
+ * @param task The task to be added to the queue. The task is moved into the
+ * queue.
+ */
 void WorkStealingQueue::push(Task task) {
   std::lock_guard<std::mutex> lock(mutex_);
   // Using push_back maintains the LIFO (Last-In, First-Out) order for the owner
@@ -83,6 +121,14 @@ void WorkStealingQueue::push(Task task) {
   queue_.push_back(std::move(task));
 }
 
+/**
+ * @brief Pops a task from the back of the queue (LIFO order for owner thread).
+ *
+ * This method is typically called by the owner thread of the work-stealing
+ * queue. It removes and returns the most recently added task from the queue,
+ * following the Last-In-First-Out (LIFO) principle which provides better cache
+ * locality for the owner thread.
+ */
 std::optional<Task> WorkStealingQueue::pop() {
   std::lock_guard<std::mutex> lock(mutex_);
   if (queue_.empty()) {
@@ -94,6 +140,22 @@ std::optional<Task> WorkStealingQueue::pop() {
   return task;
 }
 
+/**
+ * @brief Attempts to steal a task from the front of the work-stealing queue.
+ *
+ * This method is designed to be called by worker threads other than the owner
+ * of this queue. It implements a FIFO stealing strategy by removing tasks from
+ * the front of the deque, which reduces contention with the owner thread that
+ * typically accesses the back of the queue.
+ *
+ * The method is thread-safe and uses a mutex to protect concurrent access to
+ * the underlying queue. Stealing from the front tends to acquire older tasks
+ * that may represent larger chunks of work in hierarchical task decomposition
+ * scenarios.
+ *
+ * @return std::optional<Task> The stolen task if the queue is not empty,
+ *         std::nullopt otherwise
+ */
 std::optional<Task> WorkStealingQueue::steal() {
   std::lock_guard<std::mutex> lock(mutex_);
   if (queue_.empty()) {
@@ -108,6 +170,7 @@ std::optional<Task> WorkStealingQueue::steal() {
   return task;
 }
 
+// Returns true if the work-stealing queue is empty.
 bool WorkStealingQueue::empty() const {
   // Lock is required even for checking empty, as another thread might be
   // modifying the queue concurrently.
@@ -115,6 +178,7 @@ bool WorkStealingQueue::empty() const {
   return queue_.empty();
 }
 
+// Returns the current number of tasks in the work-stealing queue.
 size_t WorkStealingQueue::size() const {
   // Lock is required for thread-safe size check.
   std::lock_guard<std::mutex> lock(mutex_);
@@ -225,7 +289,7 @@ void dynamic_worker(int thread_id [[maybe_unused]], TaskQueue &queue,
  * 4. If a task is obtained (either popped or stolen), process it and atomically
  *    update the corresponding result in `results_out`.
  * 5. Crucially, decrement the global pending task counter
- * (`g_pending_tasks_ws`) *after* processing is complete, using `release`
+ * (`g_pending_tasks_ws`) after processing is complete, using `release`
  * semantics.
  * 6. If no task is found locally or stolen, check for the global termination
  *    condition using `g_all_tasks_submitted_ws` and `g_pending_tasks_ws` with
@@ -241,12 +305,6 @@ void dynamic_worker(int thread_id [[maybe_unused]], TaskQueue &queue,
  * instances (one per thread). Must be non-const to allow stealing.
  * @param results_out Reference to the shared vector for storing results,
  * accessed atomically.
- *
- * @note Termination detection in distributed work-stealing systems is
- * non-trivial. This implementation relies on the combination of the task
- * counter and the submission flag, along with appropriate memory ordering, to
- * ensure all tasks are processed before threads terminate. The `seq_cst` fence
- * provides a strong guarantee against reordering around the final check.
  */
 void dynamic_work_stealing_worker(int thread_id, int num_threads,
                                   std::vector<WorkStealingQueue> &queues,
@@ -271,9 +329,8 @@ void dynamic_work_stealing_worker(int thread_id, int num_threads,
     if (!task_opt) {
       // Simple round-robin victim selection, starting from the next thread.
       int victim_id = (thread_id + 1) % num_threads;
-      for (int i = 0; i < num_threads - 1;
-           ++i) { // Try stealing from all *other* queues.
-
+      // Try stealing from all other queues.
+      for (int i = 0; i < num_threads - 1; ++i) {
         // Skip self and skip victims currently in backoff for this thread.
         if (victim_id != thread_id && backoff_countdown[victim_id] == 0) {
           task_opt = queues[victim_id].steal(); // Attempt FIFO steal.
@@ -327,7 +384,7 @@ void dynamic_work_stealing_worker(int thread_id, int num_threads,
         }
       }
 
-      // 5. Crucially, decrement the global pending task counter *after*
+      // 5. Crucially, decrement the global pending task counter after
       // processing is complete. Use release semantics to ensure that the task
       // processing and result update are visible before the counter change,
       // synchronizing with the acquire loads in the termination check.
@@ -383,6 +440,43 @@ void dynamic_work_stealing_worker(int thread_id, int num_threads,
 // Dynamic Scheduler Execution Functions
 //----------------------------------------------------------------------------
 
+/**
+ * @brief Executes a dynamic task queue-based parallel computation for multiple
+ * ranges.
+ *
+ * This function implements a producer-consumer pattern where the main thread
+ * acts as a producer, dividing input ranges into smaller chunks and pushing
+ * them to a centralized task queue. Worker threads consume tasks from the queue
+ * and process them concurrently.
+ *
+ * @param config Configuration object containing:
+ *               - num_threads: Number of worker threads to spawn (must be > 0)
+ *               - chunk_size: Size of each task chunk (must be > 0)
+ *               - ranges: Vector of ranges to process
+ *               - verbose: Flag for verbose output
+ * @param results_out Output vector where computation results will be stored.
+ *                    Will be cleared and resized to match the number of input
+ * ranges. Each element corresponds to the result of processing one input range.
+ *
+ * @return true if the computation completed successfully, false if
+ * configuration validation failed
+ *
+ * @details The function performs the following operations:
+ *          1. Validates configuration parameters (positive num_threads and
+ * chunk_size)
+ *          2. Initializes a centralized task queue and result storage
+ *          3. Spawns worker threads that consume tasks from the queue
+ *          4. Divides each input range into chunks of specified size
+ *          5. Handles potential unsigned integer overflow when calculating
+ * chunk boundaries
+ *          6. Skips invalid ranges (where start > end) with optional warning
+ *          7. Signals completion by closing the queue and waits for all threads
+ * to finish
+ *
+ * @note This implementation uses dynamic load balancing as worker threads
+ * request tasks from a shared queue as they become available, ensuring
+ * efficient CPU utilization.
+ */
 bool run_dynamic_task_queue(const Config &config,
                             std::vector<RangeResult> &results_out) {
   // Validate essential configuration parameters.
@@ -473,6 +567,31 @@ bool run_dynamic_task_queue(const Config &config,
   return true; // Indicate successful completion.
 }
 
+/**
+ * @brief Executes a dynamic work-stealing parallel computation across multiple
+ * threads.
+ *
+ * This function implements a work-stealing scheduler that distributes
+ * computational tasks across worker threads using per-thread queues. The main
+ * thread acts as an initial task distributor, breaking down input ranges into
+ * chunks and distributing them round-robin style to worker queues. Worker
+ * threads can steal tasks from other queues when their own queue becomes empty,
+ * providing dynamic load balancing.
+ *
+ * @param config Configuration object containing:
+ *               - num_threads: Number of worker threads (must be > 0)
+ *               - chunk_size: Size of work chunks (must be > 0)
+ *               - ranges: Vector of computational ranges to process
+ *               - verbose: Flag for additional logging output
+ *
+ * @param results_out Output vector that will contain computation results for
+ * each range. Vector is cleared and resized to match the number of input
+ * ranges. Each element corresponds to the result of processing the range at the
+ * same index in config.ranges.
+ *
+ * @return true if execution completed successfully, false if configuration
+ * validation fails
+ */
 bool run_dynamic_work_stealing(const Config &config,
                                std::vector<RangeResult> &results_out) {
   // Validate essential configuration parameters.

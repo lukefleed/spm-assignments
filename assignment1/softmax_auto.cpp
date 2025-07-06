@@ -75,25 +75,32 @@ template <typename T>
 using aligned_vector = std::vector<T, AlignedAllocatorC17<T>>;
 
 /**
- * @brief Compute softmax with parallelism and auto-vectorization
+ * @brief Computes the softmax function in parallel using OpenMP with automatic
+ * vectorization.
  *
- * @param input Aligned input array pointer
- * @param output Aligned output array pointer
- * @param K Size of arrays
- * @param num_threads Thread count (-1 for system default)
+ * This function implements the softmax activation function using a numerically
+ * stable approach by subtracting the maximum value before computing
+ * exponentials. The computation is parallelized using OpenMP directives with
+ * SIMD vectorization for optimal performance.
+ *
+ * The softmax function is computed as: softmax(x_i) = exp(x_i - max(x)) /
+ * sum(exp(x_j - max(x))) where max(x) is subtracted for numerical stability to
+ * prevent overflow.
+ *
+ * @param input Pointer to the input array (read-only, must be aligned to
+ * VECTOR_ALIGNMENT)
+ * @param output Pointer to the output array where softmax results will be
+ * stored (must be aligned to VECTOR_ALIGNMENT and have at least K elements)
+ * @param K Size of the input and output arrays
+ * @param num_threads Number of OpenMP threads to use. If <= 0, uses default
+ * thread count
+ *
+ * @warning Input and output arrays must not overlap (restrict qualified
+ * pointers).
  */
 void softmax_auto_parallel(const float *__restrict__ input,
                            float *__restrict__ output, size_t K,
                            int num_threads = -1) {
-  /**
-   * OPTIMIZATION NOTES:
-   * - __restrict__ qualifier: Informs compiler pointers don't alias
-   * - Ternary operator: Enables better vectorization vs if-statements
-   * - Separate loops: Better vectorization and cache utilization
-   * - expf() instead of std::exp(): Faster single-precision SIMD operations
-   * - Multiplication by inverse: Faster than repeated divisions
-   */
-
   // Set thread count if specified
   if (num_threads > 0) {
     omp_set_num_threads(num_threads);
@@ -101,21 +108,24 @@ void softmax_auto_parallel(const float *__restrict__ input,
 
   float max_val = -std::numeric_limits<float>::infinity();
 
+  // Phase 1: Find the maximum value in the input array.
 #pragma omp parallel for simd reduction(max : max_val)                         \
     aligned(input : VECTOR_ALIGNMENT)
   for (size_t i = 0; i < K; ++i) {
     max_val = (input[i] > max_val) ? input[i] : max_val;
   }
 
+  // Phase 2: Compute exponentials and sum them up
   float sum = 0.0f;
 #pragma omp parallel for simd reduction(+ : sum)                               \
     aligned(input, output : VECTOR_ALIGNMENT)
   for (size_t i = 0; i < K; ++i) {
-    output[i] = expf(input[i] - max_val);
-    sum += output[i];
+    output[i] = std::exp(input[i] - max_val); // Compute exp with stabilization
+    sum += output[i];                         // Sum the exponentials
   }
 
   const float inv_sum = 1.0f / sum;
+  // Normalize the output by multiplying with the inverse sum
 #pragma omp parallel for simd aligned(output : VECTOR_ALIGNMENT)
   for (size_t i = 0; i < K; ++i) {
     output[i] *= inv_sum;
@@ -123,10 +133,9 @@ void softmax_auto_parallel(const float *__restrict__ input,
 }
 
 /**
- * @brief Non-parallel softmax with auto-vectorization
+ * @brief Non-parallel softmax with auto-vectorization (Optimized Version)
  *
- * Uses SIMD instructions but no threading - better for small K values
- * where thread creation overhead exceeds parallelization benefits.
+ * Uses SIMD instructions but no threading. Then same as above
  *
  * @param input Aligned input array pointer
  * @param output Aligned output array pointer
@@ -134,19 +143,22 @@ void softmax_auto_parallel(const float *__restrict__ input,
  */
 void softmax_auto_noparallel(const float *__restrict__ input,
                              float *__restrict__ output, size_t K) {
+  // Phase 1: Find the maximum value.
   float max_val = -std::numeric_limits<float>::infinity();
 #pragma omp simd reduction(max : max_val) aligned(input : VECTOR_ALIGNMENT)
   for (size_t i = 0; i < K; ++i) {
     max_val = (input[i] > max_val) ? input[i] : max_val;
   }
 
+  // Phase 2: Compute exponentials and sum them up.
   float sum = 0.0f;
 #pragma omp simd reduction(+ : sum) aligned(input, output : VECTOR_ALIGNMENT)
   for (size_t i = 0; i < K; ++i) {
-    output[i] = expf(input[i] - max_val);
-    sum += output[i];
+    output[i] = std::exp(input[i] - max_val); // Compute exp with stabilization
+    sum += output[i];                         // Sum the exponentials
   }
 
+  // Phase 3: Normalize the output.
   const float inv_sum = 1.0f / sum;
 #pragma omp simd aligned(output : VECTOR_ALIGNMENT)
   for (size_t i = 0; i < K; ++i) {

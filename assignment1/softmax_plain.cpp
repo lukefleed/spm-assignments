@@ -5,9 +5,24 @@
 #include <random>
 #include <vector>
 
+/**
+ * @brief Computes the softmax function for a given input array.
+ *
+ * This implementation uses numerical stabilization by subtracting the maximum
+ * value from all inputs before computing the exponential to prevent overflow.
+ *
+ * @param input Pointer to the input array of size K containing the raw scores
+ * @param output Pointer to the output array of size K where softmax
+ * probabilities will be stored
+ * @param K The number of elements in both input and output arrays
+ *
+ * @note The output array must be pre-allocated with at least K elements
+ * @note The function modifies the output array in-place
+ * @note Input and output arrays should not overlap
+ */
 void softmax_plain(const float *input, float *output, size_t K) {
   // Find the maximum to stabilize the computation of the exponential
-  float max_val = -std::numeric_limits<float>::infinity();
+  float max_val = -std::numeric_limits<float>::max();
   for (size_t i = 0; i < K; ++i) {
     max_val = std::max(max_val, input[i]);
   }
