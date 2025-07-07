@@ -155,3 +155,55 @@ ull find_max_steps_in_subrange(ull start, ull end) {
   // Return the highest step count found across the valid portion of the range.
   return max_s;
 }
+
+/// ------------- PARALLEL VERSION WITH OPENMP ------------- //
+// Commented out since I implemented it after the assignment was submitted.
+
+// ull find_max_steps_in_subrange(ull start, ull end) {
+//   // Handle the case where the provided range is logically invalid or empty.
+//   if (start > end) {
+//     return 0;
+//   }
+
+//   // Ensure the starting point is at least 1, as Collatz is defined for
+//   positive
+//   // integers. If the original start was 0, adjusting it to 1 maintains the
+//   // spirit of the calculation.
+//   if (start == 0) {
+//     start = 1;
+//     // If the original range was just [0, 0], adjusting start to 1 makes it
+//     [1,
+//     // 0], which will be correctly handled by the start > end check below (or
+//     // implicitly by the loop condition).
+//     if (start > end)
+//       return 0; // Handle the case where original range was [0,0]
+//   }
+
+//   ull max_s = 0; // Initialize maximum steps found so far to 0.
+
+//   // Parallelize the loop with OpenMP
+// #pragma omp parallel for reduction(max : max_s) schedule(dynamic)
+//   for (ull i = start; i <= end; ++i) {
+//     try {
+//       ull current_steps = collatz_steps(i);
+//       // OpenMP reduction will handle the max operation thread-safely
+//       if (current_steps > max_s) {
+//         max_s = current_steps;
+//       }
+//     } catch (const std::overflow_error &e) {
+//       // Note: Exception handling in OpenMP parallel regions is tricky
+//       // This will terminate the current thread but may not stop others
+// #pragma omp critical
+//       {
+//         std::cout << "Warning: Overflow occurred calculating steps for " << i
+//                   << " within range [" << start << ", " << end << "]. "
+//                   << "Result might be incomplete. Error: " << e.what()
+//                   << std::endl;
+//       }
+//       // Continue with other iterations (each thread handles its own
+//       exceptions)
+//     }
+//   }
+//   // Return the highest step count found across the valid portion of the
+//   range. return max_s;
+// }

@@ -58,6 +58,11 @@ public:
           Record *to_buf = nullptr)
       : n(total_size), step_size(step), from(from_buf), to(to_buf), offset(0) {}
 
+  // The offset variable works as a cursor to track the portion of the array
+  // already processed. It is initialized to 0 and incremented by step_size
+  // after each task creation. When it reaches or exceeds n, the emitter signals
+  // EOS to indicate that all tasks have been created and no more work is
+  // available.
   void *svc(void *) override {
     if (offset >= n) {
       return EOS; // Signal farm completion
@@ -107,7 +112,7 @@ public:
   void *svc(MergeTask *task) override {
     std::sort(task->source + task->start, task->source + task->end);
     delete task;  // Immediate cleanup, the worker is the owner of the memory of
-                  // the task so we can delete it right away
+                  // the task, it takes the responsibility to delete it.
     return GO_ON; // Signal that the worker is ready for the next task
   }
 };

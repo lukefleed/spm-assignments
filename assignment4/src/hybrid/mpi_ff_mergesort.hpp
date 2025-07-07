@@ -46,9 +46,13 @@ public:
   explicit HybridMergeSort(const HybridConfig &config);
   ~HybridMergeSort();
 
+  // Disable copy semantics
   HybridMergeSort(const HybridMergeSort &) = delete;
+  // Disable copy assignment operator
   HybridMergeSort &operator=(const HybridMergeSort &) = delete;
+  // Enable move semantics
   HybridMergeSort(HybridMergeSort &&) = default;
+  // Enable move assignment operator
   HybridMergeSort &operator=(HybridMergeSort &&) = default;
 
   /**

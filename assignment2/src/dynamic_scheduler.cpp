@@ -680,8 +680,8 @@ bool run_dynamic_work_stealing(const Config &config,
 
   // Wait for all worker threads to complete.
   for (auto &t : threads) {
-    if (t.joinable()) {
-      t.join();
+    if (t.joinable()) { // Ensure the thread is joinable before joining.
+      t.join();         // Wait for the thread to finish execution.
     }
   }
 
@@ -691,7 +691,7 @@ bool run_dynamic_work_stealing(const Config &config,
   size_t final_pending_tasks =
       g_pending_tasks_ws.load(std::memory_order_relaxed);
   if (config.verbose && final_pending_tasks != 0) {
-    std::cerr << "Warning: Work-stealing pending tasks counter is non-zero ("
+    std::cout << "Warning: Work-stealing pending tasks counter is non-zero ("
               << final_pending_tasks << ") after joining all threads."
               << std::endl;
   }

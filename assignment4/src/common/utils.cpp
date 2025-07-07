@@ -5,9 +5,28 @@
 #include <iomanip>
 #include <stdexcept>
 
-
 /**
- * @brief Generate test dataset with specified pattern
+ * @brief Generates a vector of Record objects with specified characteristics.
+ *
+ * This function creates test data for the sorting algorithm by generating
+ * records with keys following different patterns and optional random payload
+ * data.
+ *
+ * @param n The number of records to generate
+ * @param payload_size The size of the payload data for each record (in bytes)
+ * @param pattern The data pattern to use for key generation:
+ *                - RANDOM: Keys are randomly distributed
+ *                - SORTED: Keys are in ascending order (0, 1, 2, ...)
+ *                - REVERSE_SORTED: Keys are in descending order (n-1, n-2, ...)
+ *                - NEARLY_SORTED: Keys are mostly sorted with ~1% disorder
+ * @param seed The random seed for reproducible data generation
+ *
+ * @return std::vector<Record> A vector containing the generated records
+ *
+ * @note For NEARLY_SORTED pattern, approximately 1% of records will have
+ *       their keys swapped with the previous record to introduce disorder.
+ * @note If payload_size > 0, each record's payload is filled with random
+ *       ASCII characters (0-127).
  */
 std::vector<Record> generate_data(size_t n, size_t payload_size,
                                   DataPattern pattern, unsigned seed) {
@@ -60,7 +79,15 @@ bool is_sorted(const std::vector<Record> &data) {
 }
 
 /**
- * @brief Deep copy record vector with payload duplication
+ * @brief Creates a deep copy of a vector of Record objects.
+ *
+ * This function performs a deep copy of the input vector, creating new Record
+ * objects with their own allocated memory for payloads. Each Record in the
+ * returned vector will have its own independent copy of the payload data.
+ *
+ * @param original The source vector of Record objects to be copied
+ * @return std::vector<Record> A new vector containing deep copies of all
+ * records
  */
 std::vector<Record> copy_records(const std::vector<Record> &original) {
   std::vector<Record> copy;
@@ -75,16 +102,6 @@ std::vector<Record> copy_records(const std::vector<Record> &original) {
   }
   return copy;
 }
-
-/**
- * @brief Exception thrown when help is requested
- */
-class HelpRequestedException : public std::exception {
-public:
-  const char* what() const noexcept override {
-    return "Help requested";
-  }
-};
 
 /**
  * @brief Parse command-line arguments into configuration

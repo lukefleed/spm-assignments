@@ -19,19 +19,36 @@ static inline __m256i compute_mask(size_t n) {
   return _mm256_cmpgt_epi32(_mm256_set1_epi32(n), indices);
 }
 
+/**
+ * @brief Computes the softmax function using AVX vectorization and OpenMP
+ * parallelization.
+ *
+ * This function implements a optimized softmax computation with three phases:
+ * 1. Find the maximum value across all elements for numerical stability
+ * 2. Compute exponentials and their sum using exp(x - max_val)
+ * 3. Normalize by dividing each exponential by the sum
+ *
+ * @param input Pointer to input array of floats (must be 32-byte aligned for
+ * AVX)
+ * @param output Pointer to output array of floats (must be 32-byte aligned for
+ * AVX)
+ * @param K Number of elements in the input/output arrays
+ * @param num_threads Number of OpenMP threads to use (-1 for auto-detection)
+ *
+ * @note The input and output arrays must be properly aligned for AVX operations
+ */
 void softmax_avx(const float *input, float *output, size_t K,
                  int num_threads = -1) {
-  const size_t BLOCK_SIZE =
-      32 * 1024 / sizeof(float); // Block size for cache-friendly processing
-                                 // (approximately 8K floats)
-  float max_val =
-      -std::numeric_limits<float>::max(); // Initialize overall maximum to
-                                          // most negative finite value
+  // Block size for cache-friendly processing (approximately 8K floats)
+  const size_t BLOCK_SIZE = 32 * 1024 / sizeof(float);
+  // Initialize overall maximum to the most negative finite value
+  float max_val = -std::numeric_limits<float>::max();
 
   // Use specified thread count or default to processor count
   int threads_to_use = (num_threads > 0) ? num_threads : omp_get_num_procs();
-
-// Parallelize the max finding operation with reduction across all threads
+  // PHASE 1: Compute the maximum value across all elements
+  // The reduction clause allows each thread to compute its own maximum, which
+  // is then combined at the end.
 #pragma omp parallel for reduction(max : max_val) num_threads(threads_to_use)
   for (size_t block_start = 0; block_start < K; block_start += BLOCK_SIZE) {
     const size_t block_end =
@@ -94,7 +111,7 @@ void softmax_avx(const float *input, float *output, size_t K,
     }
 
     // At this points, max_vec contains the 8 partial maximums. To collapse them
-    // in one scalar, we use a sequence of shuffles.'
+    // in one scalar, we use a sequence of shuffles (a horizontal reduction).
 
     // Exchange the high and low 128-bit lanes of the max_vec vector
     // This is done to prepare for a horizontal reduction across all lanes
@@ -126,7 +143,7 @@ void softmax_avx(const float *input, float *output, size_t K,
     // Alternative using intrinsic: max_val = fmaxf(max_val, block_max);
   }
 
-  // Phase 2: Compute exponentials and sum with masking
+  // Phase 2: Compute exponentials and sum
   float sum = 0.0f;
 #pragma omp parallel num_threads(threads_to_use)
   {

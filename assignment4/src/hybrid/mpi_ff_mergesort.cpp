@@ -207,8 +207,8 @@ std::vector<Record> HybridMergeSort::sort(std::vector<Record> &data,
 void HybridMergeSort::distribute_data(std::vector<Record> &local_data,
                                       const std::vector<Record> &global_data) {
   size_t total_num_records = (mpi_rank_ == 0) ? global_data.size() : 0;
-  MPI_Bcast(&total_num_records, 1, MPI_UNSIGNED_LONG, 0,
-            MPI_COMM_WORLD); // Broadcast total record count to all processes
+  // Broadcast total record count to all processes
+  MPI_Bcast(&total_num_records, 1, MPI_UNSIGNED_LONG, 0, MPI_COMM_WORLD);
   if (total_num_records == 0)
     return;
 

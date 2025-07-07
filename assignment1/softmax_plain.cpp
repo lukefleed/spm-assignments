@@ -9,16 +9,20 @@
  * @brief Computes the softmax function for a given input array.
  *
  * This implementation uses numerical stabilization by subtracting the maximum
- * value from all inputs before computing the exponential to prevent overflow.
+ * value from all inputs before computing exponentials to prevent overflow.
  *
- * @param input Pointer to the input array of size K containing the raw scores
- * @param output Pointer to the output array of size K where softmax
- * probabilities will be stored
+ * The softmax function is defined as:
+ * softmax(x_i) = exp(x_i - max(x)) / sum(exp(x_j - max(x))) for all j
+ *
+ * @param input Pointer to the input array containing K floating-point values
+ * @param output Pointer to the output array where softmax results will be
+ stored.
+ *               Must be pre-allocated with at least K elements.
  * @param K The number of elements in both input and output arrays
  *
- * @note The output array must be pre-allocated with at least K elements
- * @note The function modifies the output array in-place
- * @note Input and output arrays should not overlap
+ * @note The input and output arrays can be the same (in-place operation)
+ * @note This function assumes both input and output pointers are valid and
+ *       point to arrays of at least K elements
  */
 void softmax_plain(const float *input, float *output, size_t K) {
   // Find the maximum to stabilize the computation of the exponential

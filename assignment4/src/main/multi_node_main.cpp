@@ -112,7 +112,33 @@ void print_performance_summary(const hybrid::HybridMetrics &metrics,
 }
 
 /**
- * @brief Multi-node hybrid mergesort main application.
+ * @brief Main function for multi-node hybrid merge sort implementation using
+ * MPI.
+ *
+ * This function initializes MPI with thread support, parses command line
+ * arguments, generates test data on rank 0, performs distributed hybrid merge
+ * sort across multiple MPI processes, validates the sorted results, and prints
+ * performance metrics.
+ *
+ * The program requires MPI_THREAD_FUNNELED thread support level to enable
+ * hybrid parallelization combining MPI distributed computing with
+ * multi-threading.
+ *
+ * @param argc Number of command line arguments
+ * @param argv Array of command line argument strings
+ *
+ * @return 0 on success, 1 on error (via MPI_Abort)
+ *
+ * @details
+ * - Initializes MPI with thread support and validates threading level
+ * - Rank 0 generates data and creates validation keys
+ * - All ranks participate in distributed hybrid merge sort
+ * - Rank 0 validates final sorted results against ground truth
+ * - Performance metrics are collected and displayed
+ * - Proper error handling with MPI_Abort on failures
+ *
+ * @note Requires MPI_THREAD_FUNNELED support from MPI implementation
+ * @throws std::exception Caught and handled with error reporting on rank 0
  */
 int main(int argc, char *argv[]) {
   int provided;

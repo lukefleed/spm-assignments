@@ -33,10 +33,10 @@ struct Record {
                   payload_size); // memset initializes memory to zero
     }
   }
-
-  Record(const Record &) = delete; // Disable copy constructor
-  Record &
-  operator=(const Record &) = delete; // Disable copy assignment operator
+  // Disable copy constructor
+  Record(const Record &) = delete;
+  // Disable copy assignment operator
+  Record &operator=(const Record &) = delete;
 
   /**
    * @brief Move constructor for Record class.

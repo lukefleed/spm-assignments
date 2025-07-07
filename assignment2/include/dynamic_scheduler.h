@@ -1,14 +1,12 @@
 #ifndef DYNAMIC_SCHEDULER_H
 #define DYNAMIC_SCHEDULER_H
 
-#include "common_types.h" // Includes Task, RangeResult, Config, ull
-#include <atomic>         // For std::atomic used in work-stealing termination
+#include "common_types.h"     // Includes Task, RangeResult, Config, ull
 #include <condition_variable> // For TaskQueue synchronization
 #include <deque> // Use std::deque for efficient push/pop at both ends (WorkStealingQueue)
 #include <mutex> // For thread synchronization (std::mutex, std::lock_guard, std::unique_lock)
 #include <optional> // For returning tasks that might not exist (std::optional<Task>)
 #include <queue>  // For std::queue (used in the simple TaskQueue)
-#include <thread> // For std::thread (used in .cpp)
 #include <vector> // For std::vector<RangeResult>, std::vector<WorkStealingQueue>
 
 /**

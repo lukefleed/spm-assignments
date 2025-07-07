@@ -22,9 +22,9 @@
 #include <vector>
 
 namespace Compressor {
-using ::FORMAT_VERSION;
-using ::MAGIC_NUMBER_LARGE_FILE;
-using ::SUFFIX;
+using ::FORMAT_VERSION;          // Version of the file format
+using ::MAGIC_NUMBER_LARGE_FILE; // Magic number for large file format
+using ::SUFFIX;                  // File extension for compressed files
 
 //-----------------------------------------------------------------------------
 // Internal Helper Functions (Anonymous Namespace)
@@ -65,6 +65,7 @@ public:
   MappedFile() = default;
   // Delete copy constructor and assignment operator
   MappedFile(const MappedFile &) = delete;
+  // Delete copy assignment operator
   MappedFile &operator=(const MappedFile &) = delete;
   // Move constructor
   MappedFile(MappedFile &&other) noexcept
@@ -158,13 +159,12 @@ public:
     // Keep fd_ open for mapped read-only files, close for others later if
     // needed
 
-    // For writeable mappings (MAP_SHARED), we typically close fd after mapping.
-    // For read-only (MAP_PRIVATE), keeping fd open can be valid. Let's close it
-    // for simplicity unless needed.
     if (!(prot & PROT_WRITE) || (flags & MAP_PRIVATE)) {
-      // If read-only or private, we can close fd after mapping.
-      // If MAP_SHARED and PROT_WRITE, keep fd open if needed for later fsync,
-      // etc. Assume we don't need fd after mapping for now.
+      // for read-only mappings (MAP_PRIVATE), the file descriptor can be closed
+      // immediately after mmap. The mapping remains valid since the kernal has
+      // already established an internal reference to the file. For shared
+      // writable mappings, the file descriptor is kept open for potential
+      // synchronization or writing.
       close(fd_);
       fd_ = -1;
     }
@@ -198,7 +198,9 @@ public:
     unmap();
     size_ = size; // Store intended size
 
-    // Open the file with read/write and create/truncate flags
+    // Step 1: Open the file with read/write and create/truncate flags
+    // 0x666 is the file permission mask
+    // it denotes rw-rw-rw- (read/write for all)
     fd_ = open(fname, O_RDWR | O_CREAT | O_TRUNC, 0666);
     if (fd_ < 0) {
       std::cerr << "Error: Failed creating/opening output file " << fname
@@ -206,7 +208,13 @@ public:
       return false;
     }
 
-    if (size > 0) {                   // ftruncate fails for size 0 sometimes
+    if (size > 0) { // ftruncate fails for size 0 sometimes
+      // Step 2: Extend the file to the specified size
+      // ftruncate here does not allocate any data, it just modifies the
+      // metadata of the file in the filesystem, setting its logical size. There
+      // is I/O on the disk dor the data. It creates a sparse file with "holes",
+      // blocks of data that are not physically allocated on disk until written
+      // to
       if (ftruncate(fd_, size) < 0) { // Extends the file without writing
         std::cerr << "Error: ftruncate failed for " << fname << " - "
                   << strerror(errno) << std::endl;
@@ -224,12 +232,12 @@ public:
       return true;
     }
 
-    // Here ftruncate succeeded, it tells the filesystem that the file will have
-    // size "X" but it doesn't actually allocate space. This is called a "sparse
-    // file" or "hole". If then I call a memcpy to `ptr_` the OS will allocate
-    // the space on demand and use only the disk pages that we actually touch.
-    // This is extremely efficient for large files since it avoids allocating
-    // space for the entire file upfront and the writing of empty blocks.
+    // Step 3: Memory map the file
+    // If I then call a memcpy on ptr_ (that corresponds to a hole), the kernel
+    // will intercept the access as a page fault. At this point, and only at
+    // this point, the kernel will allocate a physical page. It then associates
+    // this page with the corresponding hole in the file, effectively
+    // "materializing" it.
     ptr_ =
         static_cast<unsigned char *>(mmap(nullptr, size, prot, flags, fd_, 0));
     if (ptr_ == MAP_FAILED) {
@@ -606,36 +614,34 @@ bool compress_large_file(const std::string &input_path, size_t input_size,
 
   // --- Phase 1: Parallel Compression into Memory ---
 
-  // Pre-allocate per-thread temporary buffers to avoid repeated vector
-  // allocations
+  // Pre-allocate per-thread temporary buffers
   int thread_count = cfg.num_threads;
-  std::vector<std::vector<unsigned char>> thread_temp_buffers(
-      thread_count); // Per-thread temp buffers
+  std::vector<std::vector<unsigned char>> thread_temp_buffers(thread_count);
   for (int t = 0; t < thread_count; ++t) {
     // reserve max possible compressed size once per thread
     thread_temp_buffers[t].reserve(compressBound(cfg.block_size));
   }
 
-  // Pre-allocate per-thread tdefl_compressor state for reuse and reduced init
+  // Pre-allocate per-thread compressor state for reuse and reduced init
   // overhead
   std::vector<tdefl_compressor *> thread_deflators(thread_count);
   for (int t = 0; t < thread_count; ++t) {
-    thread_deflators[t] =
-        tdefl_compressor_alloc(); // Allocate per-thread compressor
+    // Allocate per-thread compressor
+    thread_deflators[t] = tdefl_compressor_alloc();
     // Initialize compressor state once per thread
     tdefl_init(thread_deflators[t], nullptr,
                nullptr, /* flags: default probes + zlib header */
                TDEFL_WRITE_ZLIB_HEADER | TDEFL_DEFAULT_MAX_PROBES);
   }
 
-  std::vector<std::vector<unsigned char>> compressed_blocks_data(
-      num_blocks); // Compressed data for each block
-  std::vector<uint64_t> compressed_block_sizes(
-      num_blocks); // Sizes of compressed blocks
-  std::vector<int> block_mz_results(
-      num_blocks, Z_OK); // Results of miniz compression for each block
-  std::atomic<bool> compression_error_occurred =
-      false; // Atomic flag to track any compression errors
+  // Compressed data for each block
+  std::vector<std::vector<unsigned char>> compressed_blocks_data(num_blocks);
+  // Sizes of compressed blocks
+  std::vector<uint64_t> compressed_block_sizes(num_blocks);
+  // Results of miniz compression for each block
+  std::vector<int> block_mz_results(num_blocks, Z_OK);
+  // Atomic flag to track any compression errors
+  std::atomic<bool> compression_error_occurred = false;
 
 // Phase 1: Parallel block read & compression using memory-mapped input
 #pragma omp parallel for num_threads(cfg.num_threads) schedule(dynamic)
@@ -649,13 +655,13 @@ bool compress_large_file(const std::string &input_path, size_t input_size,
     const unsigned char *block_ptr = in_ptr + offset; // Pointer to block data
 
     int tid = omp_get_thread_num();
-    tdefl_compressor *def =
-        thread_deflators[tid]; // Get thread-specific compressor
+    // Get thread-specific compressor
+    tdefl_compressor *def = thread_deflators[tid];
     // Reset compressor state per block
     tdefl_init(def, nullptr, nullptr,
                TDEFL_WRITE_ZLIB_HEADER | TDEFL_DEFAULT_MAX_PROBES);
-    auto &temp_buf =
-        thread_temp_buffers[tid];          // Get thread-specific temp buffer
+    // Get thread-specific temp buffer
+    auto &temp_buf = thread_temp_buffers[tid];
     size_t need = compressBound(blk_size); // Calculate max compressed size
     temp_buf.reserve(need);  // Ensure buffer can hold compressed data
     temp_buf.resize(need);   // Resize to max size
@@ -674,7 +680,6 @@ bool compress_large_file(const std::string &input_path, size_t input_size,
   // Input file can be unmapped now as all data processed
   mapped_in.unmap();
 
-  // --- Phase 2: Write Output File Sequentially ---
   bool success = !compression_error_occurred.load();
   if (success) {
     // Double check results (optional sanity check)

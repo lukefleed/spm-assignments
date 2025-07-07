@@ -25,16 +25,6 @@
  * @param results A reference to the vector where computed maximum steps for
  * each range are stored atomically.
  * @param verbose If true, enables detailed diagnostic output.
- *
- * @note The atomicity for updating the maximum steps per range
- * (`results[range_idx].max_steps`) is crucial. `fetch_max` (C++20) or a
- * compare-and-swap (CAS) loop (pre-C++20) ensures that updates from concurrent
- * threads are correctly merged without data races. `memory_order_relaxed` is
- * often sufficient for `fetch_max` or the load in the CAS loop when the primary
- * goal is just to find the maximum value without enforcing strict ordering
- * relative to other memory operations, as the final result is only needed
- * after thread joins. `memory_order_release` on success in the CAS ensures
- * visibility to other threads if needed.
  */
 void static_worker(int thread_id, int num_threads, ull block_size,
                    const std::vector<Range> &global_ranges,
@@ -189,6 +179,7 @@ void static_block_worker(int thread_id, int num_threads,
       continue;
     }
 
+    // Track the maximum steps found by this thread *within the current range*.
     ull range_len = current_range.end - current_range.start + 1;
 
     // Calculate the base size of the block assigned to each thread using
@@ -248,9 +239,14 @@ void static_block_worker(int thread_id, int num_threads,
                                              std::memory_order_relaxed);
 #else
       // Pre-C++20: Use compare-exchange loop.
+      // load reads the current value without blocking. We need only atomicity,
+      // so memory_order_relaxed is sufficient.
       ull current_max =
           results[range_idx].max_steps.load(std::memory_order_relaxed);
       while (local_max_steps > current_max) {
+        // compare_exchange_weak attempts to to update the current global max
+        // with the local max of the thread if and only if the value in memory
+        // did not change since the load.
         if (results[range_idx].max_steps.compare_exchange_weak(
                 current_max, local_max_steps, std::memory_order_release,
                 std::memory_order_relaxed)) {
@@ -275,7 +271,8 @@ void static_block_worker(int thread_id, int num_threads,
  * ...). This strategy provides good load balancing at a fine granularity but
  * can suffer from poor cache performance due to non-contiguous memory access
  * patterns if the underlying computation had locality. For Collatz, locality is
- * less pronounced.
+ * less pronounced since each number's steps depend on its own value and
+ * not on its neighbors.
  *
  * @param thread_id The unique identifier for this thread (0 to num_threads -
  * 1).
