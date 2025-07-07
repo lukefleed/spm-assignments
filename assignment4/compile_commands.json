@@ -1,56 +1,56 @@
 [
   {
-    "directory": "/home/l.lombardo11/spm-assignments/assignment4",
+    "directory": "/home/lukefleed/github/spm-assignments/assignment4",
     "command": "g++ -std=c++17 -Wall -O3 -I./fastflow -pthread -c src/common/utils.cpp -o obj/common/utils.o",
     "file": "src/common/utils.cpp"
   },
   {
-    "directory": "/home/l.lombardo11/spm-assignments/assignment4",
+    "directory": "/home/lukefleed/github/spm-assignments/assignment4",
     "command": "g++ -std=c++17 -Wall -O3 -I./fastflow -pthread -c src/sequential/sequential_mergesort.cpp -o obj/sequential/sequential_mergesort.o",
     "file": "src/sequential/sequential_mergesort.cpp"
   },
   {
-    "directory": "/home/l.lombardo11/spm-assignments/assignment4",
+    "directory": "/home/lukefleed/github/spm-assignments/assignment4",
     "command": "g++ -std=c++17 -Wall -O3 -I./fastflow -pthread -c src/fastflow/ff_mergesort.cpp -o obj/fastflow/ff_mergesort.o",
     "file": "src/fastflow/ff_mergesort.cpp"
   },
   {
-    "directory": "/home/l.lombardo11/spm-assignments/assignment4",
+    "directory": "/home/lukefleed/github/spm-assignments/assignment4",
     "command": "mpic++ -std=c++17 -Wall -O3 -I./fastflow -pthread -I/opt/ohpc/pub/mpi/openmpi5-gnu12/5.0.3/include -c src/hybrid/mpi_ff_mergesort.cpp -o obj/hybrid/mpi_ff_mergesort.o",
     "file": "src/hybrid/mpi_ff_mergesort.cpp"
   },
   {
-    "directory": "/home/l.lombardo11/spm-assignments/assignment4",
+    "directory": "/home/lukefleed/github/spm-assignments/assignment4",
     "command": "g++ -std=c++17 -Wall -O3 -I./fastflow -pthread -c src/main/single_node_main.cpp -o obj/main/single_node_main.o",
     "file": "src/main/single_node_main.cpp"
   },
   {
-    "directory": "/home/l.lombardo11/spm-assignments/assignment4",
+    "directory": "/home/lukefleed/github/spm-assignments/assignment4",
     "command": "mpic++ -std=c++17 -Wall -O3 -I./fastflow -pthread -c src/main/multi_node_main.cpp -o obj/main/multi_node_main.o",
     "file": "src/main/multi_node_main.cpp"
   },
   {
-    "directory": "/home/l.lombardo11/spm-assignments/assignment4",
+    "directory": "/home/lukefleed/github/spm-assignments/assignment4",
     "command": "g++ -std=c++17 -Wall -O3 -I./fastflow -pthread -c tests/test_sequential.cpp -o obj/tests/test_sequential.o",
     "file": "tests/test_sequential.cpp"
   },
   {
-    "directory": "/home/l.lombardo11/spm-assignments/assignment4",
+    "directory": "/home/lukefleed/github/spm-assignments/assignment4",
     "command": "mpic++ -std=c++17 -Wall -O3 -I./fastflow -pthread -c tests/test_performance.cpp -o obj/tests/test_performance.o",
     "file": "tests/test_performance.cpp"
   },
   {
-    "directory": "/home/l.lombardo11/spm-assignments/assignment4",
+    "directory": "/home/lukefleed/github/spm-assignments/assignment4",
     "command": "mpic++ -std=c++17 -Wall -O3 -I./fastflow -pthread -c tests/test_correctness.cpp -o obj/tests/test_correctness.o",
     "file": "tests/test_correctness.cpp"
   },
   {
-    "directory": "/home/l.lombardo11/spm-assignments/assignment4",
+    "directory": "/home/lukefleed/github/spm-assignments/assignment4",
     "command": "mpic++ -std=c++17 -Wall -O3 -I./fastflow -pthread -c tests/test_hybrid_correctness.cpp -o obj/tests/test_hybrid_correctness.o",
     "file": "tests/test_hybrid_correctness.cpp"
   },
   {
-    "directory": "/home/l.lombardo11/spm-assignments/assignment4",
+    "directory": "/home/lukefleed/github/spm-assignments/assignment4",
     "command": "mpic++ -std=c++17 -Wall -O3 -I./fastflow -pthread -c tests/test_hybrid_performance.cpp -o obj/tests/test_hybrid_performance.o",
     "file": "tests/test_hybrid_performance.cpp"
   }

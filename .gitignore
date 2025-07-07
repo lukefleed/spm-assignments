@@ -38,4 +38,7 @@ assignment4/fastflow
 assignment4/fastflow
 
 # Compile comands
-*.json
+assignment1/compile_commands.json
+assignment2/compile_commands.json
+assignment3/compile_commands.json
+assignment4/compile_commands.json

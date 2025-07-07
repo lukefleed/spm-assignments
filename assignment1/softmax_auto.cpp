@@ -106,7 +106,7 @@ void softmax_auto_parallel(const float *__restrict__ input,
     omp_set_num_threads(num_threads);
   }
 
-  float max_val = -std::numeric_limits<float>::infinity();
+  float max_val = -std::numeric_limits<float>::max();
 
   // Phase 1: Find the maximum value in the input array.
 #pragma omp parallel for simd reduction(max : max_val)                         \
@@ -144,7 +144,7 @@ void softmax_auto_parallel(const float *__restrict__ input,
 void softmax_auto_noparallel(const float *__restrict__ input,
                              float *__restrict__ output, size_t K) {
   // Phase 1: Find the maximum value.
-  float max_val = -std::numeric_limits<float>::infinity();
+  float max_val = -std::numeric_limits<float>::max();
 #pragma omp simd reduction(max : max_val) aligned(input : VECTOR_ALIGNMENT)
   for (size_t i = 0; i < K; ++i) {
     max_val = (input[i] > max_val) ? input[i] : max_val;
