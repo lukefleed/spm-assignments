@@ -19,7 +19,7 @@ namespace {
  * serialization.
  *
  * This function serializes Record objects by copying their key and payload data
- * into a linear byte buffer. Each record is packed sequentially with the key
+ * into a linear byte buffer. Each record is packed with the key
  * followed by the payload data. The buffer is resized to accommodate all
  * records.
  *
@@ -37,14 +37,23 @@ void pack_records(const std::vector<Record> &records, std::vector<char> &buffer,
                   size_t payload_size) {
   const size_t record_byte_size = sizeof(unsigned long) + payload_size;
   buffer.resize(records.size() * record_byte_size);
-  char *ptr = buffer.data();
-  for (const auto &rec : records) {
+  char *base_ptr = buffer.data();
+
+#pragma omp parallel for
+  for (size_t i = 0; i < records.size(); ++i) {
+    // use const reference to avoid copying
+    const auto &rec = records[i];
+    // Calculate the pointer to the start of the current record in the buffer
+    char *ptr = base_ptr + i * record_byte_size;
+    // Copy the key into the buffer
     memcpy(ptr, &rec.key, sizeof(unsigned long));
+    // Move the pointer forward by the size of the key
     ptr += sizeof(unsigned long);
+    // If payload_size > 0 and rec.payload is not null, copy the payload data
     if (payload_size > 0 && rec.payload) {
+      // Copy the payload data into the buffer
       memcpy(ptr, rec.payload, payload_size);
     }
-    ptr += payload_size;
   }
 }
 
@@ -71,17 +80,32 @@ void pack_records(const std::vector<Record> &records, std::vector<char> &buffer,
  */
 void unpack_records(const char *buffer, size_t num_records,
                     std::vector<Record> &records, size_t payload_size) {
-  records.clear();
-  records.reserve(num_records);
-  const char *ptr = buffer;
+  records.clear();              // Clear existing records
+  records.reserve(num_records); // Reserve space for new records
+
+  // Pre-allocate all records first
   for (size_t i = 0; i < num_records; ++i) {
-    auto &rec = records.emplace_back(payload_size);
+    records.emplace_back(payload_size);
+  }
+
+  // Calculate the size of each record in bytes
+  // Each record consists of a key (unsigned long) + payload data
+  const size_t record_byte_size = sizeof(unsigned long) + payload_size;
+
+#pragma omp parallel for
+  for (size_t i = 0; i < num_records; ++i) {
+    auto &rec = records[i];
+    // Calculate the pointer to the start of the current record in the buffer
+    const char *ptr = buffer + i * record_byte_size;
+    // Copy the key into the record
     memcpy(&rec.key, ptr, sizeof(unsigned long));
+    // Move the pointer forward by the size of the key
     ptr += sizeof(unsigned long);
+    // If payload_size > 0 and rec.payload is not null, copy the payload data
     if (payload_size > 0 && rec.payload) {
+      // Copy the payload data into the record
       memcpy(rec.payload, ptr, payload_size);
     }
-    ptr += payload_size;
   }
 }
 
