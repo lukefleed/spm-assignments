@@ -1,0 +1,5 @@
+MPI_Procs,Threads,Total_Time_ms,Speedup_vs_StdSort,Speedup_vs_Sequential,Speedup_vs_1Node
+1,16,12451.7,1.07,2.69,1.00
+2,16,15261.9,0.87,2.20,0.82
+4,16,13377.3,0.99,2.51,0.93
+8,16,13640,0.97,2.46,0.91

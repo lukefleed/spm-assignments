@@ -166,7 +166,7 @@ benchmark_cluster_weak_scaling: $(TARGET_MULTI_NODE) $(TARGET_HYBRID_PERF)
 # Hybrid correctness test
 test_correctness_hybrid: $(TARGET_HYBRID_CORRECT)
 	@echo "Running hybrid MPI+parallel correctness tests..."
-	srun --mpi=pmix -n 4 $(TARGET_HYBRID_CORRECT)
+	srun --mpi=pmix -n 8 $(TARGET_HYBRID_CORRECT)
 
 # Help target
 help:
