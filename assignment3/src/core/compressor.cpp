@@ -37,9 +37,14 @@ namespace { // Start anonymous namespace
  * @brief RAII wrapper class for memory-mapped files using mmap system call.
  *
  * MappedFile provides a safe and convenient interface for memory-mapping files
- * into the process address space. It follows RAII principles to ensure proper
- * resource management and automatic cleanup of memory mappings and file
- * descriptors.
+ * into the process address space. This API projects a portion of the file
+ * directly in the memory space of the process, allowing for efficient I/O
+ * operations. This eliminates all intermediate copies: instead of reading from
+ * the disk to the kernel buffer, then copying from the kernel space to the user
+ * buffer in the user space, with mmap we can access a file like as it were a
+ * regular array in memory. When accessing an offset, the OS handles the loading
+ * of that specific page from the disk on demand, directly in the page cache of
+ * the process.
  *
  * The class supports both mapping existing files for reading/writing and
  * creating new files with specified sizes. It handles various mapping
@@ -237,7 +242,8 @@ public:
     // will intercept the access as a page fault. At this point, and only at
     // this point, the kernel will allocate a physical page. It then associates
     // this page with the corresponding hole in the file, effectively
-    // "materializing" it.
+    // "materializing" it. This avoids unnecessary disk I/O of allocating and
+    // writing the entire file in advance
     ptr_ =
         static_cast<unsigned char *>(mmap(nullptr, size, prot, flags, fd_, 0));
     if (ptr_ == MAP_FAILED) {
