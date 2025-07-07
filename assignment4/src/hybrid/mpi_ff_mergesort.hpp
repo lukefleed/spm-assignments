@@ -88,6 +88,7 @@ private:
   int mpi_size_;
   size_t payload_size_;
   HybridMetrics metrics_;
+  std::vector<Record> merge_buffer_; ///< Reusable buffer for double buffering
 };
 
 } // namespace hybrid

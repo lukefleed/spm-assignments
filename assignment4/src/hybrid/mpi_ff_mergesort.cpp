@@ -427,19 +427,27 @@ void HybridMergeSort::parallel_merge(std::vector<Record> &local_data,
 
   // Use sequential merge for small total sizes to avoid parallel overhead.
   if (total_size < parallel_threshold || config_.parallel_threads <= 1) {
-    std::vector<Record> merged;
-    merged.reserve(total_size);
+    // Reuse merge buffer instead of allocating new memory
+    if (merge_buffer_.size() < total_size) {
+      merge_buffer_.resize(total_size);
+    }
+
     std::merge(std::make_move_iterator(local_data.begin()),
                std::make_move_iterator(local_data.end()),
                std::make_move_iterator(partner_data.begin()),
                std::make_move_iterator(partner_data.end()),
-               std::back_inserter(merged));
-    local_data = std::move(merged);
+               merge_buffer_.begin());
+
+    // Swap buffers instead of expensive move assignment
+    local_data.swap(merge_buffer_);
+    merge_buffer_.resize(total_size); // Keep capacity for next use
     return;
   }
 
-  // Parallel merge implementation using OpenMP.
-  std::vector<Record> merged(total_size);
+  // Parallel merge implementation using OpenMP with double buffering
+  if (merge_buffer_.size() < total_size) {
+    merge_buffer_.resize(total_size);
+  }
 
   // Ensure A is the larger vector for better pivot selection.
   std::vector<Record> &A =
@@ -462,8 +470,7 @@ void HybridMergeSort::parallel_merge(std::vector<Record> &local_data,
   split_A[num_threads] = A.size();
   split_B[num_threads] = B.size();
 
-// Phase 2: Each thread merges its assigned sub-arrays into the final
-// destination.
+// Phase 2: Each thread merges its assigned sub-arrays into the merge buffer.
 #pragma omp parallel for
   for (int i = 0; i < num_threads; ++i) {
     size_t start_A = split_A[i];
@@ -476,9 +483,12 @@ void HybridMergeSort::parallel_merge(std::vector<Record> &local_data,
                std::make_move_iterator(A.begin() + end_A),
                std::make_move_iterator(B.begin() + start_B),
                std::make_move_iterator(B.begin() + end_B),
-               merged.begin() + output_start);
+               merge_buffer_.begin() + output_start);
   }
-  local_data = std::move(merged);
+
+  // Swap buffers instead of expensive move assignment
+  local_data.swap(merge_buffer_);
+  merge_buffer_.resize(total_size); // Keep capacity for next use
 }
 
 // Metrics update function to record elapsed time for different phases.
